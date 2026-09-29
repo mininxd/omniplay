@@ -35,7 +35,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import xyz.omniplay.R
@@ -173,9 +172,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun initializePlayer(uri: Uri) {
         binding.loadingProgress.visibility = View.VISIBLE
 
-        // Configure extractors with index-seeking enabled for unindexed fragmented MP4 files (like test.mpeg)
         val extractorsFactory = DefaultExtractorsFactory()
-            .setFragmentedMp4ExtractorFlags(FragmentedMp4Extractor.FLAG_ENABLE_INDEX_SEEKING)
             .setConstantBitrateSeekingEnabled(true)
 
         val dataSourceFactory = DefaultDataSource.Factory(this)
