@@ -9,10 +9,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -243,103 +246,61 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Interactive gesture listener on the bottom section below playback controls.
-     * Allows real-time dragging/peeking of the playlist panel up and down without snapping directly open.
-     * If dragged back down towards the bottom, the playlist remains collapsed.
+     * Allows swiping up or tapping from the bottom area to expand the playlist cleanly
+     * using BottomSheetBehavior's native animations, avoiding snapping/bouncing bugs.
      */
     private fun setupBottomSwipeGesture() {
-        var startY = 0f
-        var isDraggingSheet = false
-        var velocityTracker: VelocityTracker? = null
-        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-        var activeAnimator: ValueAnimator? = null
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffY = e2.y - e1.y
+                val diffX = e2.x - e1.x
+                // Fast swipe upward
+                if (Math.abs(diffY) > Math.abs(diffX) && diffY < -30 && velocityY < -100) {
+                    if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                        return true
+                    }
+                }
+                return false
+            }
+
+            override fun onScroll(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                distanceX: Float,
+                distanceY: Float
+            ): Boolean {
+                // Dragging upward (distanceY > 0)
+                if (distanceY > 20 && Math.abs(distanceY) > Math.abs(distanceX)) {
+                    if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                        return true
+                    }
+                }
+                return false
+            }
+
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                }
+                return true
+            }
+        })
 
         binding.bottomGestureArea.setOnTouchListener { _, event ->
             if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
                 return@setOnTouchListener false
             }
-
-            val maxTravel = binding.playlistSlidingPanel.top.toFloat().takeIf { it > 0f }
-                ?: (binding.root.height - bottomSheetBehavior.peekHeight).toFloat().coerceAtLeast(1f)
-
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    activeAnimator?.cancel()
-                    startY = event.rawY
-                    isDraggingSheet = false
-                    velocityTracker?.recycle()
-                    velocityTracker = VelocityTracker.obtain().apply {
-                        addMovement(event)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    velocityTracker?.addMovement(event)
-                    val deltaTotalY = event.rawY - startY
-
-                    if (!isDraggingSheet && Math.abs(deltaTotalY) > touchSlop) {
-                        if (deltaTotalY < 0) { // Moving upwards
-                            isDraggingSheet = true
-                        }
-                    }
-
-                    if (isDraggingSheet) {
-                        // Clamp translation between -maxTravel (fully expanded) and 0f (collapsed)
-                        val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
-                        binding.playlistSlidingPanel.translationY = targetTranslation
-                        val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
-                        binding.ivChevron.rotation = progress * 180f
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    velocityTracker?.addMovement(event)
-                    if (isDraggingSheet) {
-                        velocityTracker?.computeCurrentVelocity(1000)
-                        val yVel = velocityTracker?.yVelocity ?: 0f
-                        val currentTrans = binding.playlistSlidingPanel.translationY
-                        val progress = (-currentTrans / maxTravel).coerceIn(0f, 1f)
-
-                        // If user flung upward fast (< -800) or dragged past 40% (0.4) and didn't fling downward
-                        val shouldExpand = when {
-                            yVel < -800f -> true
-                            yVel > 800f -> false
-                            else -> progress >= 0.4f
-                        }
-
-                        val targetY = if (shouldExpand) -maxTravel else 0f
-                        val duration = (250 * if (shouldExpand) (1f - progress) else progress).toLong().coerceIn(100L, 300L)
-
-                        activeAnimator = ValueAnimator.ofFloat(currentTrans, targetY).apply {
-                            this.duration = duration
-                            interpolator = DecelerateInterpolator()
-                            addUpdateListener { anim ->
-                                val v = anim.animatedValue as Float
-                                binding.playlistSlidingPanel.translationY = v
-                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 180f
-                            }
-                            addListener(object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    binding.playlistSlidingPanel.translationY = 0f
-                                    if (shouldExpand) {
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                                        binding.ivChevron.rotation = 180f
-                                    } else {
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-                                        binding.ivChevron.rotation = 0f
-                                    }
-                                    activeAnimator = null
-                                }
-                            })
-                            start()
-                        }
-                        isDraggingSheet = false
-                    }
-                    velocityTracker?.recycle()
-                    velocityTracker = null
-                    true
-                }
-                else -> false
-            }
+            gestureDetector.onTouchEvent(event)
         }
     }
 
@@ -408,13 +369,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val cached = AlbumArtLoader.getCachedAlbumArt(peekSong.id)
                     if (cached != null) {
                         binding.peekAlbumArtImage.setImageBitmap(cached)
+                        updatePeekTextContrast(isBitmapBright(cached))
                     } else {
                         binding.peekAlbumArtImage.setImageResource(R.drawable.default_album_art)
+                        updatePeekTextContrast(isBright = false)
                         lifecycleScope.launch {
                             val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, peekSong)
                             if (currentPeekSong?.id == peekSong.id && ::binding.isInitialized) {
                                 if (bitmap != null) {
                                     binding.peekAlbumArtImage.setImageBitmap(bitmap)
+                                    updatePeekTextContrast(isBitmapBright(bitmap))
                                 }
                             }
                         }
@@ -649,6 +613,71 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 else -> false
             }
+        }
+    }
+
+    /**
+     * Determines whether the given album art bitmap is perceived as bright or dark,
+     * specifically sampling the bottom area where peek title, artist, and badge are displayed.
+     */
+    private fun isBitmapBright(bitmap: Bitmap?): Boolean {
+        if (bitmap == null) return false
+        return try {
+            val width = bitmap.width
+            val height = bitmap.height
+            if (width <= 0 || height <= 0) return false
+
+            val startY = (height * 0.5f).toInt().coerceIn(0, height - 1)
+            val stepX = (width / 20).coerceAtLeast(1)
+            val stepY = ((height - startY) / 10).coerceAtLeast(1)
+
+            var totalLuma = 0.0
+            var sampleCount = 0
+
+            for (y in startY until height step stepY) {
+                for (x in 0 until width step stepX) {
+                    val pixel = bitmap.getPixel(x, y)
+                    val r = (pixel shr 16) and 0xFF
+                    val g = (pixel shr 8) and 0xFF
+                    val b = pixel and 0xFF
+                    val luma = 0.299 * r + 0.587 * g + 0.114 * b
+                    totalLuma += luma
+                    sampleCount++
+                }
+            }
+
+            if (sampleCount == 0) false else (totalLuma / sampleCount) > 130.0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Dynamically adjusts peek text color based on album art luminance without any dark gradient overlay.
+     * If the album art is bright, uses crisp dark text.
+     * If the album art is dark, uses clean white text.
+     */
+    private fun updatePeekTextContrast(isBright: Boolean) {
+        if (isBright) {
+            // Bright album art: use dark text
+            binding.peekLabelText.setTextColor(Color.parseColor("#1E3A8A"))
+            binding.peekLabelText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#80FFFFFF"))
+
+            binding.peekTitleText.setTextColor(Color.parseColor("#111827"))
+            binding.peekTitleText.setShadowLayer(4f, 0f, 1f, Color.parseColor("#99FFFFFF"))
+
+            binding.peekArtistText.setTextColor(Color.parseColor("#374151"))
+            binding.peekArtistText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#99FFFFFF"))
+        } else {
+            // Dark album art: use white text
+            binding.peekLabelText.setTextColor(ContextCompat.getColor(this, R.color.primary_accent))
+            binding.peekLabelText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#99000000"))
+
+            binding.peekTitleText.setTextColor(Color.parseColor("#FFFFFF"))
+            binding.peekTitleText.setShadowLayer(4f, 0f, 1f, Color.parseColor("#B3000000"))
+
+            binding.peekArtistText.setTextColor(Color.parseColor("#D1D5DB"))
+            binding.peekArtistText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
         }
     }
 
