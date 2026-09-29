@@ -246,60 +246,104 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Interactive gesture listener on the bottom section below playback controls.
-     * Allows swiping up or tapping from the bottom area to expand the playlist cleanly
-     * using BottomSheetBehavior's native animations, avoiding snapping/bouncing bugs.
+     * Forwards touch events directly into BottomSheetBehavior with coordinates mapped
+     * into the playlist peek header, providing smooth 1:1 real-time sliding and settling,
+     * identical to dragging the playlist panel itself.
      */
     private fun setupBottomSwipeGesture() {
-        var startY = 0f
-        var startX = 0f
-
-        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
-
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                if (e1 == null) return false
-                val diffY = e2.y - e1.y
-                val diffX = e2.x - e1.x
-                // Fast deliberate swipe upward
-                if (Math.abs(diffY) > Math.abs(diffX) * 1.2f && diffY < -120f && velocityY < -600f) {
-                    if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                        return true
-                    }
-                }
-                return false
-            }
-        })
+        var isForwarding = false
+        var yOffset = 0f
+        val parentLocation = IntArray(2)
 
         binding.bottomGestureArea.setOnTouchListener { _, event ->
-            if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+            if (!::bottomSheetBehavior.isInitialized) {
                 return@setOnTouchListener false
             }
 
+            val parent = binding.coordinatorRoot
+            val child = binding.playlistSlidingPanel
+
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    startY = event.rawY
-                    startX = event.rawX
-                    gestureDetector.onTouchEvent(event)
+                    if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                        isForwarding = false
+                        return@setOnTouchListener false
+                    }
+
+                    isForwarding = true
+                    parent.getLocationOnScreen(parentLocation)
+                    val parentX = event.rawX - parentLocation[0]
+                    val parentY = event.rawY - parentLocation[1]
+
+                    val childTop = if (child.top > 0) {
+                        child.top.toFloat()
+                    } else {
+                        (parent.height - bottomSheetBehavior.peekHeight).toFloat()
+                    }
+                    val targetY = childTop + 24f * resources.displayMetrics.density
+                    yOffset = targetY - parentY
+
+                    val transformedEvent = MotionEvent.obtain(event)
+                    transformedEvent.setLocation(parentX, targetY)
+                    try {
+                        bottomSheetBehavior.onInterceptTouchEvent(parent, child, transformedEvent)
+                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
+                    } finally {
+                        transformedEvent.recycle()
+                    }
                     true
                 }
-                MotionEvent.ACTION_UP -> {
-                    val deltaY = event.rawY - startY
-                    val deltaX = event.rawX - startX
-                    // Only expand if dragged deliberately upward (more than 180px) without small slide snaps
-                    if (deltaY < -180f && Math.abs(deltaY) > Math.abs(deltaX) * 1.3f) {
-                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                MotionEvent.ACTION_MOVE -> {
+                    if (!isForwarding) return@setOnTouchListener false
+
+                    val parentX = event.rawX - parentLocation[0]
+                    val parentY = event.rawY - parentLocation[1]
+                    val transformedY = parentY + yOffset
+
+                    val transformedEvent = MotionEvent.obtain(event)
+                    transformedEvent.setLocation(parentX, transformedY)
+                    try {
+                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
+                    } finally {
+                        transformedEvent.recycle()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!isForwarding) return@setOnTouchListener false
+                    isForwarding = false
+
+                    val parentX = event.rawX - parentLocation[0]
+                    val parentY = event.rawY - parentLocation[1]
+                    val transformedY = parentY + yOffset
+
+                    val transformedEvent = MotionEvent.obtain(event)
+                    transformedEvent.setLocation(parentX, transformedY)
+                    try {
+                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
+                    } finally {
+                        transformedEvent.recycle()
+                    }
+                    true
+                }
+                else -> {
+                    if (isForwarding) {
+                        val parentX = event.rawX - parentLocation[0]
+                        val parentY = event.rawY - parentLocation[1]
+                        val transformedY = parentY + yOffset
+
+                        val transformedEvent = MotionEvent.obtain(event)
+                        transformedEvent.setLocation(parentX, transformedY)
+                        try {
+                            bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
+                        } finally {
+                            transformedEvent.recycle()
+                        }
                         true
                     } else {
-                        gestureDetector.onTouchEvent(event)
+                        false
                     }
                 }
-                else -> gestureDetector.onTouchEvent(event)
             }
         }
     }
