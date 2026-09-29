@@ -603,7 +603,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.playbackSlider.setDuration(song.duration)
         binding.playbackSlider.setProgress(0L)
-        binding.playbackSlider.setPlaying(playbackService?.isPlaying == true)
+        binding.playbackSlider.setPlaying(playbackService?.isPlaying() == true)
         binding.playbackSlider.isEnabled = true
 
         songAdapter?.setCurrentPlayingSongId(song.id)
