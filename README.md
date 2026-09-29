@@ -2,7 +2,6 @@
 
 **Omniplay** is a lightweight, modern, open-source Android music player crafted with Material You (Material 3) design principles.
 
-![Omniplay Preview](1790665358030.jpg)
 
 ## Features
 
