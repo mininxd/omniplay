@@ -18,6 +18,21 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+    }
+
+    flavorDimensions += "version"
+    productFlavors {
+        create("modern") {
+            dimension = "version"
+            minSdk = 26
+        }
+        create("legacy") {
+            dimension = "version"
+            minSdk = 21
+        }
     }
 
     signingConfigs {
@@ -44,15 +59,6 @@ android {
         debug {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
-        }
-    }
-
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = true
         }
     }
 

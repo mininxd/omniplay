@@ -33,17 +33,19 @@
   - **Supported Formats**: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, and more.
   - **Directory-Based SAF Scanner**: Select specific music folders via Android Storage Access Framework (SAF) with on-demand library rescan.
 
-- **Legacy & Multi-Architecture Compatibility**:
-  - **Android Version Compatibility**: Supports Android 5.0 (Lollipop, API 21) through Android 14/15, including legacy **Android 7.0/7.1 (Nougat)**.
-  - Dual v1 (JAR) and v2 (Full APK) signing enabled to ensure smooth installation on legacy package managers.
-  - Multi-ABI splits: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`, Universal APK, and `legacy-all` (combining both armv7 and armv8 for all legacy and modern devices).
+- **Modern & Legacy ARM Builds**:
+  - **app_release.apk**: Target modern Android 8.0+ devices (API 26–15) with native Material You dynamic colors.
+  - **app_release_legacy.apk**: Target legacy Android 5.0–7.1 devices (API 21–25) featuring classic Material Design 2 Dark Teal palette.
+  - Focused strictly on ARM architectures (`armeabi-v7a` and `arm64-v8a`) to eliminate APK bloat without unnecessary x86 splits.
+  - Dual v1 (JAR) and v2 (Full APK) signing enabled for seamless installation on legacy package managers.
 
 ---
 
 ## Architecture & Tech Stack
 
 - **Language**: 100% Kotlin
-- **Minimum SDK**: API 21 (Android 5.0 Lollipop)
+- **Modern Build**: Min SDK 26 (Android 8.0+) • Material You (Material 3)
+- **Legacy Build**: Min SDK 21 (Android 5.0–7.1) • Classic Material 2 Dark Teal
 - **Target SDK**: API 34 (Android 14)
 - **UI Framework**: Android Jetpack, Material Components 3, View Binding, Custom Views
 - **Concurrency**: Kotlin Coroutines (`Dispatchers.IO`, `Dispatchers.Main`, `SupervisorJob`)
@@ -64,13 +66,9 @@ This project is fully open source. The release keystore is included in the repos
 
 ## CI / CD & Artifact Releases
 
-GitHub Actions automatically builds all target architectures upon pushes to `main`:
-- `app-legacy-all-release.apk` *(Universal: armv7 + armv8 for Android 7.0+ & all legacy devices)*
-- `app-arm64-v8a-release.apk` *(Modern 64-bit ARM)*
-- `app-armeabi-v7a-release.apk` *(Legacy 32-bit ARM)*
-- `app-x86-release.apk` *(32-bit x86 emulators/tablets)*
-- `app-x86_64-release.apk` *(64-bit x86 emulators)*
-- `app-universal-release.apk` *(Fat APK containing all ABIs)*
+GitHub Actions automatically builds and releases two ARM APKs upon pushes to `main`:
+- `app_release.apk` *(Modern: Android 8.0+ / Material You, arm64-v8a & armeabi-v7a)*
+- `app_release_legacy.apk` *(Legacy: Android 5.0–7.1 / Material 2 Dark Teal, armeabi-v7a & arm64-v8a)*
 
 ---
 
