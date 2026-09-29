@@ -103,6 +103,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int)
         fun onShuffleModeChanged(enabled: Boolean)
         fun onRepeatModeChanged(mode: Int)
+        fun onQueueChanged(queue: List<Song>)
     }
 
     inner class LocalBinder : Binder() {
@@ -159,6 +160,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         listener.onPlaybackStateChanged(isPlaying())
         listener.onShuffleModeChanged(isShuffleEnabled)
         listener.onRepeatModeChanged(repeatMode)
+        if (queue.isNotEmpty()) {
+            listener.onQueueChanged(queue.toList())
+        }
     }
 
     fun removeListener(listener: PlaybackListener) {
@@ -168,23 +172,19 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun setSongQueue(songs: List<Song>, startIndex: Int = 0, startPlaying: Boolean = true) {
         if (songs.isEmpty()) return
         originalQueue = songs.toList()
-        queue = if (isShuffleEnabled) {
-            val shuffled = songs.toMutableList()
-            if (startIndex in songs.indices) {
-                val selected = songs[startIndex]
-                shuffled.removeAt(startIndex)
-                shuffled.shuffle()
-                shuffled.add(0, selected)
-            } else {
-                shuffled.shuffle()
-            }
-            shuffled
+        if (isShuffleEnabled) {
+            val selected = if (startIndex in songs.indices) songs[startIndex] else songs.first()
+            val remaining = songs.filter { it.id != selected.id }.shuffled()
+            queue = (listOf(selected) + remaining).toMutableList()
+            currentIndex = 0
         } else {
-            songs.toMutableList()
+            queue = songs.toMutableList()
+            currentIndex = startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
         }
 
+        listeners.forEach { it.onQueueChanged(queue.toList()) }
+
         if (startPlaying) {
-            currentIndex = if (isShuffleEnabled) 0 else startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
             if (queue.isNotEmpty() && currentIndex in queue.indices) {
                 val song = queue[currentIndex]
                 currentSong = song
@@ -197,8 +197,30 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                 currentIndex = if (isShuffleEnabled) {
                     0
                 } else {
-                    queue.indexOfFirst { it.contentUri == currentSong?.contentUri }.coerceAtLeast(0)
+                    queue.indexOfFirst { it.id == currentSong?.id }.coerceAtLeast(0)
                 }
+            }
+        }
+    }
+
+    fun playSongFromPlaylist(song: Song, index: Int = -1) {
+        if (isShuffleEnabled) {
+            val matching = originalQueue.find { it.id == song.id } ?: queue.find { it.id == song.id } ?: song
+            val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
+            queue = (listOf(matching) + remaining).toMutableList()
+            currentIndex = 0
+            playSong(matching)
+            listeners.forEach { it.onQueueChanged(queue.toList()) }
+        } else {
+            val targetIndex = if (index in queue.indices && queue[index].id == song.id) {
+                index
+            } else {
+                val idx = queue.indexOfFirst { it.id == song.id }
+                if (idx != -1) idx else index.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+            }
+            if (queue.isNotEmpty() && targetIndex in queue.indices) {
+                currentIndex = targetIndex
+                playSong(queue[currentIndex])
             }
         }
     }
@@ -230,6 +252,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             } catch (e: Exception) {}
             listeners.forEach { it.onTrackChanged(null) }
             listeners.forEach { it.onPlaybackStateChanged(false) }
+            listeners.forEach { it.onQueueChanged(emptyList()) }
             return
         }
 
@@ -247,15 +270,12 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                 // Currently playing/selected song is still present; refresh its metadata
                 currentSong = matchingSong
                 if (isShuffleEnabled) {
-                    val shuffled = newSongs.toMutableList()
-                    shuffled.remove(matchingSong)
-                    shuffled.shuffle()
-                    shuffled.add(0, matchingSong)
-                    queue = shuffled
+                    val remaining = newSongs.filter { it.id != matchingSong.id }.shuffled()
+                    queue = (listOf(matchingSong) + remaining).toMutableList()
                     currentIndex = 0
                 } else {
                     queue = newSongs.toMutableList()
-                    currentIndex = queue.indexOfFirst { it.contentUri == matchingSong.contentUri }.coerceAtLeast(0)
+                    currentIndex = queue.indexOfFirst { it.id == matchingSong.id }.coerceAtLeast(0)
                 }
 
                 updateMediaMetadata(matchingSong)
@@ -267,6 +287,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                 }
                 // Notify listeners so UI updates immediately with the refreshed metadata
                 listeners.forEach { it.onTrackChanged(matchingSong) }
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
                 // Previously playing song was removed from folder
                 pause()
@@ -276,6 +297,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                     queue = newSongs.toMutableList()
                 }
                 currentIndex = 0
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
                 val nextSong = queue[0]
                 prepareWithoutPlaying(nextSong)
             }
@@ -283,6 +305,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             // No song currently playing or selected
             queue = if (isShuffleEnabled) newSongs.shuffled().toMutableList() else newSongs.toMutableList()
             currentIndex = -1
+            listeners.forEach { it.onQueueChanged(queue.toList()) }
         }
     }
 
@@ -424,6 +447,22 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             return
         }
 
+        if (isShuffleEnabled) {
+            // In randomized mode, Now Playing is at index 0 and upcoming tracks are below it.
+            // Rotating queue moves finished track to the bottom and brings next track to index 0.
+            if (queue.size > 1) {
+                val finished = queue.removeAt(0)
+                queue.add(finished)
+                currentIndex = 0
+                val nextSong = queue[0]
+                playSong(nextSong)
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
+            } else {
+                currentSong?.let { playSong(it) }
+            }
+            return
+        }
+
         currentIndex++
         if (currentIndex >= queue.size) {
             if (repeatMode == REPEAT_ALL) {
@@ -444,6 +483,20 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
         if (getCurrentPosition() > 3000) {
             seekTo(0)
+            return
+        }
+
+        if (isShuffleEnabled) {
+            if (queue.size > 1) {
+                // In randomized mode, moving previous brings the last track to index 0.
+                val prev = queue.removeAt(queue.size - 1)
+                queue.add(0, prev)
+                currentIndex = 0
+                playSong(prev)
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
+            } else {
+                seekTo(0)
+            }
             return
         }
 
@@ -489,24 +542,32 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun toggleShuffle() {
         isShuffleEnabled = !isShuffleEnabled
         if (isShuffleEnabled) {
-            val current = currentSong
-            val shuffled = originalQueue.toMutableList()
+            // When turning ON randomize:
+            // 1. Now playing is set on top of the playlist (index 0)
+            // 2. The bottom after now playing is freshly randomized
+            // 3. Always re-randomizes each time it is turned on
+            val current = currentSong ?: originalQueue.firstOrNull()
             if (current != null) {
-                shuffled.remove(current)
-                shuffled.shuffle()
-                shuffled.add(0, current)
+                val remaining = originalQueue.filter { it.id != current.id }.shuffled()
+                queue = (listOf(current) + remaining).toMutableList()
                 currentIndex = 0
             } else {
-                shuffled.shuffle()
+                queue = originalQueue.shuffled().toMutableList()
                 currentIndex = 0
             }
-            queue = shuffled
         } else {
+            // When turning OFF randomize:
+            // Restores the original playlist
             val current = currentSong
             queue = originalQueue.toMutableList()
-            currentIndex = if (current != null) queue.indexOf(current).coerceAtLeast(0) else 0
+            currentIndex = if (current != null) {
+                queue.indexOfFirst { it.id == current.id }.coerceAtLeast(0)
+            } else 0
         }
-        listeners.forEach { it.onShuffleModeChanged(isShuffleEnabled) }
+        listeners.forEach {
+            it.onShuffleModeChanged(isShuffleEnabled)
+            it.onQueueChanged(queue.toList())
+        }
     }
 
     fun cycleRepeatMode() {

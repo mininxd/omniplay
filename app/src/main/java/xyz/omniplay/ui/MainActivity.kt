@@ -220,8 +220,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         // Initialize playlist adapter
         songAdapter = SongAdapter { song, index ->
             playbackService?.let { service ->
-                val songsToPlay = scannedSongs.ifEmpty { listOf(song) }
-                service.setSongQueue(songsToPlay, startIndex = index, startPlaying = true)
+                if (service.queue.isEmpty() && scannedSongs.isNotEmpty()) {
+                    service.setSongQueue(scannedSongs, startIndex = index, startPlaying = true)
+                } else {
+                    service.playSongFromPlaylist(song, index)
+                }
             }
         }
 
@@ -638,6 +641,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onRepeatModeChanged(mode: Int) {
         updateRepeatButton(mode)
+    }
+
+    override fun onQueueChanged(queue: List<Song>) {
+        songAdapter?.setSongs(queue)
+        binding.songCountText.text = "${queue.size} songs"
+        if (queue.isNotEmpty()) {
+            binding.emptyStateLayout.visibility = View.GONE
+            binding.songsRecyclerView.visibility = View.VISIBLE
+        } else {
+            binding.emptyStateLayout.visibility = View.VISIBLE
+            binding.songsRecyclerView.visibility = View.GONE
+        }
+        val currentId = playbackService?.currentSong?.id ?: -1L
+        songAdapter?.setCurrentPlayingSongId(currentId)
+        if (playbackService?.isShuffleEnabled == true) {
+            binding.songsRecyclerView.scrollToPosition(0)
+        }
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
