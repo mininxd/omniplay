@@ -61,15 +61,10 @@
         </aapt:attr>
     </path>
 
-    <!-- Center Spindle Hole Circle -->
-    <path
-        android:pathData="M200,200m-24,0a24,24 0 1,0 48,0a24,24 0 1,0 -48,0"
-        android:fillColor="#FF101116" />
-
     <!-- Center Music Symbol -->
     <group
-        android:scaleX="2.0"
-        android:scaleY="2.0"
+        android:scaleX="4.0"
+        android:scaleY="4.0"
         android:translateX="152"
         android:translateY="152">
         <path
