@@ -267,9 +267,8 @@ class MusicScanner(private val context: Context) {
         var album = "Unknown Album"
         var duration = 0L
 
-        var retriever: MediaMetadataRetriever? = null
+        val retriever = MediaMetadataRetriever()
         try {
-            retriever = MediaMetadataRetriever()
             var loaded = false
             try {
                 retriever.setDataSource(context, uri)
@@ -320,7 +319,7 @@ class MusicScanner(private val context: Context) {
             // Keep fallback metadata
         } finally {
             try {
-                retriever?.release()
+                retriever.release()
             } catch (ignored: Throwable) {}
         }
 

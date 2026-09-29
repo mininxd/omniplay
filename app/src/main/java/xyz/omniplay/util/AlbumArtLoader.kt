@@ -33,9 +33,8 @@ object AlbumArtLoader {
         // 2. Try extracting embedded picture directly from audio file (works for SAF URIs and Content URIs)
         try {
             if (song.contentUri != Uri.EMPTY) {
-                var retriever: MediaMetadataRetriever? = null
+                val retriever = MediaMetadataRetriever()
                 try {
-                    retriever = MediaMetadataRetriever()
                     var loaded = false
                     try {
                         retriever.setDataSource(context, song.contentUri)
@@ -75,7 +74,7 @@ object AlbumArtLoader {
                     }
                 } finally {
                     try {
-                        retriever?.release()
+                        retriever.release()
                     } catch (ignored: Throwable) {}
                 }
             }
@@ -83,9 +82,8 @@ object AlbumArtLoader {
 
         // 3. Fallback: try file path if contentUri didn't yield
         if (song.filePath.isNotBlank()) {
-            var retriever: MediaMetadataRetriever? = null
+            val retriever = MediaMetadataRetriever()
             try {
-                retriever = MediaMetadataRetriever()
                 retriever.setDataSource(song.filePath)
                 val rawPicture = retriever.embeddedPicture
                 if (rawPicture != null && rawPicture.isNotEmpty()) {
@@ -97,7 +95,7 @@ object AlbumArtLoader {
             } catch (ignored: Throwable) {
             } finally {
                 try {
-                    retriever?.release()
+                    retriever.release()
                 } catch (ignored: Throwable) {}
             }
         }
