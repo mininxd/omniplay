@@ -15,6 +15,20 @@ import xyz.omniplay.model.Song
 object AlbumArtLoader {
 
     suspend fun loadAlbumArt(context: Context, song: Song): Bitmap? = withContext(Dispatchers.IO) {
+        // 0. On Android 10+ (API 29+), ContentResolver.loadThumbnail is fast, reliable, and high-quality
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && song.contentUri != Uri.EMPTY) {
+            try {
+                val bitmap = context.contentResolver.loadThumbnail(
+                    song.contentUri,
+                    android.util.Size(256, 256),
+                    null
+                )
+                if (bitmap != null) {
+                    return@withContext bitmap
+                }
+            } catch (ignored: Throwable) {}
+        }
+
         // 1. Try MediaStore album art URI first if available (fastest, pre-indexed bitmap)
         if (song.albumArtUri != null) {
             try {

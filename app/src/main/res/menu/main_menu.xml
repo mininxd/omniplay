@@ -1,17 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:id="@+id/action_scan_all"
-        android:icon="@drawable/ic_music_note"
-        android:title="@string/all_device_music" />
-    <item
         android:id="@+id/action_select_folder"
         android:icon="@drawable/ic_search"
         android:title="@string/select_folder" />
-    <item
-        android:id="@+id/action_sleep_timer"
-        android:icon="@drawable/ic_timer"
-        android:title="@string/sleep_timer" />
     <item
         android:id="@+id/action_track_details"
         android:icon="@drawable/ic_info"

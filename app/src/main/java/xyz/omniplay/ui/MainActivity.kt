@@ -9,11 +9,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.CountDownTimer
 import android.os.IBinder
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
@@ -23,7 +25,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.data.MusicScanner
@@ -49,9 +50,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private val musicScanner by lazy { MusicScanner(this) }
     private var scannedSongs = listOf<Song>()
     private var songAdapter: SongAdapter? = null
-
-    private var sleepTimer: CountDownTimer? = null
-    private var sleepTimerRemainingMs: Long = 0L
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -100,7 +98,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (savedFolderUri != null) {
                 loadMusicFromFolder(Uri.parse(savedFolderUri))
             } else {
-                loadAllMusicLibrary()
+                updateSongList(emptyList())
+                Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -126,11 +125,39 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupBackPressHandler()
         setupDefaultView()
         setupInWindowPlaylistPanel()
+        setupBottomSwipeGesture()
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
+    }
+
+    /**
+     * Closes playlist panel when pressing back button instead of exiting the app.
+     */
+    private fun setupBackPressHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            return
+        }
+        super.onBackPressed()
     }
 
     /**
@@ -144,9 +171,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.totalTimeText.text = getString(R.string.default_time)
         binding.albumArtImage.setImageResource(R.drawable.default_album_art)
 
-        binding.playbackSlider.valueFrom = 0.0f
-        binding.playbackSlider.valueTo = 1.0f
-        binding.playbackSlider.value = 0.0f
+        binding.playbackSlider.setDuration(1000L)
+        binding.playbackSlider.setProgress(0L)
         binding.playbackSlider.isEnabled = false
 
         updateShuffleButton(false)
@@ -156,7 +182,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Configures the in-window persistent sliding panel for the playlist.
-     * All playlist interaction stays in this single window without any modals or popups.
      */
     private fun setupInWindowPlaylistPanel() {
         bottomSheetBehavior = BottomSheetBehavior.from(binding.playlistSlidingPanel)
@@ -200,9 +225,56 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnSelectFolderEmpty.setOnClickListener {
             openFolderPicker()
         }
+    }
 
-        binding.btnScanAllEmpty.setOnClickListener {
-            switchToAllMusic()
+    /**
+     * Gesture listener: only triggers when swiping up from the bottom section below playback controls.
+     */
+    private fun setupBottomSwipeGesture() {
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            private val swipeThreshold = 30
+            private val swipeVelocityThreshold = 40
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffY = e2.y - e1.y
+                val diffX = e2.x - e1.x
+                // Swipe to top (upwards fling)
+                if (Math.abs(diffY) > Math.abs(diffX) &&
+                    diffY < -swipeThreshold &&
+                    Math.abs(velocityY) > swipeVelocityThreshold
+                ) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                    return true
+                }
+                return false
+            }
+
+            override fun onScroll(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                distanceX: Float,
+                distanceY: Float
+            ): Boolean {
+                // If scrolling upwards (distanceY > 0 means moving upward)
+                if (distanceY > 15 && Math.abs(distanceY) > Math.abs(distanceX)) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                    return true
+                }
+                return false
+            }
+
+            override fun onDown(e: MotionEvent): Boolean = true
+        })
+
+        binding.bottomGestureArea.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            true
         }
     }
 
@@ -253,21 +325,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        // Material You Slider (YouTube Music style)
-        binding.playbackSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: Slider) {
+        // Audio Waveform Seek Slider with smooth interactive seeking
+        binding.playbackSlider.seekListener = object : WaveformSeekBar.OnWaveformSeekListener {
+            override fun onStartTracking() {
                 isUserTrackingSlider = true
             }
 
-            override fun onStopTrackingTouch(slider: Slider) {
-                isUserTrackingSlider = false
-                playbackService?.seekTo((slider.value * 1000).toInt())
+            override fun onProgressChanged(progressMs: Long, fromUser: Boolean) {
+                if (fromUser) {
+                    binding.currentTimeText.text = Song.formatTime(progressMs)
+                }
             }
-        })
 
-        binding.playbackSlider.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                binding.currentTimeText.text = Song.formatTime((value * 1000).toLong())
+            override fun onStopTracking(progressMs: Long) {
+                isUserTrackingSlider = false
+                playbackService?.seekTo(progressMs.toInt())
             }
         }
 
@@ -307,8 +379,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Checks if user already selected a music directory.
-     * If so, loads from that directory; otherwise, automatically scans all device music.
+     * Checks if user already selected a music directory. If not (first run), launches folder picker.
      */
     private fun checkFolderOrScan() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -317,7 +388,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (savedFolderUri != null) {
             loadMusicFromFolder(Uri.parse(savedFolderUri))
         } else {
-            loadAllMusicLibrary()
+            Toast.makeText(this, "Select your music folder to scan songs", Toast.LENGTH_LONG).show()
+            openFolderPicker()
         }
     }
 
@@ -327,36 +399,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         } catch (e: Exception) {
             Toast.makeText(this, "Failed to open folder picker: ${e.message}", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun loadAllMusicLibrary(isRescan: Boolean = false) {
-        lifecycleScope.launch {
-            Toast.makeText(
-                this@MainActivity,
-                if (isRescan) "Rescanning music library..." else "Scanning music library...",
-                Toast.LENGTH_SHORT
-            ).show()
-
-            val songs = musicScanner.scanMediaStore()
-            updateSongList(songs)
-
-            if (isRescan) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Rescan complete: ${songs.size} songs found",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-    }
-
-    private fun switchToAllMusic() {
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .remove(KEY_MUSIC_FOLDER_URI)
-            .apply()
-        Toast.makeText(this, "Switched to all device music", Toast.LENGTH_SHORT).show()
-        loadAllMusicLibrary()
     }
 
     private fun loadMusicFromFolder(treeUri: Uri, isRescan: Boolean = false) {
@@ -388,7 +430,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (savedFolderUri != null) {
             loadMusicFromFolder(Uri.parse(savedFolderUri), isRescan = true)
         } else {
-            loadAllMusicLibrary(isRescan = true)
+            Toast.makeText(this, "Select a music folder to scan", Toast.LENGTH_SHORT).show()
+            openFolderPicker()
         }
     }
 
@@ -422,16 +465,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.action_scan_all -> {
-                    switchToAllMusic()
-                    true
-                }
                 R.id.action_select_folder -> {
                     openFolderPicker()
-                    true
-                }
-                R.id.action_sleep_timer -> {
-                    showSleepTimerDialog()
                     true
                 }
                 R.id.action_track_details -> {
@@ -450,46 +485,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
         popup.show()
-    }
-
-    private fun showSleepTimerDialog() {
-        val options = arrayOf("15 minutes", "30 minutes", "45 minutes", "60 minutes", "Cancel Timer")
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.sleep_timer)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> startSleepTimer(15 * 60 * 1000L)
-                    1 -> startSleepTimer(30 * 60 * 1000L)
-                    2 -> startSleepTimer(45 * 60 * 1000L)
-                    3 -> startSleepTimer(60 * 60 * 1000L)
-                    4 -> cancelSleepTimer()
-                }
-            }
-            .show()
-    }
-
-    private fun startSleepTimer(durationMs: Long) {
-        sleepTimer?.cancel()
-        sleepTimerRemainingMs = durationMs
-        sleepTimer = object : CountDownTimer(durationMs, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                sleepTimerRemainingMs = millisUntilFinished
-            }
-
-            override fun onFinish() {
-                playbackService?.pause()
-                Toast.makeText(this@MainActivity, "Sleep timer finished. Playback paused.", Toast.LENGTH_LONG).show()
-            }
-        }.start()
-        val minutes = durationMs / (60 * 1000)
-        Toast.makeText(this, "Sleep timer set for $minutes minutes", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun cancelSleepTimer() {
-        sleepTimer?.cancel()
-        sleepTimer = null
-        sleepTimerRemainingMs = 0L
-        Toast.makeText(this, "Sleep timer cancelled", Toast.LENGTH_SHORT).show()
     }
 
     private fun showTrackDetailsDialog() {
@@ -549,10 +544,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.albumNameText.text = song.album
         binding.totalTimeText.text = Song.formatTime(song.duration)
 
-        val durationSec = (song.duration / 1000).toFloat().coerceAtLeast(1.0f)
-        binding.playbackSlider.valueFrom = 0.0f
-        binding.playbackSlider.valueTo = durationSec
-        binding.playbackSlider.value = 0.0f
+        binding.playbackSlider.setSongSeed(song.id)
+        binding.playbackSlider.setDuration(song.duration)
+        binding.playbackSlider.setProgress(0L)
         binding.playbackSlider.isEnabled = true
 
         songAdapter?.setCurrentPlayingSongId(song.id)
@@ -574,13 +568,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int) {
         if (!isUserTrackingSlider && binding.playbackSlider.isEnabled) {
-            val currentSec = (currentPositionMs / 1000).toFloat()
-            val totalSec = (totalDurationMs / 1000).toFloat().coerceAtLeast(1.0f)
-
-            if (binding.playbackSlider.valueTo != totalSec) {
-                binding.playbackSlider.valueTo = totalSec
-            }
-            binding.playbackSlider.value = currentSec.coerceIn(0.0f, binding.playbackSlider.valueTo)
+            binding.playbackSlider.setProgress(currentPositionMs.toLong())
             binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
             binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
         }
@@ -631,7 +619,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             unbindService(serviceConnection)
             isBound = false
         }
-        sleepTimer?.cancel()
         super.onDestroy()
     }
 }

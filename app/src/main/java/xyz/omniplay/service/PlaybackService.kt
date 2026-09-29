@@ -533,7 +533,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                 val current = getCurrentPosition()
                 val total = getDuration()
                 listeners.forEach { it.onProgressUpdate(current, total) }
-                delay(250)
+                delay(80)
             }
         }
     }

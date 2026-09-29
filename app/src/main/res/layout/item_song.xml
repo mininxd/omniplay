@@ -14,7 +14,7 @@
         android:id="@+id/thumbnail_card"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        app:cardBackgroundColor="@color/surface_container"
+        app:cardBackgroundColor="@color/surface_container_high"
         app:cardCornerRadius="10dp"
         app:cardElevation="0dp"
         app:strokeWidth="0dp"
@@ -26,7 +26,8 @@
             android:id="@+id/item_thumbnail_image"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop"
+            android:padding="10dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_music_note"
             app:tint="@color/primary_accent" />
     </com.google.android.material.card.MaterialCardView>
