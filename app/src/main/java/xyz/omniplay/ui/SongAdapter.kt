@@ -18,7 +18,6 @@ import xyz.omniplay.R
 import xyz.omniplay.databinding.ItemSongBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
-import xyz.omniplay.util.AlbumColorGenerator
 
 class SongAdapter(
     private var showAlbumArt: Boolean = true,
@@ -76,8 +75,6 @@ class SongAdapter(
         fun bind(song: Song, isPlaying: Boolean) {
             loadJob?.cancel()
             val context = binding.root.context
-            val pad = (11 * context.resources.displayMetrics.density).toInt()
-            val albumColor = AlbumColorGenerator.getColorForAlbum(song.album, song.artist)
 
             binding.itemTitleText.text = song.title
             binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
@@ -92,17 +89,17 @@ class SongAdapter(
                 binding.thumbnailCard.strokeWidth = 0
             }
 
-            fun showMusicNoteFallback() {
-                binding.thumbnailCard.setCardBackgroundColor(albumColor)
-                binding.itemThumbnailImage.setImageDrawable(null)
-                binding.itemThumbnailImage.scaleType = ImageView.ScaleType.CENTER_INSIDE
-                binding.itemThumbnailImage.setPadding(pad, pad, pad, pad)
-                binding.itemThumbnailImage.setImageResource(R.drawable.ic_music_note)
-                binding.itemThumbnailImage.imageTintList = ColorStateList.valueOf(Color.WHITE)
+            fun showDefaultAlbumArt() {
+                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.surface_container_high))
+                binding.itemThumbnailImage.imageTintList = null
+                binding.itemThumbnailImage.clearColorFilter()
+                binding.itemThumbnailImage.setPadding(0, 0, 0, 0)
+                binding.itemThumbnailImage.scaleType = ImageView.ScaleType.CENTER_CROP
+                binding.itemThumbnailImage.setImageResource(R.drawable.default_album_art)
             }
 
             fun showAlbumArt(bitmap: Bitmap) {
-                binding.thumbnailCard.setCardBackgroundColor(Color.TRANSPARENT)
+                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.surface_container_high))
                 binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()
                 binding.itemThumbnailImage.setPadding(0, 0, 0, 0)
@@ -111,13 +108,13 @@ class SongAdapter(
             }
 
             if (!showAlbumArt) {
-                showMusicNoteFallback()
+                showDefaultAlbumArt()
             } else {
                 val cachedBitmap = AlbumArtLoader.getCachedAlbumArt(song.id)
                 if (cachedBitmap != null) {
                     showAlbumArt(cachedBitmap)
                 } else {
-                    showMusicNoteFallback()
+                    showDefaultAlbumArt()
                     val songId = song.id
                     binding.itemThumbnailImage.tag = songId
 
@@ -128,7 +125,7 @@ class SongAdapter(
                                 if (bitmap != null) {
                                     showAlbumArt(bitmap)
                                 } else {
-                                    showMusicNoteFallback()
+                                    showDefaultAlbumArt()
                                 }
                             }
                         }

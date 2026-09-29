@@ -374,8 +374,35 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     currentPeekSong = peekSong
                     peekDirection = direction
                     binding.peekAlbumArtCard.visibility = View.VISIBLE
-                    binding.peekLabelText.text = if (direction == -1) "NEXT TRACK" else "PREVIOUS TRACK"
+
+                    val isNext = (direction == -1)
+                    val gravity = if (isNext) Gravity.END else Gravity.START
+                    val textAlignment = if (isNext) View.TEXT_ALIGNMENT_VIEW_END else View.TEXT_ALIGNMENT_VIEW_START
+
+                    binding.peekBadgeLayout.gravity = gravity
+
+                    (binding.peekLabelText.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let { lp ->
+                        lp.gravity = gravity
+                        binding.peekLabelText.layoutParams = lp
+                    }
+                    binding.peekLabelText.gravity = gravity
+                    binding.peekLabelText.textAlignment = textAlignment
+                    binding.peekLabelText.text = if (isNext) "NEXT TRACK" else "PREVIOUS TRACK"
+
+                    (binding.peekTitleText.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let { lp ->
+                        lp.gravity = gravity
+                        binding.peekTitleText.layoutParams = lp
+                    }
+                    binding.peekTitleText.gravity = gravity
+                    binding.peekTitleText.textAlignment = textAlignment
                     binding.peekTitleText.text = peekSong.title
+
+                    (binding.peekArtistText.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let { lp ->
+                        lp.gravity = gravity
+                        binding.peekArtistText.layoutParams = lp
+                    }
+                    binding.peekArtistText.gravity = gravity
+                    binding.peekArtistText.textAlignment = textAlignment
                     binding.peekArtistText.text = peekSong.artist
 
                     val cached = AlbumArtLoader.getCachedAlbumArt(peekSong.id)
