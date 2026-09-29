@@ -47,6 +47,81 @@
             app:layout_constraintTop_toTopOf="@id/app_title_text"
             app:tint="@color/text_primary" />
 
+        <!-- Peek Album Art Card (Revealed behind during swipe) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/peek_album_art_card"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginStart="36dp"
+            android:layout_marginTop="20dp"
+            android:layout_marginEnd="36dp"
+            android:visibility="invisible"
+            app:cardCornerRadius="28dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="@color/surface_container"
+            app:strokeWidth="0dp"
+            app:layout_constraintBottom_toTopOf="@id/song_title_text"
+            app:layout_constraintDimensionRatio="1:1"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/app_title_text"
+            app:layout_constraintVertical_bias="0.15">
+
+            <ImageView
+                android:id="@+id/peek_album_art_image"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Peek Album Art"
+                android:scaleType="centerCrop"
+                android:src="@drawable/default_album_art" />
+
+            <LinearLayout
+                android:id="@+id/peek_badge_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:background="@drawable/bg_peek_gradient"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="20dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="14dp">
+
+                <TextView
+                    android:id="@+id/peek_label_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/primary_accent"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:textAllCaps="true"
+                    tools:text="NEXT TRACK" />
+
+                <TextView
+                    android:id="@+id/peek_title_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:singleLine="true"
+                    android:textColor="@color/text_primary"
+                    android:textSize="15sp"
+                    tools:text="Song Title" />
+
+                <TextView
+                    android:id="@+id/peek_artist_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    tools:text="Artist Name" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Album Art Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/album_art_card"

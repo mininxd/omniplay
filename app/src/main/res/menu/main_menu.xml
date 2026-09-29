@@ -5,6 +5,11 @@
         android:icon="@drawable/ic_search"
         android:title="@string/select_folder" />
     <item
+        android:id="@+id/action_show_album_art"
+        android:checkable="true"
+        android:checked="true"
+        android:title="@string/show_album_art_in_playlist" />
+    <item
         android:id="@+id/action_track_details"
         android:icon="@drawable/ic_info"
         android:title="@string/track_details" />

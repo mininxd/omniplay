@@ -515,6 +515,36 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         playSong(queue[currentIndex])
     }
 
+    fun getNextSong(): Song? {
+        if (queue.isEmpty()) return null
+        if (repeatMode == REPEAT_ONE) {
+            return currentSong
+        }
+        val nextIdx = currentIndex + 1
+        return if (nextIdx < queue.size) {
+            queue[nextIdx]
+        } else if (repeatMode == REPEAT_ALL) {
+            queue.firstOrNull()
+        } else {
+            null
+        }
+    }
+
+    fun getPreviousSong(): Song? {
+        if (queue.isEmpty()) return null
+        if (isShuffleEnabled) {
+            return if (queue.size > 1) queue.lastOrNull() else currentSong
+        }
+        val prevIdx = currentIndex - 1
+        return if (prevIdx >= 0) {
+            queue[prevIdx]
+        } else if (repeatMode == REPEAT_ALL) {
+            queue.lastOrNull()
+        } else {
+            queue.firstOrNull()
+        }
+    }
+
     fun seekTo(positionMs: Int) {
         try {
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {

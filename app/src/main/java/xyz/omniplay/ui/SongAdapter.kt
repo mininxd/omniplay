@@ -1,6 +1,8 @@
 package xyz.omniplay.ui
 
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -16,8 +18,10 @@ import xyz.omniplay.R
 import xyz.omniplay.databinding.ItemSongBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
+import xyz.omniplay.util.AlbumColorGenerator
 
 class SongAdapter(
+    private var showAlbumArt: Boolean = true,
     private val onSongClicked: (Song, Int) -> Unit
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
@@ -28,6 +32,13 @@ class SongAdapter(
     fun setSongs(newSongs: List<Song>) {
         songs = newSongs
         notifyDataSetChanged()
+    }
+
+    fun setShowAlbumArt(show: Boolean) {
+        if (showAlbumArt != show) {
+            showAlbumArt = show
+            notifyDataSetChanged()
+        }
     }
 
     fun getSongs(): List<Song> = songs
@@ -65,7 +76,8 @@ class SongAdapter(
         fun bind(song: Song, isPlaying: Boolean) {
             loadJob?.cancel()
             val context = binding.root.context
-            val pad = (10 * context.resources.displayMetrics.density).toInt()
+            val pad = (11 * context.resources.displayMetrics.density).toInt()
+            val albumColor = AlbumColorGenerator.getColorForAlbum(song.album, song.artist)
 
             binding.itemTitleText.text = song.title
             binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
@@ -73,48 +85,51 @@ class SongAdapter(
 
             if (isPlaying) {
                 binding.itemTitleText.setTextColor(ContextCompat.getColor(context, R.color.primary_accent))
-                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.primary_accent))
+                binding.thumbnailCard.strokeWidth = (2 * context.resources.displayMetrics.density).toInt()
+                binding.thumbnailCard.strokeColor = ContextCompat.getColor(context, R.color.primary_accent)
             } else {
                 binding.itemTitleText.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.surface_container_high))
+                binding.thumbnailCard.strokeWidth = 0
             }
 
-            fun showMusicNote() {
+            fun showMusicNoteFallback() {
+                binding.thumbnailCard.setCardBackgroundColor(albumColor)
                 binding.itemThumbnailImage.setImageDrawable(null)
                 binding.itemThumbnailImage.scaleType = ImageView.ScaleType.CENTER_INSIDE
                 binding.itemThumbnailImage.setPadding(pad, pad, pad, pad)
                 binding.itemThumbnailImage.setImageResource(R.drawable.ic_music_note)
-                val tint = if (isPlaying) {
-                    ContextCompat.getColor(context, R.color.on_primary)
-                } else {
-                    ContextCompat.getColor(context, R.color.primary_accent)
-                }
-                binding.itemThumbnailImage.setColorFilter(tint)
+                binding.itemThumbnailImage.imageTintList = ColorStateList.valueOf(Color.WHITE)
             }
 
             fun showAlbumArt(bitmap: Bitmap) {
+                binding.thumbnailCard.setCardBackgroundColor(Color.TRANSPARENT)
+                binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()
                 binding.itemThumbnailImage.setPadding(0, 0, 0, 0)
                 binding.itemThumbnailImage.scaleType = ImageView.ScaleType.CENTER_CROP
                 binding.itemThumbnailImage.setImageBitmap(bitmap)
             }
 
-            val cachedBitmap = AlbumArtLoader.getCachedAlbumArt(song.id)
-            if (cachedBitmap != null) {
-                showAlbumArt(cachedBitmap)
+            if (!showAlbumArt) {
+                showMusicNoteFallback()
             } else {
-                showMusicNote()
-                val songId = song.id
-                binding.itemThumbnailImage.tag = songId
+                val cachedBitmap = AlbumArtLoader.getCachedAlbumArt(song.id)
+                if (cachedBitmap != null) {
+                    showAlbumArt(cachedBitmap)
+                } else {
+                    showMusicNoteFallback()
+                    val songId = song.id
+                    binding.itemThumbnailImage.tag = songId
 
-                loadJob = adapterScope.launch {
-                    val bitmap = AlbumArtLoader.loadAlbumArt(context, song)
-                    if (binding.itemThumbnailImage.tag == songId) {
-                        withContext(Dispatchers.Main) {
-                            if (bitmap != null) {
-                                showAlbumArt(bitmap)
-                            } else {
-                                showMusicNote()
+                    loadJob = adapterScope.launch {
+                        val bitmap = AlbumArtLoader.loadAlbumArt(context, song)
+                        if (binding.itemThumbnailImage.tag == songId) {
+                            withContext(Dispatchers.Main) {
+                                if (bitmap != null) {
+                                    showAlbumArt(bitmap)
+                                } else {
+                                    showMusicNoteFallback()
+                                }
                             }
                         }
                     }

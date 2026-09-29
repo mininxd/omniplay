@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     companion object {
         private const val PREFS_NAME = "omniplay_prefs"
         private const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
+        private const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -219,7 +220,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         // Initialize playlist adapter
-        songAdapter = SongAdapter { song, index ->
+        val isShowArt = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
+
+        songAdapter = SongAdapter(showAlbumArt = isShowArt) { song, index ->
             playbackService?.let { service ->
                 if (service.queue.isEmpty() && scannedSongs.isNotEmpty()) {
                     service.setSongQueue(scannedSongs, startIndex = index, startPlaying = true)
@@ -341,7 +345,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Interactive gesture listener on album art card.
-     * Allows real-time dragging/peeking left or right without accidental snapping.
+     * Allows real-time dragging/peeking left or right.
+     * Peeking dynamically reveals the peek_album_art_card underneath with the actual next or previous song's
+     * album art, title, and artist, so users can see what songs next or prev before committing!
      * Dragging back to center snaps back to original position with no track change.
      * Dragging past threshold or fast fling commits to skipNext (swipe left) or skipPrevious (swipe right).
      * Simple tap without dragging expands the playlist sheet.
@@ -353,6 +359,46 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         var velocityTracker: VelocityTracker? = null
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         var activeAnimator: ValueAnimator? = null
+        var currentPeekSong: Song? = null
+        var peekDirection = 0 // -1 = next (swipe left), +1 = prev (swipe right)
+
+        fun updatePeekCard(direction: Int) {
+            val peekSong = if (direction == -1) {
+                playbackService?.getNextSong()
+            } else {
+                playbackService?.getPreviousSong()
+            }
+
+            if (peekSong != null) {
+                if (currentPeekSong?.id != peekSong.id || peekDirection != direction) {
+                    currentPeekSong = peekSong
+                    peekDirection = direction
+                    binding.peekAlbumArtCard.visibility = View.VISIBLE
+                    binding.peekLabelText.text = if (direction == -1) "NEXT TRACK" else "PREVIOUS TRACK"
+                    binding.peekTitleText.text = peekSong.title
+                    binding.peekArtistText.text = peekSong.artist
+
+                    val cached = AlbumArtLoader.getCachedAlbumArt(peekSong.id)
+                    if (cached != null) {
+                        binding.peekAlbumArtImage.setImageBitmap(cached)
+                    } else {
+                        binding.peekAlbumArtImage.setImageResource(R.drawable.default_album_art)
+                        lifecycleScope.launch {
+                            val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, peekSong)
+                            if (currentPeekSong?.id == peekSong.id && ::binding.isInitialized) {
+                                if (bitmap != null) {
+                                    binding.peekAlbumArtImage.setImageBitmap(bitmap)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                currentPeekSong = null
+                peekDirection = direction
+                binding.peekAlbumArtCard.visibility = View.INVISIBLE
+            }
+        }
 
         binding.albumArtCard.setOnTouchListener { v, event ->
             when (event.actionMasked) {
@@ -361,6 +407,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     startX = event.rawX
                     startY = event.rawY
                     isDragging = false
+                    currentPeekSong = null
+                    peekDirection = 0
+                    binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                    binding.peekAlbumArtCard.scaleX = 0.90f
+                    binding.peekAlbumArtCard.scaleY = 0.90f
+                    binding.peekAlbumArtCard.alpha = 0.6f
                     velocityTracker?.recycle()
                     velocityTracker = VelocityTracker.obtain().apply {
                         addMovement(event)
@@ -381,9 +433,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
                     if (isDragging) {
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
-                        val rotationDeg = (deltaX / cardWidth) * 12f
-                        v.translationX = deltaX
+                        val dir = if (deltaX < 0) -1 else 1
+                        updatePeekCard(dir)
+
+                        // If no song in that direction, apply rubber band resistance
+                        val effectiveDeltaX = if (currentPeekSong == null) deltaX * 0.25f else deltaX
+                        val rotationDeg = (effectiveDeltaX / cardWidth) * 12f
+                        v.translationX = effectiveDeltaX
                         v.rotation = rotationDeg
+
+                        // Reveal peek card behind
+                        if (currentPeekSong != null) {
+                            val progress = (Math.abs(effectiveDeltaX) / cardWidth).coerceIn(0f, 1f)
+                            binding.peekAlbumArtCard.scaleX = 0.90f + 0.10f * progress
+                            binding.peekAlbumArtCard.scaleY = 0.90f + 0.10f * progress
+                            binding.peekAlbumArtCard.alpha = 0.6f + 0.4f * progress
+                        }
                     }
                     true
                 }
@@ -398,12 +463,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
                         val threshold = cardWidth * 0.35f
 
-                        val hasSong = playbackService?.currentSong != null
-                        val commitNext = hasSong && ((xVel < -800f) || (currentX < -threshold && xVel < 400f))
-                        val commitPrev = hasSong && ((xVel > 800f) || (currentX > threshold && xVel > -400f))
+                        val commitNext = currentPeekSong != null && peekDirection == -1 &&
+                                ((xVel < -800f) || (currentX < -threshold && xVel < 400f))
+                        val commitPrev = currentPeekSong != null && peekDirection == 1 &&
+                                ((xVel > 800f) || (currentX > threshold && xVel > -400f))
 
                         if (commitNext) {
-                            val targetX = -cardWidth * 1.2f
+                            val targetX = -cardWidth * 1.25f
+                            binding.peekAlbumArtCard.animate()
+                                .scaleX(1f).scaleY(1f).alpha(1f)
+                                .setDuration(180L).start()
+
                             activeAnimator = ValueAnimator.ofFloat(currentX, targetX).apply {
                                 duration = 180L
                                 interpolator = DecelerateInterpolator()
@@ -414,22 +484,28 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 }
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationEnd(animation: Animator) {
+                                        binding.peekAlbumArtImage.drawable?.let {
+                                            binding.albumArtImage.setImageDrawable(it)
+                                        }
                                         playbackService?.skipNext()
-                                        v.translationX = cardWidth * 0.8f
-                                        v.rotation = 8f
-                                        v.animate()
-                                            .translationX(0f)
-                                            .rotation(0f)
-                                            .setDuration(220L)
-                                            .setInterpolator(DecelerateInterpolator())
-                                            .start()
+                                        v.translationX = 0f
+                                        v.rotation = 0f
+                                        binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                                        binding.peekAlbumArtCard.scaleX = 0.90f
+                                        binding.peekAlbumArtCard.scaleY = 0.90f
+                                        binding.peekAlbumArtCard.alpha = 0.6f
+                                        currentPeekSong = null
                                         activeAnimator = null
                                     }
                                 })
                                 start()
                             }
                         } else if (commitPrev) {
-                            val targetX = cardWidth * 1.2f
+                            val targetX = cardWidth * 1.25f
+                            binding.peekAlbumArtCard.animate()
+                                .scaleX(1f).scaleY(1f).alpha(1f)
+                                .setDuration(180L).start()
+
                             activeAnimator = ValueAnimator.ofFloat(currentX, targetX).apply {
                                 duration = 180L
                                 interpolator = DecelerateInterpolator()
@@ -440,15 +516,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 }
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationEnd(animation: Animator) {
+                                        binding.peekAlbumArtImage.drawable?.let {
+                                            binding.albumArtImage.setImageDrawable(it)
+                                        }
                                         playbackService?.skipPrevious()
-                                        v.translationX = -cardWidth * 0.8f
-                                        v.rotation = -8f
-                                        v.animate()
-                                            .translationX(0f)
-                                            .rotation(0f)
-                                            .setDuration(220L)
-                                            .setInterpolator(DecelerateInterpolator())
-                                            .start()
+                                        v.translationX = 0f
+                                        v.rotation = 0f
+                                        binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                                        binding.peekAlbumArtCard.scaleX = 0.90f
+                                        binding.peekAlbumArtCard.scaleY = 0.90f
+                                        binding.peekAlbumArtCard.alpha = 0.6f
+                                        currentPeekSong = null
                                         activeAnimator = null
                                     }
                                 })
@@ -456,6 +534,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             }
                         } else {
                             // User dragged back or didn't cross threshold -> smoothly snap back!
+                            binding.peekAlbumArtCard.animate()
+                                .scaleX(0.90f).scaleY(0.90f).alpha(0.6f)
+                                .setDuration(200L).start()
+
                             activeAnimator = ValueAnimator.ofFloat(currentX, 0f).apply {
                                 duration = 200L
                                 interpolator = DecelerateInterpolator()
@@ -468,6 +550,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     override fun onAnimationEnd(animation: Animator) {
                                         v.translationX = 0f
                                         v.rotation = 0f
+                                        binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                                        currentPeekSong = null
                                         activeAnimator = null
                                     }
                                 })
@@ -671,8 +755,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun showOptionsMenu(anchor: View) {
         val popup = PopupMenu(this, anchor, Gravity.END)
         popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
+        popup.menu.findItem(R.id.action_show_album_art)?.isChecked = isShowArt
+
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_show_album_art -> {
+                    val newState = !item.isChecked
+                    item.isChecked = newState
+                    prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
+                    songAdapter?.setShowAlbumArt(newState)
+                    true
+                }
                 R.id.action_select_folder -> {
                     openFolderPicker()
                     true
@@ -760,6 +856,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.playbackSlider.isEnabled = true
 
             songAdapter?.setCurrentPlayingSongId(song.id)
+
+            binding.albumArtCard.translationX = 0f
+            binding.albumArtCard.rotation = 0f
+            binding.peekAlbumArtCard.visibility = View.INVISIBLE
 
             // Asynchronously load real album art
             lifecycleScope.launch {

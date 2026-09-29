@@ -28,8 +28,7 @@
             android:layout_height="match_parent"
             android:padding="10dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_music_note"
-            app:tint="@color/primary_accent" />
+            android:src="@drawable/ic_music_note" />
     </com.google.android.material.card.MaterialCardView>
 
     <!-- Title & Subtitle -->
