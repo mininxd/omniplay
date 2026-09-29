@@ -17,7 +17,7 @@
         android:layout_height="match_parent"
         android:clipChildren="false"
         android:clipToPadding="false"
-        android:paddingBottom="56dp">
+        android:paddingBottom="72dp">
 
         <!-- Top Bar -->
         <TextView
@@ -343,19 +343,6 @@
                 app:tint="@color/control_tint" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <!-- Bottom section after playback controls to capture swipe-up gesture to open playlist -->
-        <View
-            android:id="@+id/bottom_gesture_area"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:background="@android:color/transparent"
-            android:clickable="true"
-            android:focusable="false"
-            app:layout_constraintTop_toBottomOf="@id/controls_layout"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- Persistent In-Window Sliding Playlist Panel -->
@@ -367,14 +354,14 @@
         android:elevation="12dp"
         android:orientation="vertical"
         app:behavior_hideable="false"
-        app:behavior_peekHeight="56dp"
+        app:behavior_peekHeight="72dp"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
 
         <!-- Sliding Panel Peek Header (Draggable & Clickable) -->
         <LinearLayout
             android:id="@+id/playlist_peek_header"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="72dp"
             android:background="?attr/selectableItemBackground"
             android:gravity="center_vertical"
             android:orientation="horizontal"

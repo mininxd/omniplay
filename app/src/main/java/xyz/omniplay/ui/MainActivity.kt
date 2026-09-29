@@ -137,7 +137,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupBackPressHandler()
         setupDefaultView()
         setupInWindowPlaylistPanel()
-        setupBottomSwipeGesture()
         setupAlbumArtSwipeGesture()
         setupListeners()
         bindPlaybackService()
@@ -242,111 +241,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnSelectFolderEmpty.setOnClickListener {
             openFolderPicker()
         }
-    }
 
-    /**
-     * Interactive gesture listener on the bottom section below playback controls.
-     * Allows dragging the playlist up and down smoothly in real-time with the user's finger,
-     * matching the exact behavior of sliding the playlist directly.
-     * Flings or drags past threshold animate smoothly to expanded; otherwise settles back to collapsed.
-     */
-    private fun setupBottomSwipeGesture() {
-        var startY = 0f
-        var isDragging = false
-        var velocityTracker: VelocityTracker? = null
-        var settleAnimator: ValueAnimator? = null
-        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
-
-        binding.bottomGestureArea.setOnTouchListener { _, event ->
-            if (!::bottomSheetBehavior.isInitialized) {
-                return@setOnTouchListener false
-            }
-
-            // Only respond when collapsed or actively dragging from this area
-            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED && !isDragging) {
-                return@setOnTouchListener false
-            }
-
-            val parent = binding.coordinatorRoot
-            val panel = binding.playlistSlidingPanel
-            val collapsedTop = parent.height - bottomSheetBehavior.peekHeight
-            val expandedTop = 0
-            val totalDistance = (collapsedTop - expandedTop).toFloat().coerceAtLeast(1f)
-
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    settleAnimator?.cancel()
-                    startY = event.rawY
-                    isDragging = false
-                    velocityTracker?.recycle()
-                    velocityTracker = VelocityTracker.obtain()
-                    velocityTracker?.addMovement(event)
-                    true
+        // Dynamically size peek height to smoothly reach right below playback controls,
+        // maximizing the native draggable range without splitting gestures or causing flicker.
+        binding.root.post {
+            if (::bottomSheetBehavior.isInitialized) {
+                val controlsBottom = binding.controlsLayout.bottom
+                val rootHeight = binding.coordinatorRoot.height
+                val availableSpace = rootHeight - controlsBottom
+                if (availableSpace > 0) {
+                    val density = resources.displayMetrics.density
+                    val desiredPeek = availableSpace.coerceIn(
+                        (72 * density).toInt(),
+                        (140 * density).toInt()
+                    )
+                    bottomSheetBehavior.peekHeight = desiredPeek
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    velocityTracker?.addMovement(event)
-                    val deltaY = event.rawY - startY
-
-                    if (!isDragging) {
-                        if (Math.abs(deltaY) > touchSlop) {
-                            isDragging = true
-                            startY = event.rawY
-                        }
-                    }
-
-                    if (isDragging) {
-                        val currentDeltaY = event.rawY - startY
-                        val newTop = (collapsedTop + currentDeltaY).toInt().coerceIn(expandedTop, collapsedTop)
-                        panel.offsetTopAndBottom(newTop - panel.top)
-
-                        // Update slide offset and chevron rotation in real time
-                        val slideOffset = (collapsedTop - panel.top).toFloat() / totalDistance
-                        binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isDragging) {
-                        velocityTracker?.addMovement(event)
-                        velocityTracker?.computeCurrentVelocity(1000)
-                        val velocityY = velocityTracker?.yVelocity ?: 0f
-                        val currentTop = panel.top
-                        val movedDistance = collapsedTop - currentTop
-
-                        // Commit to expand if fast upward fling or dragged past 30% of total distance
-                        val shouldExpand = velocityY < -600f || (movedDistance > totalDistance * 0.30f && velocityY < 300f)
-                        val targetTop = if (shouldExpand) expandedTop else collapsedTop
-
-                        settleAnimator?.cancel()
-                        settleAnimator = ValueAnimator.ofInt(currentTop, targetTop).apply {
-                            duration = 280L
-                            interpolator = DecelerateInterpolator(1.5f)
-                            addUpdateListener { animator ->
-                                val animatedTop = animator.animatedValue as Int
-                                panel.offsetTopAndBottom(animatedTop - panel.top)
-                                val slideOffset = (collapsedTop - panel.top).toFloat() / totalDistance
-                                binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
-                            }
-                            addListener(object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    if (shouldExpand) {
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                                    } else {
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-                                    }
-                                    isDragging = false
-                                }
-                            })
-                            start()
-                        }
-                    } else {
-                        isDragging = false
-                    }
-                    velocityTracker?.recycle()
-                    velocityTracker = null
-                    true
-                }
-                else -> false
             }
         }
     }
