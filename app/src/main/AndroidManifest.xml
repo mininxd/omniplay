@@ -50,30 +50,59 @@
         <activity
             android:name=".ui.VideoPlayerActivity"
             android:exported="true"
+            android:label="@string/app_name"
             android:theme="@style/Theme.Omniplay.VideoPlayer"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:launchMode="singleTask">
+
+            <!-- Primary video handler for file managers & content providers -->
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <!-- Universal video MIME type without scheme constraint -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="video/*" />
             </intent-filter>
+
+            <!-- Octet-stream fallback used by various file managers -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
-                <data android:mimeType="video/*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-matroska" />
+                <data android:mimeType="application/mp4" />
             </intent-filter>
+
+            <!-- Direct file extensions for file managers passing file URIs without MIME type -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
                 <data android:scheme="file" />
-                <data android:host="*" />
+                <data android:pathPattern=".*\\.mp4" />
+                <data android:pathPattern=".*\\.mkv" />
+                <data android:pathPattern=".*\\.webm" />
+                <data android:pathPattern=".*\\.3gp" />
+                <data android:pathPattern=".*\\.mov" />
+                <data android:pathPattern=".*\\.avi" />
+                <data android:pathPattern=".*\\.flv" />
+                <data android:pathPattern=".*\\.ts" />
+            </intent-filter>
+
+            <!-- Content scheme with extension matching -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
                 <data android:pathPattern=".*\\.mp4" />
                 <data android:pathPattern=".*\\.mkv" />
                 <data android:pathPattern=".*\\.webm" />

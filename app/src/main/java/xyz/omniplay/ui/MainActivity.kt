@@ -97,12 +97,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 .putString(KEY_MUSIC_FOLDER_URI, treeUri.toString())
                 .apply()
 
-            loadMusicFromFolder(treeUri)
+            loadMusicFromFolder(treeUri, isUserInitiated = true)
         } else {
             val savedFolderUri = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(KEY_MUSIC_FOLDER_URI, null)
             if (savedFolderUri != null) {
-                loadMusicFromFolder(Uri.parse(savedFolderUri))
+                loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = false)
             } else {
                 updateSongList(emptyList())
                 Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
@@ -770,18 +770,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
-    private fun loadMusicFromFolder(treeUri: Uri, isRescan: Boolean = false) {
+    private fun loadMusicFromFolder(treeUri: Uri, isUserInitiated: Boolean = false, isRescan: Boolean = false) {
         lifecycleScope.launch {
-            Toast.makeText(
-                this@MainActivity,
-                if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
-                Toast.LENGTH_SHORT
-            ).show()
+            if (isUserInitiated) {
+                Toast.makeText(
+                    this@MainActivity,
+                    if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
 
             val songs = musicScanner.scanFolder(treeUri)
             updateSongList(songs)
 
-            if (isRescan || songs.isEmpty()) {
+            if (isUserInitiated) {
                 val message = if (songs.isNotEmpty()) {
                     "Scan complete: ${songs.size} songs found"
                 } else {
@@ -797,7 +799,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
 
         if (savedFolderUri != null) {
-            loadMusicFromFolder(Uri.parse(savedFolderUri), isRescan = true)
+            loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = true, isRescan = true)
         } else {
             Toast.makeText(this, "Select a music folder to scan", Toast.LENGTH_SHORT).show()
             openFolderPicker()

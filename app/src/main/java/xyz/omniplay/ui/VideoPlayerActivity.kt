@@ -14,9 +14,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
+import android.view.WindowManager
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -29,6 +32,8 @@ import xyz.omniplay.databinding.ActivityVideoPlayerBinding
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.ui.view.ScaleableVideoView
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Dedicated video playback activity for Omniplay.
@@ -49,8 +54,26 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var savedPlaybackPosition = 0
     private var wasPlayingBeforePause = true
 
+    // Touch gesture slider variables (30% left brightness, 30% right volume)
+    private var touchSlop = 0
+    private var activeTouchZone = TouchZone.NONE
+    private var touchDownX = 0f
+    private var touchDownY = 0f
+    private var isDraggingSlider = false
+    private var initialBrightness = 0.5f
+    private var initialVolume = 0f
+    private var maxVolume = 15f
+
+    private enum class TouchZone {
+        NONE, BRIGHTNESS, VOLUME
+    }
+
     private val hideControlsRunnable = Runnable {
         hideControls()
+    }
+
+    private val hideGestureIndicatorRunnable = Runnable {
+        hideGestureIndicator()
     }
 
     private val progressUpdateRunnable = object : Runnable {
@@ -69,9 +92,13 @@ class VideoPlayerActivity : AppCompatActivity() {
         binding = ActivityVideoPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Make window edge-to-edge
+        // Make window fullscreen & permanently hide status bar (no snap UI)
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        keepStatusBarsHidden()
 
+        touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         // Pause any background audio playback currently running in Omniplay
@@ -224,12 +251,17 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private fun setupGestures() {
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                toggleControls()
+                if (!isDraggingSlider) {
+                    toggleControls()
+                }
                 return true
             }
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isDraggingSlider) return false
                 val screenWidth = binding.videoRootLayout.width
                 if (e.x < screenWidth / 2) {
                     seekRelative(-10000)
@@ -242,10 +274,89 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         })
 
-        binding.videoRootLayout.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            true
+        val touchListener = View.OnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownX = event.x
+                    touchDownY = event.y
+                    isDraggingSlider = false
+                    val width = binding.videoRootLayout.width.toFloat().coerceAtLeast(1f)
+
+                    activeTouchZone = when {
+                        touchDownX < width * 0.30f -> TouchZone.BRIGHTNESS
+                        touchDownX > width * 0.70f -> TouchZone.VOLUME
+                        else -> TouchZone.NONE
+                    }
+
+                    if (activeTouchZone == TouchZone.BRIGHTNESS) {
+                        var b = window.attributes.screenBrightness
+                        if (b < 0f) {
+                            try {
+                                b = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
+                            } catch (e: Exception) {
+                                b = 0.5f
+                            }
+                        }
+                        initialBrightness = b.coerceIn(0.01f, 1f)
+                    } else if (activeTouchZone == TouchZone.VOLUME) {
+                        val maxVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+                        val curVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+                        maxVolume = maxVol.toFloat().coerceAtLeast(1f)
+                        initialVolume = curVol.toFloat()
+                    }
+                    gestureDetector.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.x - touchDownX
+                    val deltaY = touchDownY - event.y // up is positive
+
+                    if (!isDraggingSlider && activeTouchZone != TouchZone.NONE) {
+                        if (abs(deltaY) > touchSlop && abs(deltaY) > abs(deltaX)) {
+                            isDraggingSlider = true
+                            handler.removeCallbacks(hideGestureIndicatorRunnable)
+                        }
+                    }
+
+                    if (isDraggingSlider) {
+                        val height = binding.videoRootLayout.height.toFloat().coerceAtLeast(1f)
+                        val deltaPercent = deltaY / (height * 0.75f)
+
+                        if (activeTouchZone == TouchZone.BRIGHTNESS) {
+                            val newBrightness = (initialBrightness + deltaPercent).coerceIn(0.01f, 1f)
+                            val lp = window.attributes
+                            lp.screenBrightness = newBrightness
+                            window.attributes = lp
+                            showBrightnessIndicator(newBrightness)
+                        } else if (activeTouchZone == TouchZone.VOLUME) {
+                            val newFraction = (initialVolume / maxVolume + deltaPercent).coerceIn(0f, 1f)
+                            val targetVol = (newFraction * maxVolume).roundToInt().coerceIn(0, maxVolume.toInt())
+                            audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                            showVolumeIndicator(targetVol, maxVolume.toInt())
+                        }
+                        true
+                    } else {
+                        gestureDetector.onTouchEvent(event)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDraggingSlider) {
+                        isDraggingSlider = false
+                        activeTouchZone = TouchZone.NONE
+                        handler.removeCallbacks(hideGestureIndicatorRunnable)
+                        handler.postDelayed(hideGestureIndicatorRunnable, 800)
+                        true
+                    } else {
+                        activeTouchZone = TouchZone.NONE
+                        gestureDetector.onTouchEvent(event)
+                    }
+                }
+                else -> gestureDetector.onTouchEvent(event)
+            }
         }
+
+        binding.videoRootLayout.setOnTouchListener(touchListener)
+        binding.controlsOverlay.setOnTouchListener(touchListener)
     }
 
     private fun togglePlayPause() {
@@ -329,7 +440,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             .withStartAction { binding.controlsOverlay.visibility = View.VISIBLE }
             .start()
 
-        setSystemBarsVisible(true)
+        keepStatusBarsHidden()
         if (binding.videoView.isPlaying) {
             scheduleControlsHide(3500)
         }
@@ -343,7 +454,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             .withEndAction { binding.controlsOverlay.visibility = View.GONE }
             .start()
 
-        setSystemBarsVisible(false)
+        keepStatusBarsHidden()
     }
 
     private fun scheduleControlsHide(delayMs: Long = 3500) {
@@ -351,15 +462,50 @@ class VideoPlayerActivity : AppCompatActivity() {
         handler.postDelayed(hideControlsRunnable, delayMs)
     }
 
-    private fun setSystemBarsVisible(visible: Boolean) {
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        if (visible) {
-            controller.show(WindowInsetsCompat.Type.systemBars())
-        } else {
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            keepStatusBarsHidden()
         }
+    }
+
+    private fun keepStatusBarsHidden() {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.statusBars())
+        controller.hide(WindowInsetsCompat.Type.navigationBars())
+    }
+
+    private fun showBrightnessIndicator(brightness: Float) {
+        val percent = (brightness * 100).roundToInt().coerceIn(1, 100)
+        binding.gestureIndicatorIcon.setImageResource(R.drawable.ic_brightness)
+        binding.gestureIndicatorProgress.progress = percent
+        binding.gestureIndicatorText.text = "$percent%"
+
+        binding.gestureIndicatorCard.animate().cancel()
+        binding.gestureIndicatorCard.alpha = 1f
+        binding.gestureIndicatorCard.visibility = View.VISIBLE
+    }
+
+    private fun showVolumeIndicator(current: Int, max: Int) {
+        val percent = if (max > 0) ((current.toFloat() / max) * 100).roundToInt().coerceIn(0, 100) else 0
+        val iconRes = if (current <= 0) R.drawable.ic_volume_off else R.drawable.ic_volume_up
+        binding.gestureIndicatorIcon.setImageResource(iconRes)
+        binding.gestureIndicatorProgress.progress = percent
+        binding.gestureIndicatorText.text = "$percent%"
+
+        binding.gestureIndicatorCard.animate().cancel()
+        binding.gestureIndicatorCard.alpha = 1f
+        binding.gestureIndicatorCard.visibility = View.VISIBLE
+    }
+
+    private fun hideGestureIndicator() {
+        binding.gestureIndicatorCard.animate()
+            .alpha(0f)
+            .setDuration(250L)
+            .withEndAction { binding.gestureIndicatorCard.visibility = View.GONE }
+            .start()
     }
 
     private fun updateProgressUI(currentMs: Long, totalMs: Long) {
