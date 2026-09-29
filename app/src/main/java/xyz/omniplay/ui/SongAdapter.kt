@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.R
@@ -22,7 +23,7 @@ class SongAdapter(
 
     private var songs: List<Song> = emptyList()
     private var currentPlayingSongId: Long = -1L
-    private val adapterScope = CoroutineScope(Dispatchers.Main + Job())
+    private val adapterScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     fun setSongs(newSongs: List<Song>) {
         songs = newSongs

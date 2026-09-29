@@ -6,6 +6,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background_dark"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
     <!-- Main Screen Content (Now Playing) -->
@@ -13,6 +15,8 @@
         android:id="@+id/main_content_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:paddingBottom="56dp">
 
         <!-- Top Bar -->
@@ -133,7 +137,7 @@
         <xyz.omniplay.ui.SquigglySeekBar
             android:id="@+id/playback_slider"
             android:layout_width="0dp"
-            android:layout_height="40dp"
+            android:layout_height="48dp"
             android:layout_marginStart="24dp"
             android:layout_marginTop="16dp"
             android:layout_marginEnd="24dp"

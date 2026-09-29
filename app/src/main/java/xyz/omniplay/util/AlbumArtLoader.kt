@@ -30,117 +30,131 @@ object AlbumArtLoader {
     }
 
     suspend fun loadAlbumArt(context: Context, song: Song): Bitmap? = withContext(Dispatchers.IO) {
-        val cached = memoryCache.get(song.id)
-        if (cached != null) {
-            return@withContext cached
-        }
+        try {
+            val cached = memoryCache.get(song.id)
+            if (cached != null) {
+                return@withContext cached
+            }
 
-        var decodedBitmap: Bitmap? = null
+            var decodedBitmap: Bitmap? = null
 
-        // 1. Try MediaStore album art URI first if available (official indexed artwork)
-        if (song.albumArtUri != null) {
-            try {
-                decodedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, song.albumArtUri))
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, song.albumArtUri)
-                }
-            } catch (ignored: Throwable) {}
-        }
-
-        // 2. Try extracting embedded ID3 / FLAC picture directly from audio content URI
-        if (decodedBitmap == null && song.contentUri != Uri.EMPTY) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                var loaded = false
+            // 1. Try MediaStore album art URI first if available (official indexed artwork)
+            if (song.albumArtUri != null) {
                 try {
-                    retriever.setDataSource(context, song.contentUri)
-                    loaded = true
+                    decodedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, song.albumArtUri)) { decoder, _, _ ->
+                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                            decoder.isMutableRequired = false
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, song.albumArtUri)
+                    }
                 } catch (ignored: Throwable) {}
+            }
 
-                if (!loaded) {
+            // 2. Try extracting embedded ID3 / FLAC picture directly from audio content URI
+            if (decodedBitmap == null && song.contentUri != Uri.EMPTY) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    var loaded = false
                     try {
-                        context.contentResolver.openAssetFileDescriptor(song.contentUri, "r")?.use { afd ->
-                            if (afd.declaredLength < 0) {
-                                retriever.setDataSource(afd.fileDescriptor)
-                            } else {
-                                retriever.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                        retriever.setDataSource(context, song.contentUri)
+                        loaded = true
+                    } catch (ignored: Throwable) {}
+
+                    if (!loaded) {
+                        try {
+                            context.contentResolver.openAssetFileDescriptor(song.contentUri, "r")?.use { afd ->
+                                if (afd.declaredLength < 0) {
+                                    retriever.setDataSource(afd.fileDescriptor)
+                                } else {
+                                    retriever.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                                }
+                                loaded = true
                             }
-                            loaded = true
-                        }
-                    } catch (ignored: Throwable) {}
-                }
+                        } catch (ignored: Throwable) {}
+                    }
 
-                if (!loaded) {
+                    if (!loaded) {
+                        try {
+                            context.contentResolver.openFileDescriptor(song.contentUri, "r")?.use { pfd ->
+                                retriever.setDataSource(pfd.fileDescriptor)
+                                loaded = true
+                            }
+                        } catch (ignored: Throwable) {}
+                    }
+
+                    if (loaded) {
+                        val rawPicture = retriever.embeddedPicture
+                        if (rawPicture != null && rawPicture.isNotEmpty()) {
+                            decodedBitmap = BitmapFactory.decodeByteArray(rawPicture, 0, rawPicture.size)
+                        }
+                    }
+                } catch (ignored: Throwable) {
+                } finally {
                     try {
-                        context.contentResolver.openFileDescriptor(song.contentUri, "r")?.use { pfd ->
-                            retriever.setDataSource(pfd.fileDescriptor)
-                            loaded = true
-                        }
+                        retriever.release()
                     } catch (ignored: Throwable) {}
                 }
+            }
 
-                if (loaded) {
+            // 3. Fallback: try file path if contentUri didn't yield artwork
+            if (decodedBitmap == null && song.filePath.isNotBlank()) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(song.filePath)
                     val rawPicture = retriever.embeddedPicture
                     if (rawPicture != null && rawPicture.isNotEmpty()) {
                         decodedBitmap = BitmapFactory.decodeByteArray(rawPicture, 0, rawPicture.size)
                     }
+                } catch (ignored: Throwable) {
+                } finally {
+                    try {
+                        retriever.release()
+                    } catch (ignored: Throwable) {}
                 }
-            } catch (ignored: Throwable) {
-            } finally {
-                try {
-                    retriever.release()
-                } catch (ignored: Throwable) {}
             }
-        }
 
-        // 3. Fallback: try file path if contentUri didn't yield artwork
-        if (decodedBitmap == null && song.filePath.isNotBlank()) {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(song.filePath)
-                val rawPicture = retriever.embeddedPicture
-                if (rawPicture != null && rawPicture.isNotEmpty()) {
-                    decodedBitmap = BitmapFactory.decodeByteArray(rawPicture, 0, rawPicture.size)
+            // 4. Validate decoded bitmap: reject corrupted or solid black/blank placeholders
+            if (decodedBitmap != null) {
+                if (isSolidOrBlankBitmap(decodedBitmap)) {
+                    return@withContext null
                 }
-            } catch (ignored: Throwable) {
-            } finally {
-                try {
-                    retriever.release()
-                } catch (ignored: Throwable) {}
+                memoryCache.put(song.id, decodedBitmap)
+                return@withContext decodedBitmap
             }
-        }
 
-        // 4. Validate decoded bitmap: reject corrupted or solid black/blank placeholders
-        if (decodedBitmap != null) {
-            if (isSolidOrBlankBitmap(decodedBitmap)) {
-                return@withContext null
-            }
-            memoryCache.put(song.id, decodedBitmap)
-            return@withContext decodedBitmap
+            null
+        } catch (t: Throwable) {
+            null
         }
-
-        null
     }
 
     private fun isSolidOrBlankBitmap(bitmap: Bitmap): Boolean {
-        val w = bitmap.width
-        val h = bitmap.height
-        if (w <= 0 || h <= 0) return true
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bitmap.config == Bitmap.Config.HARDWARE) {
+                return false
+            }
+            val w = bitmap.width
+            val h = bitmap.height
+            if (w <= 0 || h <= 0) return true
 
-        val samples = intArrayOf(
-            bitmap.getPixel(w / 2, h / 2),
-            bitmap.getPixel(w / 4, h / 4),
-            bitmap.getPixel(3 * w / 4, 3 * w / 4),
-            bitmap.getPixel(w / 4, 3 * w / 4),
-            bitmap.getPixel(3 * w / 4, h / 4),
-            bitmap.getPixel(w / 2, h / 4),
-            bitmap.getPixel(w / 2, 3 * w / 4)
-        )
-        val first = samples[0]
-        val isDarkOrEmpty = (first == 0xFF000000.toInt() || (first ushr 24) == 0)
-        val allSame = samples.all { it == first }
-        return allSame && isDarkOrEmpty
+            val samples = intArrayOf(
+                bitmap.getPixel(w / 2, h / 2),
+                bitmap.getPixel(w / 4, h / 4),
+                bitmap.getPixel(3 * w / 4, 3 * w / 4),
+                bitmap.getPixel(w / 4, 3 * w / 4),
+                bitmap.getPixel(3 * w / 4, h / 4),
+                bitmap.getPixel(w / 2, h / 4),
+                bitmap.getPixel(w / 2, 3 * w / 4)
+            )
+            val first = samples[0]
+            val isDarkOrEmpty = (first == 0xFF000000.toInt() || (first ushr 24) == 0)
+            val allSame = samples.all { it == first }
+            return allSame && isDarkOrEmpty
+        } catch (t: Throwable) {
+            return false
+        }
     }
 }

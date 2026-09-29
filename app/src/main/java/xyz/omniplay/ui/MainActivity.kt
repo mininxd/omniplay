@@ -134,6 +134,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupDefaultView()
         setupInWindowPlaylistPanel()
         setupBottomSwipeGesture()
+        setupAlbumArtSwipeGesture()
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
@@ -338,6 +339,158 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    /**
+     * Interactive gesture listener on album art card.
+     * Allows real-time dragging/peeking left or right without accidental snapping.
+     * Dragging back to center snaps back to original position with no track change.
+     * Dragging past threshold or fast fling commits to skipNext (swipe left) or skipPrevious (swipe right).
+     * Simple tap without dragging expands the playlist sheet.
+     */
+    private fun setupAlbumArtSwipeGesture() {
+        var startX = 0f
+        var startY = 0f
+        var isDragging = false
+        var velocityTracker: VelocityTracker? = null
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var activeAnimator: ValueAnimator? = null
+
+        binding.albumArtCard.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    activeAnimator?.cancel()
+                    startX = event.rawX
+                    startY = event.rawY
+                    isDragging = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    velocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - startX
+                    val deltaY = event.rawY - startY
+
+                    if (!isDragging) {
+                        if (Math.abs(deltaX) > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.2f) {
+                            isDragging = true
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                    }
+
+                    if (isDragging) {
+                        val cardWidth = v.width.toFloat().coerceAtLeast(1f)
+                        val rotationDeg = (deltaX / cardWidth) * 12f
+                        v.translationX = deltaX
+                        v.rotation = rotationDeg
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isDragging) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = velocityTracker?.xVelocity ?: 0f
+                        val currentX = v.translationX
+                        val cardWidth = v.width.toFloat().coerceAtLeast(1f)
+                        val threshold = cardWidth * 0.35f
+
+                        val hasSong = playbackService?.currentSong != null
+                        val commitNext = hasSong && ((xVel < -800f) || (currentX < -threshold && xVel < 400f))
+                        val commitPrev = hasSong && ((xVel > 800f) || (currentX > threshold && xVel > -400f))
+
+                        if (commitNext) {
+                            val targetX = -cardWidth * 1.2f
+                            activeAnimator = ValueAnimator.ofFloat(currentX, targetX).apply {
+                                duration = 180L
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { anim ->
+                                    val x = anim.animatedValue as Float
+                                    v.translationX = x
+                                    v.rotation = (x / cardWidth) * 12f
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        playbackService?.skipNext()
+                                        v.translationX = cardWidth * 0.8f
+                                        v.rotation = 8f
+                                        v.animate()
+                                            .translationX(0f)
+                                            .rotation(0f)
+                                            .setDuration(220L)
+                                            .setInterpolator(DecelerateInterpolator())
+                                            .start()
+                                        activeAnimator = null
+                                    }
+                                })
+                                start()
+                            }
+                        } else if (commitPrev) {
+                            val targetX = cardWidth * 1.2f
+                            activeAnimator = ValueAnimator.ofFloat(currentX, targetX).apply {
+                                duration = 180L
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { anim ->
+                                    val x = anim.animatedValue as Float
+                                    v.translationX = x
+                                    v.rotation = (x / cardWidth) * 12f
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        playbackService?.skipPrevious()
+                                        v.translationX = -cardWidth * 0.8f
+                                        v.rotation = -8f
+                                        v.animate()
+                                            .translationX(0f)
+                                            .rotation(0f)
+                                            .setDuration(220L)
+                                            .setInterpolator(DecelerateInterpolator())
+                                            .start()
+                                        activeAnimator = null
+                                    }
+                                })
+                                start()
+                            }
+                        } else {
+                            // User dragged back or didn't cross threshold -> smoothly snap back!
+                            activeAnimator = ValueAnimator.ofFloat(currentX, 0f).apply {
+                                duration = 200L
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { anim ->
+                                    val x = anim.animatedValue as Float
+                                    v.translationX = x
+                                    v.rotation = (x / cardWidth) * 12f
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        v.translationX = 0f
+                                        v.rotation = 0f
+                                        activeAnimator = null
+                                    }
+                                })
+                                start()
+                            }
+                        }
+                        isDragging = false
+                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
+                        // Tap without drag -> expand playlist panel
+                        if (::bottomSheetBehavior.isInitialized) {
+                            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                        }
+                        v.performClick()
+                    }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
     private fun setupListeners() {
         // Menu button (Hamburger)
         binding.btnMenu.setOnClickListener { view ->
@@ -401,11 +554,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 isUserTrackingSlider = false
                 playbackService?.seekTo(progressMs.toInt())
             }
-        }
-
-        // Clicking album art opens/slides up the playlist panel
-        binding.albumArtCard.setOnClickListener {
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
 
@@ -593,70 +741,90 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     // PlaybackListener callbacks
     override fun onTrackChanged(song: Song?) {
-        if (song == null) {
-            setupDefaultView()
-            songAdapter?.setCurrentPlayingSongId(-1L)
-            return
-        }
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            if (song == null) {
+                setupDefaultView()
+                songAdapter?.setCurrentPlayingSongId(-1L)
+                return@runOnUiThread
+            }
 
-        binding.songTitleText.text = song.title
-        binding.artistNameText.text = song.artist
-        binding.albumNameText.text = song.album
-        binding.totalTimeText.text = Song.formatTime(song.duration)
+            binding.songTitleText.text = song.title
+            binding.artistNameText.text = song.artist
+            binding.albumNameText.text = song.album
+            binding.totalTimeText.text = Song.formatTime(song.duration)
 
-        binding.playbackSlider.setDuration(song.duration)
-        binding.playbackSlider.setProgress(0L)
-        binding.playbackSlider.setPlaying(playbackService?.isPlaying() == true)
-        binding.playbackSlider.isEnabled = true
+            binding.playbackSlider.setDuration(song.duration)
+            binding.playbackSlider.setProgress(0L)
+            binding.playbackSlider.setPlaying(playbackService?.isPlaying() == true)
+            binding.playbackSlider.isEnabled = true
 
-        songAdapter?.setCurrentPlayingSongId(song.id)
+            songAdapter?.setCurrentPlayingSongId(song.id)
 
-        // Asynchronously load real album art
-        lifecycleScope.launch {
-            val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, song)
-            if (bitmap != null) {
-                binding.albumArtImage.setImageBitmap(bitmap)
-            } else {
-                binding.albumArtImage.setImageResource(R.drawable.default_album_art)
+            // Asynchronously load real album art
+            lifecycleScope.launch {
+                val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, song)
+                if (::binding.isInitialized) {
+                    if (bitmap != null) {
+                        binding.albumArtImage.setImageBitmap(bitmap)
+                    } else {
+                        binding.albumArtImage.setImageResource(R.drawable.default_album_art)
+                    }
+                }
             }
         }
     }
 
     override fun onPlaybackStateChanged(isPlaying: Boolean) {
-        updatePlayPauseButton(isPlaying)
-        binding.playbackSlider.setPlaying(isPlaying)
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            updatePlayPauseButton(isPlaying)
+            binding.playbackSlider.setPlaying(isPlaying)
+        }
     }
 
     override fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int) {
-        if (!isUserTrackingSlider && binding.playbackSlider.isEnabled) {
-            binding.playbackSlider.setProgress(currentPositionMs.toLong())
-            binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
-            binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            if (!isUserTrackingSlider && binding.playbackSlider.isEnabled) {
+                binding.playbackSlider.setProgress(currentPositionMs.toLong())
+                binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
+                binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
+            }
         }
     }
 
     override fun onShuffleModeChanged(enabled: Boolean) {
-        updateShuffleButton(enabled)
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            updateShuffleButton(enabled)
+        }
     }
 
     override fun onRepeatModeChanged(mode: Int) {
-        updateRepeatButton(mode)
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            updateRepeatButton(mode)
+        }
     }
 
     override fun onQueueChanged(queue: List<Song>) {
-        songAdapter?.setSongs(queue)
-        binding.songCountText.text = "${queue.size} songs"
-        if (queue.isNotEmpty()) {
-            binding.emptyStateLayout.visibility = View.GONE
-            binding.songsRecyclerView.visibility = View.VISIBLE
-        } else {
-            binding.emptyStateLayout.visibility = View.VISIBLE
-            binding.songsRecyclerView.visibility = View.GONE
-        }
-        val currentId = playbackService?.currentSong?.id ?: -1L
-        songAdapter?.setCurrentPlayingSongId(currentId)
-        if (playbackService?.isShuffleEnabled == true) {
-            binding.songsRecyclerView.scrollToPosition(0)
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            songAdapter?.setSongs(queue)
+            binding.songCountText.text = "${queue.size} songs"
+            if (queue.isNotEmpty()) {
+                binding.emptyStateLayout.visibility = View.GONE
+                binding.songsRecyclerView.visibility = View.VISIBLE
+            } else {
+                binding.emptyStateLayout.visibility = View.VISIBLE
+                binding.songsRecyclerView.visibility = View.GONE
+            }
+            val currentId = playbackService?.currentSong?.id ?: -1L
+            songAdapter?.setCurrentPlayingSongId(currentId)
+            if (playbackService?.isShuffleEnabled == true) {
+                binding.songsRecyclerView.scrollToPosition(0)
+            }
         }
     }
 

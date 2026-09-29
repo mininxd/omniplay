@@ -5,12 +5,16 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import androidx.core.content.ContextCompat
 import xyz.omniplay.R
+import xyz.omniplay.model.Song
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
@@ -20,7 +24,7 @@ import kotlin.math.sin
  * Android 13/14 (Tiramisu/UpsideDownCake) native style Squiggly Progress Line Seek Bar.
  * When playing, a lively squiggly wave flows along the played portion of the track.
  * When paused, the wave settles into a calm line.
- * Moves continuously and smoothly without discrete step jumps.
+ * When scrubbing, the wave smoothly flattens into a straight guide line and displays a floating timestamp bubble.
  */
 class SquigglySeekBar @JvmOverloads constructor(
     context: Context,
@@ -50,6 +54,8 @@ class SquigglySeekBar @JvmOverloads constructor(
     private val thumbHaloRadiusPx = 14f * density
 
     private var wavePhase: Float = 0f
+    private var currentAmplitudeFactor: Float = 1f
+    private var amplitudeAnimator: ValueAnimator? = null
     private var phaseAnimator: ValueAnimator? = null
     private var smoothProgressAnimator: ValueAnimator? = null
 
@@ -78,6 +84,24 @@ class SquigglySeekBar @JvmOverloads constructor(
     private val thumbHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.slider_halo)
         style = Paint.Style.FILL
+    }
+
+    private val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.surface_container_high)
+        style = Paint.Style.FILL
+    }
+
+    private val bubbleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.primary_accent)
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * density
+    }
+
+    private val bubbleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.text_primary)
+        textSize = 12f * context.resources.displayMetrics.scaledDensity
+        typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
     }
 
     init {
@@ -140,6 +164,19 @@ class SquigglySeekBar @JvmOverloads constructor(
         phaseAnimator = null
     }
 
+    private fun animateAmplitude(target: Float) {
+        amplitudeAnimator?.cancel()
+        amplitudeAnimator = ValueAnimator.ofFloat(currentAmplitudeFactor, target).apply {
+            duration = 180
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                currentAmplitudeFactor = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (isPlaying) {
@@ -151,6 +188,7 @@ class SquigglySeekBar @JvmOverloads constructor(
         super.onDetachedFromWindow()
         stopPhaseAnimation()
         smoothProgressAnimator?.cancel()
+        amplitudeAnimator?.cancel()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -176,26 +214,23 @@ class SquigglySeekBar @JvmOverloads constructor(
         if (progressX > startX) {
             squigglyPath.moveTo(startX, centerY)
 
-            val activeDist = progressX - startX
-            // Use 2dp steps along X for smooth curve rendering
             val step = max(2f, 2f * density)
             var x = startX
 
             while (x <= progressX) {
                 val relX = x - startX
-                // Envelope ramp-up at beginning and ramp-down at thumb for smooth connection
                 val rampIn = min(1f, relX / (waveLengthPx * 0.75f))
                 val rampOut = min(1f, (progressX - x) / (waveLengthPx * 0.75f))
                 val ramp = min(rampIn, rampOut)
 
-                val effectiveAmp = if (isPlaying) waveAmplitudePx * ramp else (waveAmplitudePx * 0.35f) * ramp
+                val baseAmp = if (isPlaying) waveAmplitudePx else (waveAmplitudePx * 0.35f)
+                val effectiveAmp = baseAmp * ramp * currentAmplitudeFactor
                 val angle = (relX / waveLengthPx) * (2 * PI).toFloat() - wavePhase
                 val y = centerY + effectiveAmp * sin(angle)
 
                 squigglyPath.lineTo(x, y)
                 x += step
             }
-            // Ensure path ends right at progressX and centerY
             squigglyPath.lineTo(progressX, centerY)
 
             canvas.drawPath(squigglyPath, activeTrackPaint)
@@ -208,6 +243,36 @@ class SquigglySeekBar @JvmOverloads constructor(
             }
             canvas.drawCircle(progressX, centerY, thumbRadiusPx, thumbPaint)
         }
+
+        // 4. Draw Floating Time Bubble Tooltip above finger during scrubbing
+        if (isUserDragging && isEnabled && maxDurationMs > 0) {
+            val formattedTime = Song.formatTime(currentProgressMs)
+            val textWidth = bubbleTextPaint.measureText(formattedTime)
+            val bubbleWidth = textWidth + 18f * density
+            val bubbleHeight = 22f * density
+            val bubbleRadius = 11f * density
+            val bubbleBottom = centerY - thumbHaloRadiusPx - 4f * density
+            val bubbleTop = bubbleBottom - bubbleHeight
+
+            val halfWidth = bubbleWidth / 2f
+            val bubbleCenterX = progressX.coerceIn(
+                paddingLeft + halfWidth + 2f * density,
+                width - paddingRight - halfWidth - 2f * density
+            )
+
+            val bubbleRect = RectF(
+                bubbleCenterX - halfWidth,
+                bubbleTop,
+                bubbleCenterX + halfWidth,
+                bubbleBottom
+            )
+
+            canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubblePaint)
+            canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubbleStrokePaint)
+
+            val textY = bubbleRect.centerY() - (bubbleTextPaint.descent() + bubbleTextPaint.ascent()) / 2f
+            canvas.drawText(formattedTime, bubbleCenterX, textY, bubbleTextPaint)
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -216,6 +281,7 @@ class SquigglySeekBar @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isUserDragging = true
+                animateAmplitude(0f) // Smoothly flatten wave into straight line during scrubbing
                 parent?.requestDisallowInterceptTouchEvent(true)
                 seekListener?.onStartTracking()
                 smoothProgressAnimator?.cancel()
@@ -231,6 +297,7 @@ class SquigglySeekBar @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (isUserDragging) {
                     isUserDragging = false
+                    animateAmplitude(1f) // Smoothly bounce back to squiggly wave on release
                     updateTouchPosition(event.x)
                     seekListener?.onStopTracking(currentProgressMs)
                 }

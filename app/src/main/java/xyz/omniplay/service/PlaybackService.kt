@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
+import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -28,6 +29,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -35,6 +37,7 @@ import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.ui.MainActivity
 import xyz.omniplay.util.AlbumArtLoader
+import java.util.concurrent.CopyOnWriteArrayList
 
 class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener,
@@ -77,7 +80,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     private var currentAlbumArt: Bitmap? = null
     private var progressJob: Job? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var resumeOnFocusGain = false
 
     private var currentAfd: AssetFileDescriptor? = null
@@ -95,7 +98,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         currentPfd = null
     }
 
-    private val listeners = mutableListOf<PlaybackListener>()
+    private val listeners = CopyOnWriteArrayList<PlaybackListener>()
 
     interface PlaybackListener {
         fun onTrackChanged(song: Song?)
@@ -332,7 +335,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         updateMediaMetadata(song)
 
         serviceScope.launch {
-            currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            val art = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            currentAlbumArt = art
+            updateMediaMetadata(song, song.duration, art)
             if (isPlaying()) {
                 updateNotification(isPlaying = true)
             }
@@ -387,8 +392,10 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     override fun onPrepared(mp: MediaPlayer?) {
+        val dur = mp?.duration?.toLong()?.takeIf { it > 0 } ?: currentSong?.duration ?: 0L
+        currentSong?.let { updateMediaMetadata(it, dur, currentAlbumArt) }
         mp?.start()
-        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
+        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0L)
         startProgressTracker()
         startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
         listeners.forEach { it.onPlaybackStateChanged(true) }
@@ -408,7 +415,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         mediaPlayer?.let {
             if (!it.isPlaying) {
                 it.start()
-                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
+                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, getCurrentPosition().toLong())
                 startProgressTracker()
                 startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
@@ -421,7 +428,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             if (it.isPlaying) {
                 it.pause()
                 stopProgressTracker()
-                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
+                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, getCurrentPosition().toLong())
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
             }
@@ -513,6 +520,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
                 mediaPlayer?.seekTo(positionMs)
             }
+            val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+            updatePlaybackState(state, positionMs.toLong())
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -590,10 +599,18 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = serviceScope.launch {
+            var lastStateSync = 0L
             while (isActive) {
                 val current = getCurrentPosition()
                 val total = getDuration()
                 listeners.forEach { it.onProgressUpdate(current, total) }
+
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastStateSync >= 1000L) {
+                    lastStateSync = now
+                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, current.toLong())
+                }
+
                 delay(80)
             }
         }
@@ -653,17 +670,22 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         }
     }
 
-    private fun updateMediaMetadata(song: Song) {
-        val metadata = MediaMetadataCompat.Builder()
+    private fun updateMediaMetadata(song: Song, durationMs: Long = song.duration, art: Bitmap? = currentAlbumArt) {
+        val builder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, song.title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, song.artist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, song.album)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, song.duration)
-            .build()
-        mediaSession?.setMetadata(metadata)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs.coerceAtLeast(0L))
+
+        art?.let {
+            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
+        }
+        mediaSession?.setMetadata(builder.build())
     }
 
-    private fun updatePlaybackState(state: Int) {
+    private fun updatePlaybackState(state: Int, positionMs: Long = getCurrentPosition().toLong()) {
+        val speed = if (state == PlaybackStateCompat.STATE_PLAYING) 1.0f else 0.0f
         val playbackState = PlaybackStateCompat.Builder()
             .setActions(
                 PlaybackStateCompat.ACTION_PLAY or
@@ -673,7 +695,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                         PlaybackStateCompat.ACTION_SEEK_TO or
                         PlaybackStateCompat.ACTION_PLAY_PAUSE
             )
-            .setState(state, getCurrentPosition().toLong(), 1.0f)
+            .setState(state, positionMs.coerceAtLeast(0L), speed, SystemClock.elapsedRealtime())
             .build()
         mediaSession?.setPlaybackState(playbackState)
     }
