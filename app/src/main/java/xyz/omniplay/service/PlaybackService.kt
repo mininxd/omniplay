@@ -619,7 +619,7 @@ class PlaybackService : Service() {
 
         currentIndex--
         if (currentIndex < 0) {
-            if (repeatMode == REPEAT_ALL || forcePrevious) {
+            if (repeatMode == REPEAT_ALL) {
                 currentIndex = queue.size - 1
             } else {
                 currentIndex = 0
@@ -639,8 +639,10 @@ class PlaybackService : Service() {
         val nextIdx = currentIndex + 1
         return if (nextIdx < queue.size) {
             queue[nextIdx]
-        } else {
+        } else if (repeatMode == REPEAT_ALL) {
             queue.firstOrNull()
+        } else {
+            null
         }
     }
 
@@ -652,8 +654,10 @@ class PlaybackService : Service() {
         val prevIdx = currentIndex - 1
         return if (prevIdx >= 0) {
             queue[prevIdx]
-        } else {
+        } else if (repeatMode == REPEAT_ALL) {
             queue.lastOrNull()
+        } else {
+            null
         }
     }
 
