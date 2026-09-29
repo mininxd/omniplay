@@ -1,7 +1,0 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="oval">
-    <solid android:color="@color/slider_thumb"/>
-    <size
-        android:width="14dp"
-        android:height="14dp"/>
-</shape>

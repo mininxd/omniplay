@@ -5,10 +5,6 @@
         android:icon="@drawable/ic_search"
         android:title="@string/select_folder" />
     <item
-        android:id="@+id/action_equalizer"
-        android:icon="@drawable/ic_equalizer"
-        android:title="@string/equalizer" />
-    <item
         android:id="@+id/action_sleep_timer"
         android:icon="@drawable/ic_timer"
         android:title="@string/sleep_timer" />

@@ -9,8 +9,8 @@
 - **Instant Launch**: Starts directly on the Now Playing screen without extra splash screens or gimmicks.
 - **Wide Audio Format Support**: Plays **MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, AMR, MIDI**, and other popular audio formats.
 - **High-Performance Audio Engine**: Built with native Android `MediaPlayer` and `MediaSessionCompat` for lock screen controls, notification playback controls, audio focus handling (auto-pause on calls or disconnects), and headset media button support.
-- **Built-in Equalizer & Audio FX**: 5-band equalizer, Bass Boost, and Virtualizer (3D Surround sound).
-- **Expandable Queue & Library**: Swipe up or tap the upward chevron (`^`) to view, search, and manage your track queue and library.
+- **Material You Slider**: Modern YouTube Music style seekbar slider with smooth scrubbing.
+- **In-Window Sliding Playlist**: Slide up from the bottom to view the playlist directly in the same window without any modals or popups.
 - **Sleep Timer**: Automatically stops playback after 15, 30, 45, or 60 minutes.
 - **Ultra-Small APK Size**: Aggressively optimized using custom ProGuard and R8 rules with resource shrinking and ABI splits.
 - **Multi-Architecture Support**: Built for `armeabi-v7a` (armv7), `arm64-v8a` (armv8), `x86`, `x86_64`, and Universal APK.

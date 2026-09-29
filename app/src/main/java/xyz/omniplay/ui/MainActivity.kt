@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,25 +13,21 @@ import android.os.CountDownTimer
 import android.os.IBinder
 import android.view.Gravity
 import android.view.View
-import android.widget.LinearLayout
-import android.widget.SeekBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.bottomsheet.BottomSheetDialog
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.data.MusicScanner
 import xyz.omniplay.databinding.ActivityMainBinding
-import xyz.omniplay.databinding.DialogEqualizerBinding
-import xyz.omniplay.databinding.LayoutQueueBottomSheetBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.util.AlbumArtLoader
@@ -48,8 +43,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private lateinit var binding: ActivityMainBinding
     private var playbackService: PlaybackService? = null
     private var isBound = false
-    private var isUserTrackingSeekBar = false
+    private var isUserTrackingSlider = false
 
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private val musicScanner by lazy { MusicScanner(this) }
     private var scannedSongs = listOf<Song>()
     private var songAdapter: SongAdapter? = null
@@ -95,7 +91,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             loadMusicFromFolder(treeUri)
         } else {
-            // If user dismissed folder picker, load media store as fallback
             loadMusicLibrary()
         }
     }
@@ -122,26 +117,80 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setContentView(binding.root)
 
         setupDefaultView()
+        setupInWindowPlaylistPanel()
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
     }
 
+    /**
+     * Initializes the UI cleanly with no mock / hardcoded songs.
+     */
     private fun setupDefaultView() {
-        val defaultSong = Song.getDefaultMockSong()
-        binding.songTitleText.text = defaultSong.title
-        binding.artistNameText.text = defaultSong.artist
-        binding.albumNameText.text = defaultSong.album
-        binding.currentTimeText.text = getString(R.string.default_current_time)
-        binding.totalTimeText.text = getString(R.string.default_total_time)
+        binding.songTitleText.text = getString(R.string.no_track_selected)
+        binding.artistNameText.text = ""
+        binding.albumNameText.text = ""
+        binding.currentTimeText.text = getString(R.string.default_time)
+        binding.totalTimeText.text = getString(R.string.default_time)
         binding.albumArtImage.setImageResource(R.drawable.default_album_art)
 
-        binding.playbackSeekBar.max = (defaultSong.duration / 1000).toInt()
-        binding.playbackSeekBar.progress = 135 // 2:15 out of 4:30
+        binding.playbackSlider.valueFrom = 0.0f
+        binding.playbackSlider.valueTo = 1.0f
+        binding.playbackSlider.value = 0.0f
+        binding.playbackSlider.isEnabled = false
 
         updateShuffleButton(false)
         updateRepeatButton(PlaybackService.REPEAT_OFF)
         updatePlayPauseButton(isPlaying = false)
+    }
+
+    /**
+     * Configures the in-window persistent sliding panel for the playlist.
+     * All playlist interaction stays in this single window without any modals or popups.
+     */
+    private fun setupInWindowPlaylistPanel() {
+        bottomSheetBehavior = BottomSheetBehavior.from(binding.playlistSlidingPanel)
+        bottomSheetBehavior.isHideable = false
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+
+        bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                when (newState) {
+                    BottomSheetBehavior.STATE_EXPANDED -> binding.ivChevron.rotation = 180f
+                    BottomSheetBehavior.STATE_COLLAPSED -> binding.ivChevron.rotation = 0f
+                    else -> {}
+                }
+            }
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                // Smoothly rotate the chevron as the user slides the panel up/down
+                binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
+            }
+        })
+
+        // Tap on peek header toggles panel between collapsed and expanded
+        binding.playlistPeekHeader.setOnClickListener {
+            if (bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            } else {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+        }
+
+        // Initialize playlist adapter
+        songAdapter = SongAdapter { song, index ->
+            playbackService?.let { service ->
+                val songsToPlay = scannedSongs.ifEmpty { listOf(song) }
+                service.setSongQueue(songsToPlay, startIndex = index, startPlaying = true)
+            }
+        }
+
+        binding.songsRecyclerView.adapter = songAdapter
+        binding.songsRecyclerView.layoutManager = LinearLayoutManager(this)
+
+        binding.btnSelectFolderEmpty.setOnClickListener {
+            openFolderPicker()
+        }
     }
 
     private fun setupListeners() {
@@ -153,7 +202,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         // Play / Pause Circular Card
         binding.btnPlayPauseCard.setOnClickListener {
             if (isBound) {
-                playbackService?.togglePlayPause()
+                playbackService?.let {
+                    if (it.currentSong == null && scannedSongs.isNotEmpty()) {
+                        it.setSongQueue(scannedSongs, startIndex = 0, startPlaying = true)
+                    } else {
+                        it.togglePlayPause()
+                    }
+                }
             }
         }
 
@@ -185,34 +240,27 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        // Seekbar
-        binding.playbackSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    binding.currentTimeText.text = Song.formatTime(progress * 1000L)
-                }
+        // Material You Slider (YouTube Music style)
+        binding.playbackSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {
+                isUserTrackingSlider = true
             }
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                isUserTrackingSeekBar = true
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                isUserTrackingSeekBar = false
-                seekBar?.let {
-                    playbackService?.seekTo(it.progress * 1000)
-                }
+            override fun onStopTrackingTouch(slider: Slider) {
+                isUserTrackingSlider = false
+                playbackService?.seekTo((slider.value * 1000).toInt())
             }
         })
 
-        // Playlist bottom arrow (^)
-        binding.btnExpandQueue.setOnClickListener {
-            showPlaylistBottomSheet()
+        binding.playbackSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                binding.currentTimeText.text = Song.formatTime((value * 1000).toLong())
+            }
         }
 
-        // Album Art click also opens playlist
+        // Clicking album art opens/slides up the playlist panel
         binding.albumArtCard.setOnClickListener {
-            showPlaylistBottomSheet()
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
 
@@ -246,7 +294,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Checks if user already selected a music directory. If not (first run), launches folder picker!
+     * Checks if user already selected a music directory. If not (first run), launches folder picker.
      */
     private fun checkFolderOrScan() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -255,7 +303,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (savedFolderUri != null) {
             loadMusicFromFolder(Uri.parse(savedFolderUri))
         } else {
-            // First run: Open folder selector directly
             Toast.makeText(this, "Select your music folder to scan songs", Toast.LENGTH_LONG).show()
             openFolderPicker()
         }
@@ -279,61 +326,33 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 musicScanner.scanMediaStore()
             }
 
-            scannedSongs = songs
-            songAdapter?.setSongs(songs)
-
-            if (songs.isNotEmpty()) {
-                playbackService?.setSongQueue(songs, startIndex = 0, startPlaying = false)
-            }
+            updateSongList(songs)
         }
     }
 
     private fun loadMusicLibrary() {
         lifecycleScope.launch {
             val songs = musicScanner.scanMediaStore()
-            scannedSongs = songs
-            songAdapter?.setSongs(songs)
-
-            if (songs.isNotEmpty()) {
-                playbackService?.setSongQueue(songs, startIndex = 0, startPlaying = false)
-            }
+            updateSongList(songs)
         }
     }
 
-    /**
-     * Displays the Playlist bottom sheet (without search bar).
-     */
-    private fun showPlaylistBottomSheet() {
-        val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
-        val sheetBinding = LayoutQueueBottomSheetBinding.inflate(layoutInflater)
-        bottomSheetDialog.setContentView(sheetBinding.root)
+    private fun updateSongList(songs: List<Song>) {
+        scannedSongs = songs
+        songAdapter?.setSongs(songs)
 
-        val adapter = SongAdapter { song, index ->
-            playbackService?.let { service ->
-                val songsToPlay = scannedSongs.ifEmpty { listOf(song) }
-                service.setSongQueue(songsToPlay, startIndex = index, startPlaying = true)
+        if (songs.isNotEmpty()) {
+            binding.songCountText.text = "${songs.size} songs"
+            binding.emptyStateLayout.visibility = View.GONE
+            binding.songsRecyclerView.visibility = View.VISIBLE
+            if (playbackService?.currentSong == null) {
+                playbackService?.setSongQueue(songs, startIndex = 0, startPlaying = false)
             }
-            bottomSheetDialog.dismiss()
+        } else {
+            binding.songCountText.text = "0 songs"
+            binding.emptyStateLayout.visibility = View.VISIBLE
+            binding.songsRecyclerView.visibility = View.GONE
         }
-        songAdapter = adapter
-
-        sheetBinding.songsRecyclerView.adapter = adapter
-        sheetBinding.songsRecyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
-
-        val songsToShow = scannedSongs.ifEmpty { listOf(Song.getDefaultMockSong()) }
-        adapter.setSongs(songsToShow)
-        playbackService?.currentSong?.let {
-            adapter.setCurrentPlayingSongId(it.id)
-        }
-
-        sheetBinding.songCountText.text = "(${songsToShow.size} songs)"
-
-        sheetBinding.btnSelectFolderEmpty.setOnClickListener {
-            bottomSheetDialog.dismiss()
-            openFolderPicker()
-        }
-
-        bottomSheetDialog.show()
     }
 
     private fun showOptionsMenu(anchor: View) {
@@ -343,10 +362,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             when (item.itemId) {
                 R.id.action_select_folder -> {
                     openFolderPicker()
-                    true
-                }
-                R.id.action_equalizer -> {
-                    showEqualizerDialog()
                     true
                 }
                 R.id.action_sleep_timer -> {
@@ -369,100 +384,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
         popup.show()
-    }
-
-    private fun showEqualizerDialog() {
-        val eq = playbackService?.equalizer
-        val bass = playbackService?.bassBoost
-        val virt = playbackService?.virtualizer
-
-        val dialogBinding = DialogEqualizerBinding.inflate(layoutInflater)
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogBinding.root)
-            .create()
-
-        if (eq != null) {
-            dialogBinding.switchEqualizer.isChecked = eq.enabled
-            dialogBinding.switchEqualizer.setOnCheckedChangeListener { _, isChecked ->
-                eq.enabled = isChecked
-                bass?.enabled = isChecked
-                virt?.enabled = isChecked
-            }
-
-            bass?.let {
-                dialogBinding.seekBassBoost.progress = it.roundedStrength.toInt()
-                dialogBinding.seekBassBoost.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                        if (fromUser) it.setStrength(progress.toShort())
-                    }
-                    override fun onStartTrackingTouch(sb: SeekBar?) {}
-                    override fun onStopTrackingTouch(sb: SeekBar?) {}
-                })
-            }
-
-            virt?.let {
-                dialogBinding.seekVirtualizer.progress = it.roundedStrength.toInt()
-                dialogBinding.seekVirtualizer.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                        if (fromUser) it.setStrength(progress.toShort())
-                    }
-                    override fun onStartTrackingTouch(sb: SeekBar?) {}
-                    override fun onStopTrackingTouch(sb: SeekBar?) {}
-                })
-            }
-
-            val bands = eq.numberOfBands
-            val minBandLevel = eq.bandLevelRange[0]
-            val maxBandLevel = eq.bandLevelRange[1]
-            val range = maxBandLevel - minBandLevel
-
-            dialogBinding.bandsContainer.removeAllViews()
-
-            for (i in 0 until bands) {
-                val band = i.toShort()
-                val freq = eq.getCenterFreq(band) / 1000
-                val freqLabel = if (freq < 1000) "${freq}Hz" else "${freq / 1000}kHz"
-
-                val bandLayout = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(0, 8, 0, 8)
-                }
-
-                val label = TextView(this).apply {
-                    text = "$freqLabel (${eq.getBandLevel(band) / 100} dB)"
-                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
-                    textSize = 12f
-                }
-
-                val seekBar = androidx.appcompat.widget.AppCompatSeekBar(this).apply {
-                    max = range.toInt()
-                    progress = (eq.getBandLevel(band) - minBandLevel).toInt()
-                    progressDrawable = ContextCompat.getDrawable(this@MainActivity, R.drawable.seekbar_progress)
-                    thumb = ContextCompat.getDrawable(this@MainActivity, R.drawable.seekbar_thumb)
-                    setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                        override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                            if (fromUser) {
-                                val level = (progress + minBandLevel).toShort()
-                                eq.setBandLevel(band, level)
-                                label.text = "$freqLabel (${level / 100} dB)"
-                            }
-                        }
-                        override fun onStartTrackingTouch(sb: SeekBar?) {}
-                        override fun onStopTrackingTouch(sb: SeekBar?) {}
-                    })
-                }
-
-                bandLayout.addView(label)
-                bandLayout.addView(seekBar)
-                dialogBinding.bandsContainer.addView(bandLayout)
-            }
-        }
-
-        dialogBinding.btnCloseEqualizer.setOnClickListener {
-            dialog.dismiss()
-        }
-
-        dialog.show()
     }
 
     private fun showSleepTimerDialog() {
@@ -506,7 +427,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showTrackDetailsDialog() {
-        val song = playbackService?.currentSong ?: Song.getDefaultMockSong()
+        val song = playbackService?.currentSong
+        if (song == null) {
+            Toast.makeText(this, "No track currently playing", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val sizeMb = String.format(Locale.US, "%.2f MB", song.fileSize / (1024.0 * 1024.0))
 
         val details = """
@@ -516,7 +442,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             Duration: ${Song.formatTime(song.duration)}
             Format: ${song.format}
             File Size: $sizeMb
-            Path: ${song.filePath.ifEmpty { "Default Preview Track" }}
+            Path: ${song.filePath.ifEmpty { "Audio File" }}
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)
@@ -550,7 +476,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.artistNameText.text = song.artist
         binding.albumNameText.text = song.album
         binding.totalTimeText.text = Song.formatTime(song.duration)
-        binding.playbackSeekBar.max = (song.duration / 1000).toInt()
+
+        val durationSec = (song.duration / 1000).toFloat().coerceAtLeast(1.0f)
+        binding.playbackSlider.valueFrom = 0.0f
+        binding.playbackSlider.valueTo = durationSec
+        binding.playbackSlider.value = 0.0f
+        binding.playbackSlider.isEnabled = true
 
         songAdapter?.setCurrentPlayingSongId(song.id)
 
@@ -570,12 +501,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     override fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int) {
-        if (!isUserTrackingSeekBar) {
-            val seconds = currentPositionMs / 1000
-            val totalSeconds = totalDurationMs / 1000
+        if (!isUserTrackingSlider && binding.playbackSlider.isEnabled) {
+            val currentSec = (currentPositionMs / 1000).toFloat()
+            val totalSec = (totalDurationMs / 1000).toFloat().coerceAtLeast(1.0f)
 
-            binding.playbackSeekBar.max = totalSeconds
-            binding.playbackSeekBar.progress = seconds
+            if (binding.playbackSlider.valueTo != totalSec) {
+                binding.playbackSlider.valueTo = totalSec
+            }
+            binding.playbackSlider.value = currentSec.coerceIn(0.0f, binding.playbackSlider.valueTo)
             binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
             binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
         }

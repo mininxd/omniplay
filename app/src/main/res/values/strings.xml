@@ -1,12 +1,8 @@
 <resources>
     <string name="app_name">Omniplay</string>
-    <string name="default_song_title">Live The Song</string>
-    <string name="default_artist_name">John Staters</string>
-    <string name="default_album_name">Album - Simlom</string>
-    <string name="default_current_time">2:15</string>
-    <string name="default_total_time">4:30</string>
+    <string name="no_track_selected">No track selected</string>
+    <string name="default_time">0:00</string>
     <string name="queue_title">Playlist</string>
-    <string name="equalizer">Equalizer</string>
     <string name="sleep_timer">Sleep Timer</string>
     <string name="select_folder">Select Music Folder</string>
     <string name="rescan_library">Rescan Music</string>

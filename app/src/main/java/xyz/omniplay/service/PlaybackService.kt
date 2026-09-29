@@ -10,20 +10,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
-import android.graphics.ImageDecoder
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.media.audiofx.BassBoost
-import android.media.audiofx.Equalizer
-import android.media.audiofx.Virtualizer
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.provider.MediaStore
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -37,6 +32,7 @@ import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.ui.MainActivity
+import xyz.omniplay.util.AlbumArtLoader
 
 class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener,
@@ -75,14 +71,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     var isShuffleEnabled: Boolean = false
         private set
     var repeatMode: Int = REPEAT_OFF
-        private set
-
-    // Equalizer & Audio FX
-    var equalizer: Equalizer? = null
-        private set
-    var bassBoost: BassBoost? = null
-        private set
-    var virtualizer: Virtualizer? = null
         private set
 
     private var progressJob: Job? = null
@@ -125,30 +113,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             setOnCompletionListener(this@PlaybackService)
             setOnErrorListener(this@PlaybackService)
         }
-        initAudioEffects()
-    }
-
-    private fun initAudioEffects() {
-        try {
-            val audioSessionId = mediaPlayer?.audioSessionId ?: return
-            if (audioSessionId != 0) {
-                equalizer = Equalizer(0, audioSessionId).apply { enabled = true }
-                bassBoost = BassBoost(0, audioSessionId).apply {
-                    if (strengthSupported) {
-                        enabled = true
-                        setStrength(250.toShort())
-                    }
-                }
-                virtualizer = Virtualizer(0, audioSessionId).apply {
-                    if (strengthSupported) {
-                        enabled = true
-                        setStrength(200.toShort())
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     private fun initMediaSession() {
@@ -173,7 +137,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         if (!listeners.contains(listener)) {
             listeners.add(listener)
         }
-        // Notify immediately of current state
         currentSong?.let { listener.onTrackChanged(it) }
         listener.onPlaybackStateChanged(isPlaying())
         listener.onShuffleModeChanged(isShuffleEnabled)
@@ -185,6 +148,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun setSongQueue(songs: List<Song>, startIndex: Int = 0, startPlaying: Boolean = true) {
+        if (songs.isEmpty()) return
         originalQueue = songs.toList()
         queue = if (isShuffleEnabled) {
             val shuffled = songs.toMutableList()
@@ -239,16 +203,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
         try {
             mediaPlayer?.reset()
-            initAudioEffects()
             if (song.contentUri != Uri.EMPTY) {
                 mediaPlayer?.setDataSource(applicationContext, song.contentUri)
                 mediaPlayer?.prepareAsync()
-            } else {
-                // Mock song playback simulation
-                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
-                startProgressTracker()
-                startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
-                listeners.forEach { it.onPlaybackStateChanged(true) }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -274,15 +231,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
         if (!requestAudioFocus()) return
 
-        if (currentSong?.contentUri == Uri.EMPTY) {
-            // Simulated playback for demo track
-            updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
-            startProgressTracker()
-            startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
-            listeners.forEach { it.onPlaybackStateChanged(true) }
-            return
-        }
-
         mediaPlayer?.let {
             if (!it.isPlaying) {
                 it.start()
@@ -295,14 +243,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun pause() {
-        if (currentSong?.contentUri == Uri.EMPTY) {
-            stopProgressTracker()
-            updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
-            updateNotification(isPlaying = false)
-            listeners.forEach { it.onPlaybackStateChanged(false) }
-            return
-        }
-
         mediaPlayer?.let {
             if (it.isPlaying) {
                 it.pause()
@@ -323,11 +263,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun isPlaying(): Boolean {
-        return if (currentSong?.contentUri == Uri.EMPTY) {
-            progressJob?.isActive == true
-        } else {
-            mediaPlayer?.isPlaying == true
-        }
+        return mediaPlayer?.isPlaying == true
     }
 
     fun skipNext() {
@@ -355,7 +291,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun skipPrevious() {
         if (queue.isEmpty()) return
 
-        // If played more than 3 seconds, restart current track
         if (getCurrentPosition() > 3000) {
             seekTo(0)
             return
@@ -371,7 +306,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     fun seekTo(positionMs: Int) {
         try {
-            if (currentSong?.contentUri != Uri.EMPTY) {
+            if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
                 mediaPlayer?.seekTo(positionMs)
             }
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
@@ -382,12 +317,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     fun getCurrentPosition(): Int {
         return try {
-            if (currentSong?.contentUri != Uri.EMPTY) {
+            if (mediaPlayer?.isPlaying == true || currentSong != null) {
                 mediaPlayer?.currentPosition ?: 0
-            } else {
-                // If demo song, return halfway or current simulated
-                135000
-            }
+            } else 0
         } catch (e: Exception) {
             0
         }
@@ -395,11 +327,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     fun getDuration(): Int {
         return try {
-            if (currentSong?.contentUri != Uri.EMPTY) {
+            if (currentSong != null) {
                 mediaPlayer?.duration ?: (currentSong?.duration?.toInt() ?: 0)
-            } else {
-                currentSong?.duration?.toInt() ?: 270000
-            }
+            } else 0
         } catch (e: Exception) {
             0
         }
@@ -442,7 +372,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
-        // Return true to indicate error handled
         return true
     }
 
@@ -538,7 +467,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     private fun buildNotification(isPlaying: Boolean): Notification {
-        val song = currentSong ?: Song.getDefaultMockSong()
+        val song = currentSong ?: return NotificationCompat.Builder(this, CHANNEL_ID).build()
 
         val mainIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -575,9 +504,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                     .setShowActionsInCompactView(0, 1, 2)
             )
 
-        val albumArt = try {
+        val albumArt: Bitmap? = try {
             kotlinx.coroutines.runBlocking {
-                xyz.omniplay.util.AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+                AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
             }
         } catch (e: Exception) {
             null
@@ -593,20 +522,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private fun updateNotification(isPlaying: Boolean) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(isPlaying))
-    }
-
-    private fun loadAlbumArtBitmap(uri: Uri?): Bitmap? {
-        if (uri == null) return null
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver, uri))
-            } else {
-                @Suppress("DEPRECATION")
-                MediaStore.Images.Media.getBitmap(contentResolver, uri)
-            }
-        } catch (e: Exception) {
-            null
-        }
     }
 
     private fun createNotificationChannel() {
@@ -657,9 +572,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         } catch (e: Exception) {}
         mediaPlayer?.release()
         mediaPlayer = null
-        equalizer?.release()
-        bassBoost?.release()
-        virtualizer?.release()
         mediaSession?.release()
         super.onDestroy()
     }

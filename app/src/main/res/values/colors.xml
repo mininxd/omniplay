@@ -16,12 +16,13 @@
     <color name="text_secondary">#A2A8BC</color>
     <color name="text_tertiary">#72788E</color>
 
-    <!-- Controls & Slider -->
+    <!-- Controls & Material You Slider -->
     <color name="control_tint">#A0A6BA</color>
     <color name="control_tint_active">#B4C8EB</color>
     <color name="slider_track_inactive">#282C3A</color>
     <color name="slider_track_active">#B4C8EB</color>
     <color name="slider_thumb">#B4C8EB</color>
+    <color name="slider_halo">#33B4C8EB</color>
 
     <!-- System & Window -->
     <color name="status_bar_color">#101116</color>

@@ -25,20 +25,5 @@ data class Song(
             val seconds = totalSeconds % 60
             return String.format(Locale.US, "%d:%02d", minutes, seconds)
         }
-
-        fun getDefaultMockSong(): Song {
-            return Song(
-                id = -1L,
-                title = "Live The Song",
-                artist = "John Staters",
-                album = "Album - Simlom",
-                duration = 270000L, // 4:30
-                contentUri = Uri.EMPTY,
-                albumArtUri = null,
-                format = "FLAC",
-                filePath = "Demo Track",
-                fileSize = 25 * 1024 * 1024L
-            )
-        }
     }
 }
