@@ -29,6 +29,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -36,6 +37,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.TsExtractor
@@ -95,9 +97,10 @@ class VideoPlayerActivity : AppCompatActivity() {
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
             val p = player
-            if (::binding.isInitialized && p != null && p.isPlaying && !isUserTrackingSeekBar) {
+            if (::binding.isInitialized && p != null && !isUserTrackingSeekBar) {
                 val current = p.currentPosition.coerceAtLeast(0L)
-                val total = p.duration.coerceAtLeast(0L)
+                val duration = p.duration
+                val total = if (duration > 0L) duration else 0L
                 updateProgressUI(current, total)
             }
             handler.postDelayed(this, 250)
@@ -225,17 +228,25 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun initializePlayer(uri: Uri) {
         binding.loadingProgress.visibility = View.VISIBLE
 
-        val extractorsFactory = DefaultExtractorsFactory()
+        val sniffedMime = sniffVideoContainer(this, uri)
+
+        val defaultExtractorsFactory = DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)
-            .setMp4ExtractorFlags(
-                Mp4Extractor.FLAG_READ_MOTION_PHOTO_METADATA or
-                Mp4Extractor.FLAG_WORKAROUND_IGNORE_EDIT_LISTS
-            )
+            .setMp4ExtractorFlags(Mp4Extractor.FLAG_READ_MOTION_PHOTO_METADATA)
             .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
             .setTsExtractorFlags(
                 DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
                 DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
             )
+
+        val extractorsFactory = ExtractorsFactory {
+            val defaults = defaultExtractorsFactory.createExtractors()
+            if (sniffedMime == MimeTypes.VIDEO_MP4) {
+                arrayOf(Mp4Extractor(Mp4Extractor.FLAG_READ_MOTION_PHOTO_METADATA), *defaults)
+            } else {
+                defaults
+            }
+        }
 
         val dataSourceFactory = DefaultDataSource.Factory(this)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
@@ -247,7 +258,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setSeekParameters(SeekParameters.CLOSEST_SYNC)
+            .setSeekParameters(SeekParameters.EXACT)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -265,19 +276,26 @@ class VideoPlayerActivity : AppCompatActivity() {
                     }
                     Player.STATE_READY -> {
                         binding.loadingProgress.visibility = View.GONE
-                        val duration = exoPlayer.duration.coerceAtLeast(0L)
-                        binding.totalTimeText.text = formatTime(duration)
-                        binding.videoSeekBar.max = duration.toInt()
-                        updateProgressUI(exoPlayer.currentPosition.coerceAtLeast(0L), duration)
+                        val duration = exoPlayer.duration
+                        val total = if (duration > 0L) duration else 0L
+                        updateProgressUI(exoPlayer.currentPosition.coerceAtLeast(0L), total)
                     }
                     Player.STATE_ENDED -> {
                         updatePlayPauseButton(false)
                         exoPlayer.seekTo(0L)
                         exoPlayer.pause()
-                        updateProgressUI(0L, exoPlayer.duration.coerceAtLeast(0L))
+                        val duration = exoPlayer.duration
+                        updateProgressUI(0L, if (duration > 0L) duration else 0L)
                         showControls()
                     }
                     Player.STATE_IDLE -> {}
+                }
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                val duration = exoPlayer.duration
+                if (duration > 0L) {
+                    updateProgressUI(exoPlayer.currentPosition.coerceAtLeast(0L), duration)
                 }
             }
 
@@ -302,7 +320,6 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
         })
 
-        val sniffedMime = sniffVideoContainer(this, uri)
         val mediaItem = MediaItem.Builder()
             .setUri(uri)
             .apply {
@@ -369,7 +386,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                 seekBar?.let {
                     val target = it.progress.toLong()
                     player?.seekTo(target)
-                    updateProgressUI(target, player?.duration?.coerceAtLeast(0L) ?: 0L)
+                    val duration = player?.duration ?: 0L
+                    updateProgressUI(target, if (duration > 0L) duration else 0L)
                 }
                 isUserTrackingSeekBar = false
                 scheduleControlsHide(3000)
@@ -481,13 +499,16 @@ class VideoPlayerActivity : AppCompatActivity() {
                             }
                             TouchZone.SEEK -> {
                                 val p = player
-                                val duration = p?.duration?.coerceAtLeast(0L) ?: 0L
-                                if (duration > 0L) {
-                                    val seekWindow = 90000L.coerceAtMost(duration)
-                                    val deltaMs = ((deltaX / screenWidth) * seekWindow).toLong()
-                                    targetSeekPosition = (initialSeekPosition + deltaMs).coerceIn(0L, duration)
-                                    showSeekIndicator(targetSeekPosition, duration, deltaMs)
+                                val duration = p?.duration ?: 0L
+                                val validDuration = if (duration > 0L) duration else 0L
+                                val seekWindow = if (validDuration > 0L) 90000L.coerceAtMost(validDuration) else 90000L
+                                val deltaMs = ((deltaX / screenWidth) * seekWindow).toLong()
+                                targetSeekPosition = if (validDuration > 0L) {
+                                    (initialSeekPosition + deltaMs).coerceIn(0L, validDuration)
+                                } else {
+                                    (initialSeekPosition + deltaMs).coerceAtLeast(0L)
                                 }
+                                showSeekIndicator(targetSeekPosition, validDuration, deltaMs)
                             }
                             TouchZone.NONE -> {}
                         }
@@ -497,7 +518,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                     if (isDraggingSlider) {
                         if (activeTouchZone == TouchZone.SEEK) {
                             player?.seekTo(targetSeekPosition)
-                            updateProgressUI(targetSeekPosition, player?.duration?.coerceAtLeast(0L) ?: 0L)
+                            val duration = player?.duration ?: 0L
+                            updateProgressUI(targetSeekPosition, if (duration > 0L) duration else 0L)
                         }
                         isDraggingSlider = false
                         activeTouchZone = TouchZone.NONE
@@ -535,10 +557,14 @@ class VideoPlayerActivity : AppCompatActivity() {
     private fun seekRelative(offsetMs: Long) {
         val p = player ?: return
         val current = p.currentPosition.coerceAtLeast(0L)
-        val duration = p.duration.coerceAtLeast(0L)
-        val target = (current + offsetMs).coerceIn(0L, duration)
+        val duration = p.duration
+        val target = if (duration > 0L) {
+            (current + offsetMs).coerceIn(0L, duration)
+        } else {
+            (current + offsetMs).coerceAtLeast(0L)
+        }
         p.seekTo(target)
-        updateProgressUI(target, duration)
+        updateProgressUI(target, if (duration > 0L) duration else 0L)
         scheduleControlsHide(3000)
     }
 
@@ -672,7 +698,12 @@ class VideoPlayerActivity : AppCompatActivity() {
         binding.gestureIndicatorCard.visibility = View.VISIBLE
 
         binding.currentTimeText.text = formatTime(targetMs)
-        binding.videoSeekBar.progress = targetMs.toInt()
+        if (totalMs > 0L) {
+            if (binding.videoSeekBar.max != totalMs.toInt()) {
+                binding.videoSeekBar.max = totalMs.toInt()
+            }
+            binding.videoSeekBar.progress = targetMs.toInt().coerceIn(0, totalMs.toInt())
+        }
     }
 
     private fun hideGestureIndicator() {
@@ -685,8 +716,13 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private fun updateProgressUI(currentMs: Long, totalMs: Long) {
         binding.currentTimeText.text = formatTime(currentMs)
-        binding.totalTimeText.text = formatTime(totalMs)
-        binding.videoSeekBar.progress = currentMs.toInt()
+        if (totalMs > 0L) {
+            binding.totalTimeText.text = formatTime(totalMs)
+            if (binding.videoSeekBar.max != totalMs.toInt()) {
+                binding.videoSeekBar.max = totalMs.toInt()
+            }
+            binding.videoSeekBar.progress = currentMs.toInt().coerceIn(0, totalMs.toInt())
+        }
     }
 
     private fun startProgressUpdates() {
