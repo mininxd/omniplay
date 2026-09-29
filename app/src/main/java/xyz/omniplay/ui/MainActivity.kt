@@ -495,7 +495,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val commitPrev = currentPeekSong != null && peekDirection == 1 &&
                                 ((xVel > 800f) || (currentX > threshold && xVel > -400f))
 
-                        if (commitNext) {
+                        val targetSong = currentPeekSong
+                        if (commitNext && targetSong != null) {
                             val targetX = -cardWidth * 1.25f
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(1f).scaleY(1f).alpha(1f)
@@ -509,12 +510,34 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
+                                var isCanceled = false
                                 addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationCancel(animation: Animator) {
+                                        isCanceled = true
+                                    }
                                     override fun onAnimationEnd(animation: Animator) {
-                                        binding.peekAlbumArtImage.drawable?.let {
-                                            binding.albumArtImage.setImageDrawable(it)
+                                        if (isCanceled) return
+                                        val songBefore = playbackService?.currentSong
+                                        playbackService?.skipNext(forceNext = true)
+                                        val songAfter = playbackService?.currentSong
+
+                                        if (songAfter != null && songAfter.id != songBefore?.id) {
+                                            binding.peekAlbumArtImage.drawable?.let {
+                                                binding.albumArtImage.setImageDrawable(it)
+                                            }
+                                        } else {
+                                            // Fallback: restore current song artwork if track didn't change
+                                            val current = songBefore ?: songAfter
+                                            if (current != null) {
+                                                val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
+                                                if (cached != null) {
+                                                    binding.albumArtImage.setImageBitmap(cached)
+                                                } else {
+                                                    binding.albumArtImage.setImageResource(R.drawable.default_album_art)
+                                                }
+                                            }
                                         }
-                                        playbackService?.skipNext()
+
                                         v.translationX = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
@@ -527,7 +550,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 })
                                 start()
                             }
-                        } else if (commitPrev) {
+                        } else if (commitPrev && targetSong != null) {
                             val targetX = cardWidth * 1.25f
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(1f).scaleY(1f).alpha(1f)
@@ -541,12 +564,34 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
+                                var isCanceled = false
                                 addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationCancel(animation: Animator) {
+                                        isCanceled = true
+                                    }
                                     override fun onAnimationEnd(animation: Animator) {
-                                        binding.peekAlbumArtImage.drawable?.let {
-                                            binding.albumArtImage.setImageDrawable(it)
+                                        if (isCanceled) return
+                                        val songBefore = playbackService?.currentSong
+                                        playbackService?.skipPrevious(forcePrevious = true)
+                                        val songAfter = playbackService?.currentSong
+
+                                        if (songAfter != null && songAfter.id != songBefore?.id) {
+                                            binding.peekAlbumArtImage.drawable?.let {
+                                                binding.albumArtImage.setImageDrawable(it)
+                                            }
+                                        } else {
+                                            // Fallback: restore current song artwork if track didn't change
+                                            val current = songBefore ?: songAfter
+                                            if (current != null) {
+                                                val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
+                                                if (cached != null) {
+                                                    binding.albumArtImage.setImageBitmap(cached)
+                                                } else {
+                                                    binding.albumArtImage.setImageResource(R.drawable.default_album_art)
+                                                }
+                                            }
                                         }
-                                        playbackService?.skipPrevious()
+
                                         v.translationX = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
@@ -573,8 +618,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
+                                var isCanceled = false
                                 addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationCancel(animation: Animator) {
+                                        isCanceled = true
+                                    }
                                     override fun onAnimationEnd(animation: Animator) {
+                                        if (isCanceled) return
                                         v.translationX = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
@@ -624,14 +674,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         // Next
         binding.btnNext.setOnClickListener {
             if (isBound) {
-                playbackService?.skipNext()
+                playbackService?.skipNext(forceNext = true)
             }
         }
 
         // Previous
         binding.btnPrevious.setOnClickListener {
             if (isBound) {
-                playbackService?.skipPrevious()
+                playbackService?.skipPrevious(forcePrevious = false)
             }
         }
 
@@ -888,10 +938,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.albumArtCard.rotation = 0f
             binding.peekAlbumArtCard.visibility = View.INVISIBLE
 
+            val cachedArt = AlbumArtLoader.getCachedAlbumArt(song.id)
+            if (cachedArt != null) {
+                binding.albumArtImage.setImageBitmap(cachedArt)
+            } else {
+                binding.albumArtImage.setImageResource(R.drawable.default_album_art)
+            }
+
             // Asynchronously load real album art
             lifecycleScope.launch {
                 val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, song)
-                if (::binding.isInitialized) {
+                if (::binding.isInitialized && playbackService?.currentSong?.id == song.id) {
                     if (bitmap != null) {
                         binding.albumArtImage.setImageBitmap(bitmap)
                     } else {

@@ -146,8 +146,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() { play() }
                 override fun onPause() { pause() }
-                override fun onSkipToNext() { skipNext() }
-                override fun onSkipToPrevious() { skipPrevious() }
+                override fun onSkipToNext() { skipNext(forceNext = true) }
+                override fun onSkipToPrevious() { skipPrevious(forcePrevious = false) }
                 override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
                 override fun onStop() { pause() }
             })
@@ -447,9 +447,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         return mediaPlayer?.isPlaying == true
     }
 
-    fun skipNext() {
+    fun skipNext(forceNext: Boolean = false) {
         if (queue.isEmpty()) return
-        if (repeatMode == REPEAT_ONE) {
+        if (!forceNext && repeatMode == REPEAT_ONE) {
             currentSong?.let { playSong(it) }
             return
         }
@@ -470,6 +470,16 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             return
         }
 
+        if (queue.size <= 1) {
+            if (repeatMode == REPEAT_ALL || forceNext) {
+                currentSong?.let { playSong(it) }
+            } else {
+                pause()
+                seekTo(0)
+            }
+            return
+        }
+
         currentIndex++
         if (currentIndex >= queue.size) {
             if (repeatMode == REPEAT_ALL) {
@@ -485,10 +495,10 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         playSong(queue[currentIndex])
     }
 
-    fun skipPrevious() {
+    fun skipPrevious(forcePrevious: Boolean = false) {
         if (queue.isEmpty()) return
 
-        if (getCurrentPosition() > 3000) {
+        if (!forcePrevious && getCurrentPosition() > 3000) {
             seekTo(0)
             return
         }
@@ -507,18 +517,29 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             return
         }
 
+        if (queue.size <= 1) {
+            seekTo(0)
+            return
+        }
+
         currentIndex--
         if (currentIndex < 0) {
-            currentIndex = if (repeatMode == REPEAT_ALL) queue.size - 1 else 0
+            if (repeatMode == REPEAT_ALL) {
+                currentIndex = queue.size - 1
+            } else {
+                currentIndex = 0
+                seekTo(0)
+                return
+            }
         }
 
         playSong(queue[currentIndex])
     }
 
     fun getNextSong(): Song? {
-        if (queue.isEmpty()) return null
-        if (repeatMode == REPEAT_ONE) {
-            return currentSong
+        if (queue.isEmpty() || queue.size <= 1) return null
+        if (isShuffleEnabled) {
+            return queue.getOrNull(1)
         }
         val nextIdx = currentIndex + 1
         return if (nextIdx < queue.size) {
@@ -531,9 +552,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun getPreviousSong(): Song? {
-        if (queue.isEmpty()) return null
+        if (queue.isEmpty() || queue.size <= 1) return null
         if (isShuffleEnabled) {
-            return if (queue.size > 1) queue.lastOrNull() else currentSong
+            return queue.lastOrNull()
         }
         val prevIdx = currentIndex - 1
         return if (prevIdx >= 0) {
@@ -541,7 +562,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         } else if (repeatMode == REPEAT_ALL) {
             queue.lastOrNull()
         } else {
-            queue.firstOrNull()
+            null
         }
     }
 
@@ -619,7 +640,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     override fun onCompletion(mp: MediaPlayer?) {
-        skipNext()
+        skipNext(forceNext = false)
     }
 
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
@@ -813,8 +834,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             ACTION_PLAY -> play()
             ACTION_PAUSE -> pause()
             ACTION_TOGGLE -> togglePlayPause()
-            ACTION_NEXT -> skipNext()
-            ACTION_PREVIOUS -> skipPrevious()
+            ACTION_NEXT -> skipNext(forceNext = true)
+            ACTION_PREVIOUS -> skipPrevious(forcePrevious = false)
         }
         return START_NOT_STICKY
     }
