@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background & Surface - Deep AMOLED aesthetic -->
+    <color name="background_dark">#101116</color>
+    <color name="surface_dark">#161820</color>
+    <color name="surface_container">#1E212B</color>
+    <color name="surface_container_high">#282C3A</color>
+
+    <!-- Material You Primary & Accent -->
+    <color name="primary_accent">#B4C8EB</color>
+    <color name="primary_variant">#8EA8D6</color>
+    <color name="on_primary">#101A2C</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A2A8BC</color>
+    <color name="text_tertiary">#72788E</color>
+
+    <!-- Controls & Slider -->
+    <color name="control_tint">#A0A6BA</color>
+    <color name="control_tint_active">#B4C8EB</color>
+    <color name="slider_track_inactive">#282C3A</color>
+    <color name="slider_track_active">#B4C8EB</color>
+    <color name="slider_thumb">#B4C8EB</color>
+
+    <!-- System & Window -->
+    <color name="status_bar_color">#101116</color>
+    <color name="navigation_bar_color">#101116</color>
+</resources>

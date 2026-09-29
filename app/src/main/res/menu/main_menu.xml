@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_equalizer"
+        android:icon="@drawable/ic_equalizer"
+        android:title="@string/equalizer" />
+    <item
+        android:id="@+id/action_sleep_timer"
+        android:icon="@drawable/ic_timer"
+        android:title="@string/sleep_timer" />
+    <item
+        android:id="@+id/action_track_details"
+        android:icon="@drawable/ic_info"
+        android:title="@string/track_details" />
+    <item
+        android:id="@+id/action_rescan"
+        android:icon="@drawable/ic_refresh"
+        android:title="@string/rescan_library" />
+    <item
+        android:id="@+id/action_about"
+        android:icon="@drawable/ic_info"
+        android:title="@string/about_omniplay" />
+</menu>
