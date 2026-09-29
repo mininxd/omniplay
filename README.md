@@ -1,91 +1,84 @@
 # Omniplay
 
-**Omniplay** is a modern, lightweight, open-source local audio player for Android designed around Material You (Material 3) aesthetics with fluid gesture-driven navigation and native Android 13/14 UI patterns.
+**Omniplay** is a fast, lightweight, and open-source local music player for Android. Designed with Material 3 (Material You) styling, it offers smooth gesture navigation, a lively Android 13/14 native squiggly waveform scrubber, and great compatibility across all Android versions from Android 5.0 to Android 14.
 
 ---
 
-## Key Highlights
+## ⚡ Key Features
 
-- **Squiggly Waveform Seek Bar (Android 13/14 Native Style)**:
-  - Lively animated squiggly wave flowing along the active progress track during playback.
-  - Dynamically flattens into a straight guide line when scrubbing and bounces back to the wave on release.
-  - Floating timestamp bubble pill above the scrubbing thumb displaying exact seek position in real time.
+- **🌊 Squiggly Waveform Seek Bar (Android 13/14 Style)**:
+  - An animated squiggly wave flows along the progress bar while music is playing.
+  - Automatically straightens into a smooth guide line when scrubbing for accurate seeking.
+  - Floating timestamp bubble indicator shows the exact time position right above your finger.
 
-- **Interactive Gesture Album Art Peeking**:
-  - **Swipe Left / Right Peeking**: Hold and drag the album art card horizontally to peek adjacent tracks before deciding to skip.
-  - **Contextual Alignment**: Peeking the **Next** track displays its real artwork, title, and artist **right-aligned** on the revealed edge; peeking the **Previous** track aligns to the left.
-  - **Accidental Skip Prevention**: Dragging back to center snaps back cleanly with zero track change; releasing past the 35% threshold or fast-flinging commits the track skip with smooth card transition.
-  - **Tap to Expand**: Tapping the album art expands the persistent playlist sheet.
+- **💿 Interactive Gesture Album Art Peeking**:
+  - **Swipe Left / Right Preview**: Drag the album cover horizontally to peek at the next or previous song without stopping your current playback.
+  - **Smart Title & Artist Preview**: Swiping left to see the **Next** track displays its title, artist, and artwork right along the revealed edge; swiping right shows the **Previous** track on the left.
+  - **Accidental Skip Protection**: If you change your mind and drag the card back, it snaps back smoothly without changing songs. List boundaries also provide natural resistance.
+  - **Reliable Song Skipping**: Flinging or dragging past 35% smoothly switches to that song with perfectly synced music and album cover art.
+  - **Tap to Open Playlist**: Simply tap the album cover to expand the playlist sheet.
 
-- **Persistent In-Window Sliding Playlist**:
-  - Slide up directly from the bottom gesture area below playback controls to preview or browse songs.
-  - Interactive touch tracking allows holding and sliding the panel up or down without accidental snap-open.
-  - Pressing the system back button smoothly collapses the playlist sheet instead of abruptly exiting the app.
-  - High-contrast, clean album jacket artwork placeholders with an overflow menu option to toggle embedded album art loading.
+- **📑 Slide-Up Playlist**:
+  - A persistent sliding playlist panel that slides up from below the controls whenever you want to pick a song.
+  - Drag up or down with your finger smoothly, or press the back button to collapse it.
+  - Clean vinyl record jacket placeholders with a clear musical note icon centered on the disc label.
+  - Easily toggle between custom file album art and uniform disc covers in the menu.
 
-- **Rock-Solid Playback Engine & Notification Sync**:
-  - Background audio playback handled by a dedicated `PlaybackService` with `MediaSessionCompat`.
-  - Fully synchronized system notification seekbar: tracks playback in real-time, pauses without drifting, and updates immediately upon user scrub.
-  - Automatic audio focus management (pauses during phone calls and unplugs via `ACTION_AUDIO_BECOMING_NOISY`).
-  - Supports Shuffle (re-randomizes queue and pins current track to top) and Repeat modes (Off, All, One).
+- **⚙️ Smooth & Reliable Playback**:
+  - Seamless background playback with lock screen and notification controls.
+  - Fully synchronized notification seek bar that matches your track progress without lagging or drifting.
+  - Automatic audio management: automatically pauses during phone calls and when headphones are unplugged.
+  - Full Shuffle and Repeat modes (Repeat Off, Repeat All, Repeat One).
 
-- **Format & Storage Support**:
-  - **Supported Formats**: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, and more.
-  - **Directory-Based SAF Scanner**: Select specific music folders via Android Storage Access Framework (SAF) with on-demand library rescan.
+- **📁 Supported Formats & Music Folders**:
+  - **Audio Formats**: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, and more.
+  - **Folder Selection**: Easily pick your music folder from internal storage or an SD card with one tap, and rescan anytime.
 
-- **Modern & Legacy ARM Builds**:
-  - **app_release.apk**: Target modern Android 8.0+ devices (API 26–15) with native Material You dynamic colors.
-  - **app_release_legacy.apk**: Target legacy Android 5.0–7.1 devices (API 21–25) featuring classic Material Design 2 Dark Teal palette.
-  - Focused strictly on ARM architectures (`armeabi-v7a` and `arm64-v8a`) to eliminate APK bloat without unnecessary x86 splits.
-  - Dual v1 (JAR) and v2 (Full APK) signing enabled for seamless installation on legacy package managers.
-
----
-
-## Architecture & Tech Stack
-
-- **Language**: 100% Kotlin
-- **Modern Build**: Min SDK 26 (Android 8.0+) • Material You (Material 3)
-- **Legacy Build**: Min SDK 21 (Android 5.0–7.1) • Classic Material 2 Dark Teal
-- **Target SDK**: API 34 (Android 14)
-- **UI Framework**: Android Jetpack, Material Components 3, View Binding, Custom Views
-- **Concurrency**: Kotlin Coroutines (`Dispatchers.IO`, `Dispatchers.Main`, `SupervisorJob`)
-- **Media Engine**: Native Android `MediaPlayer`, `MediaSessionCompat`, `PlaybackStateCompat`
-- **Metadata & Art**: `MediaMetadataRetriever`, `ImageDecoder` (software allocator safe for hardware bitmaps), in-memory `LruCache`
+- **📱 Modern & Legacy Android Support**:
+  - **`app_release.apk` (Modern)**: For devices running Android 8.0 and newer. Features Material You dynamic colors that match your device's wallpaper.
+  - **`app_release_legacy.apk` (Legacy)**: For older phones running Android 5.0 to 7.1. Features a classic Dark Teal Material look so older devices can play music smoothly.
 
 ---
 
-## Open Source Signing Key
+## 🏗️ Technical Details
 
-This project is fully open source. The release keystore is included in the repository for reproducible CI builds:
-- **Keystore**: `omniplay.jks`
-- **Keystore Password**: `omniplay123`
-- **Key Alias**: `omniplay`
-- **Key Password**: `omniplay123`
+| Property | Details |
+| :--- | :--- |
+| **Language** | Kotlin |
+| **Target Version** | Android 14 (API 34) |
+| **Modern Build** | Android 8.0+ (API 26+) • Material You |
+| **Legacy Build** | Android 5.0–7.1 (API 21–25) • Classic Material 2 |
+| **Supported Devices** | ARM phones and tablets (`arm64-v8a`, `armeabi-v7a`) |
+| **Core Libraries** | AndroidX, Material Components, Kotlin Coroutines |
+| **Audio Engine** | Android native MediaPlayer & MediaSession |
+---
+
+## 🚀 Downloads & Releases
+
+GitHub Actions automatically builds two ready-to-install APK files on every update:
+
+- **`app_release.apk`**: For Android 8.0 and newer (Material You)
+- **`app_release_legacy.apk`**: For older Android 5.0 to 7.1 devices (Material 2)
 
 ---
 
-## CI / CD & Artifact Releases
-
-GitHub Actions automatically builds and releases two ARM APKs upon pushes to `main`:
-- `app_release.apk` *(Modern: Android 8.0+ / Material You, arm64-v8a & armeabi-v7a)*
-- `app_release_legacy.apk` *(Legacy: Android 5.0–7.1 / Material 2 Dark Teal, armeabi-v7a & arm64-v8a)*
-
----
-
-## Building Locally
+## 🛠️ Building From Source
 
 ```bash
-# Clone repository
+# Clone the repository
 git clone https://github.com/mininxd/omniplay.git
 cd omniplay
 
 # Build release APKs
 ./gradlew assembleRelease
 ```
-Compiled APKs are output to `app/build/outputs/apk/release/`.
+
+Generated APKs will be located in `app/build/outputs/apk/release/`:
+- `app-modern-release.apk` → `app_release.apk`
+- `app-legacy-release.apk` → `app_release_legacy.apk`
 
 ---
 
-## License
+## 📄 License
 
-This project is open source and available under the Apache 2.0 / GNU General Public License.
+Omniplay is open-source software licensed under the [Apache License 2.0](LICENSE).
