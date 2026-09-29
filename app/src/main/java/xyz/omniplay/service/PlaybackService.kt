@@ -9,23 +9,28 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
-import android.media.MediaPlayer
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioMixerAttributes
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.os.ParcelFileDescriptor
-import android.os.PowerManager
 import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,9 +44,8 @@ import xyz.omniplay.ui.MainActivity
 import xyz.omniplay.util.AlbumArtLoader
 import java.util.concurrent.CopyOnWriteArrayList
 
-class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
-    MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener,
-    AudioManager.OnAudioFocusChangeListener {
+@OptIn(UnstableApi::class)
+class PlaybackService : Service() {
 
     companion object {
         const val CHANNEL_ID = "omniplay_playback_channel"
@@ -59,10 +63,12 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     private val binder = LocalBinder()
-    private var mediaPlayer: MediaPlayer? = null
+    private var player: ExoPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
-    private lateinit var audioManager: AudioManager
-    private var audioFocusRequest: AudioFocusRequest? = null
+    private lateinit var audioManager: android.media.AudioManager
+
+    // Android 14+ Bit-Perfect Audio variables (activated silently for USB DACs)
+    private var audioDeviceCallback: AudioDeviceCallback? = null
 
     // Playback state
     var currentSong: Song? = null
@@ -81,22 +87,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private var currentAlbumArt: Bitmap? = null
     private var progressJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var resumeOnFocusGain = false
-
-    private var currentAfd: AssetFileDescriptor? = null
-    private var currentPfd: ParcelFileDescriptor? = null
-
-    private fun releaseCurrentFd() {
-        try {
-            currentAfd?.close()
-        } catch (ignored: Exception) {}
-        currentAfd = null
-
-        try {
-            currentPfd?.close()
-        } catch (ignored: Exception) {}
-        currentPfd = null
-    }
 
     private val listeners = CopyOnWriteArrayList<PlaybackListener>()
 
@@ -115,25 +105,145 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     override fun onCreate() {
         super.onCreate()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
         createNotificationChannel()
         initMediaSession()
-        initMediaPlayer()
+        initPlayer()
+        setupBitPerfectAudio()
         registerBecomingNoisyReceiver()
     }
 
-    private fun initMediaPlayer() {
-        mediaPlayer = MediaPlayer().apply {
-            setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
-            setAudioAttributes(
+    /**
+     * Initializes ExoPlayer configured for High-Res Audio output by default.
+     * Enables 32-bit floating point PCM output (setEnableAudioFloatOutput)
+     * so 24-bit and 32-bit / 192kHz FLAC, WAV, ALAC, etc. play without downsampling or distortion.
+     */
+    private fun initPlayer() {
+        val renderersFactory = DefaultRenderersFactory(applicationContext)
+            .setEnableAudioFloatOutput(true) // Native 32-bit float Hi-Res output
+            .setEnableAudioTrackPlaybackParams(true)
+
+        val exo = ExoPlayer.Builder(applicationContext, renderersFactory)
+            .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .build()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true // Auto handle audio focus (pause on call, duck, resume)
             )
-            setOnPreparedListener(this@PlaybackService)
-            setOnCompletionListener(this@PlaybackService)
-            setOnErrorListener(this@PlaybackService)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
+
+        exo.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        val dur = exo.duration.takeIf { it > 0L } ?: currentSong?.duration ?: 0L
+                        currentSong?.let { updateMediaMetadata(it, dur, currentAlbumArt) }
+                        val isPlaying = exo.isPlaying
+                        val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+                        updatePlaybackState(state, exo.currentPosition.coerceAtLeast(0L))
+                    }
+                    Player.STATE_ENDED -> {
+                        skipNext(forceNext = false)
+                    }
+                    Player.STATE_IDLE, Player.STATE_BUFFERING -> {}
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, exo.currentPosition.coerceAtLeast(0L))
+                    startProgressTracker()
+                    startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                } else {
+                    stopProgressTracker()
+                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, exo.currentPosition.coerceAtLeast(0L))
+                    updateNotification(isPlaying = false)
+                }
+                listeners.forEach { it.onPlaybackStateChanged(isPlaying) }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                // If a playback error occurs, advance safely without hanging
+                skipNext(forceNext = false)
+            }
+        })
+
+        player = exo
+    }
+
+    /**
+     * Silent Bit-Perfect activation for USB DACs on Android 14+ (API 34).
+     * Bypasses OS software resampling/mixing without displaying any UI or settings.
+     */
+    private fun setupBitPerfectAudio() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            applyBitPerfectIfCapable()
+
+            audioDeviceCallback = object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                    applyBitPerfectIfCapable()
+                }
+
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                    applyBitPerfectIfCapable()
+                }
+            }
+            try {
+                audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+            } catch (ignored: Throwable) {}
+        }
+    }
+
+    private fun applyBitPerfectIfCapable() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                val mediaAttributes = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+
+                val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                for (device in devices) {
+                    if (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                        device.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                        device.type == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+
+                        val supportedAttrs = audioManager.getSupportedMixerAttributes(device)
+                        val bitPerfectAttr = supportedAttrs.find {
+                            it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT
+                        }
+                        if (bitPerfectAttr != null) {
+                            audioManager.setPreferredMixerAttributes(mediaAttributes, device, bitPerfectAttr)
+                        } else {
+                            try {
+                                val customBitPerfect = AudioMixerAttributes.Builder(
+                                    android.media.AudioFormat.Builder()
+                                        .setEncoding(android.media.AudioFormat.ENCODING_PCM_FLOAT)
+                                        .setSampleRate(192000)
+                                        .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_STEREO)
+                                        .build()
+                                )
+                                    .setMixerBehavior(AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT)
+                                    .build()
+                                audioManager.setPreferredMixerAttributes(mediaAttributes, device, customBitPerfect)
+                            } catch (ignored: Throwable) {}
+                        }
+                    }
+                }
+            } catch (ignored: Throwable) {}
+        }
+    }
+
+    private fun teardownBitPerfectAudio() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                audioDeviceCallback?.let {
+                    audioManager.unregisterAudioDeviceCallback(it)
+                }
+                audioDeviceCallback = null
+            } catch (ignored: Throwable) {}
         }
     }
 
@@ -240,60 +350,40 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             currentSong = null
             currentAlbumArt = null
             try {
-                if (mediaPlayer?.isPlaying == true) {
-                    mediaPlayer?.pause()
-                }
-                mediaPlayer?.reset()
-                releaseCurrentFd()
+                player?.stop()
+                player?.clearMediaItems()
             } catch (e: Exception) {}
             stopProgressTracker()
             updatePlaybackState(PlaybackStateCompat.STATE_NONE)
-            try {
-                stopForeground(true)
-                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                manager.cancel(NOTIFICATION_ID)
-            } catch (e: Exception) {}
-            listeners.forEach { it.onTrackChanged(null) }
-            listeners.forEach { it.onPlaybackStateChanged(false) }
-            listeners.forEach { it.onQueueChanged(emptyList()) }
+            updateNotification(isPlaying = false)
+            listeners.forEach {
+                it.onTrackChanged(null)
+                it.onQueueChanged(emptyList())
+                it.onPlaybackStateChanged(false)
+            }
             return
         }
 
         originalQueue = newSongs.toList()
-        val current = currentSong
+        val currentId = currentSong?.id
 
-        if (current != null) {
-            val matchingSong = newSongs.find {
-                it.contentUri == current.contentUri ||
-                it.id == current.id ||
-                (it.filePath.isNotEmpty() && it.filePath == current.filePath)
-            }
+        if (currentId != null) {
+            val updatedCurrent = newSongs.find { it.id == currentId }
+            if (updatedCurrent != null) {
+                currentSong = updatedCurrent
+                listeners.forEach { it.onTrackChanged(updatedCurrent) }
 
-            if (matchingSong != null) {
-                // Currently playing/selected song is still present; refresh its metadata
-                currentSong = matchingSong
                 if (isShuffleEnabled) {
-                    val remaining = newSongs.filter { it.id != matchingSong.id }.shuffled()
-                    queue = (listOf(matchingSong) + remaining).toMutableList()
+                    val remaining = newSongs.filter { it.id != currentId }.shuffled()
+                    queue = (listOf(updatedCurrent) + remaining).toMutableList()
                     currentIndex = 0
                 } else {
                     queue = newSongs.toMutableList()
-                    currentIndex = queue.indexOfFirst { it.id == matchingSong.id }.coerceAtLeast(0)
+                    currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
                 }
-
-                updateMediaMetadata(matchingSong)
-                serviceScope.launch {
-                    currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, matchingSong)
-                    if (isPlaying()) {
-                        updateNotification(isPlaying = true)
-                    }
-                }
-                // Notify listeners so UI updates immediately with the refreshed metadata
-                listeners.forEach { it.onTrackChanged(matchingSong) }
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
-                // Previously playing song was removed from folder
-                pause()
+                // Currently playing song was deleted/removed from folder
                 if (isShuffleEnabled) {
                     queue = newSongs.shuffled().toMutableList()
                 } else {
@@ -319,10 +409,12 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
         }
         try {
-            mediaPlayer?.reset()
+            val p = player ?: return
+            p.stop()
             if (song.contentUri != Uri.EMPTY) {
-                setMediaPlayerDataSource(song.contentUri)
-                mediaPlayer?.prepareAsync()
+                val mediaItem = MediaItem.fromUri(song.contentUri)
+                p.setMediaItem(mediaItem)
+                p.prepare()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -343,62 +435,18 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             }
         }
 
-        if (!requestAudioFocus()) {
-            return
-        }
-
         try {
-            mediaPlayer?.reset()
+            val p = player ?: return
+            p.stop()
             if (song.contentUri != Uri.EMPTY) {
-                setMediaPlayerDataSource(song.contentUri)
-                mediaPlayer?.prepareAsync()
+                val mediaItem = MediaItem.fromUri(song.contentUri)
+                p.setMediaItem(mediaItem)
+                p.prepare()
+                p.play()
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    private fun setMediaPlayerDataSource(uri: Uri) {
-        releaseCurrentFd()
-        try {
-            mediaPlayer?.setDataSource(applicationContext, uri)
-        } catch (e: Exception) {
-            var loaded = false
-            try {
-                val afd = applicationContext.contentResolver.openAssetFileDescriptor(uri, "r")
-                if (afd != null) {
-                    currentAfd = afd
-                    if (afd.declaredLength < 0) {
-                        mediaPlayer?.setDataSource(afd.fileDescriptor)
-                    } else {
-                        mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
-                    }
-                    loaded = true
-                }
-            } catch (ignored: Exception) {}
-
-            if (!loaded) {
-                try {
-                    val pfd = applicationContext.contentResolver.openFileDescriptor(uri, "r")
-                    if (pfd != null) {
-                        currentPfd = pfd
-                        mediaPlayer?.setDataSource(pfd.fileDescriptor)
-                    }
-                } catch (ex: Exception) {
-                    ex.printStackTrace()
-                }
-            }
-        }
-    }
-
-    override fun onPrepared(mp: MediaPlayer?) {
-        val dur = mp?.duration?.toLong()?.takeIf { it > 0 } ?: currentSong?.duration ?: 0L
-        currentSong?.let { updateMediaMetadata(it, dur, currentAlbumArt) }
-        mp?.start()
-        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, 0L)
-        startProgressTracker()
-        startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
-        listeners.forEach { it.onPlaybackStateChanged(true) }
     }
 
     fun play() {
@@ -410,11 +458,9 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             return
         }
 
-        if (!requestAudioFocus()) return
-
-        mediaPlayer?.let {
+        player?.let {
             if (!it.isPlaying) {
-                it.start()
+                it.play()
                 updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, getCurrentPosition().toLong())
                 startProgressTracker()
                 startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
@@ -424,7 +470,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun pause() {
-        mediaPlayer?.let {
+        player?.let {
             if (it.isPlaying) {
                 it.pause()
                 stopProgressTracker()
@@ -444,7 +490,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     fun isPlaying(): Boolean {
-        return mediaPlayer?.isPlaying == true
+        return player?.isPlaying == true
     }
 
     fun skipNext(forceNext: Boolean = false) {
@@ -455,8 +501,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         }
 
         if (isShuffleEnabled) {
-            // In randomized mode, Now Playing is at index 0 and upcoming tracks are below it.
-            // Rotating queue moves finished track to the bottom and brings next track to index 0.
             if (queue.size > 1) {
                 val finished = queue.removeAt(0)
                 queue.add(finished)
@@ -505,7 +549,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
         if (isShuffleEnabled) {
             if (queue.size > 1) {
-                // In randomized mode, moving previous brings the last track to index 0.
                 val prev = queue.removeAt(queue.size - 1)
                 queue.add(0, prev)
                 currentIndex = 0
@@ -565,7 +608,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun seekTo(positionMs: Int) {
         try {
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
-                mediaPlayer?.seekTo(positionMs)
+                player?.seekTo(positionMs.toLong())
             }
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
@@ -577,8 +620,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     fun getCurrentPosition(): Int {
         return try {
-            if (mediaPlayer?.isPlaying == true || currentSong != null) {
-                mediaPlayer?.currentPosition ?: 0
+            if (player?.isPlaying == true || currentSong != null) {
+                player?.currentPosition?.toInt()?.coerceAtLeast(0) ?: 0
             } else 0
         } catch (e: Exception) {
             0
@@ -588,7 +631,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun getDuration(): Int {
         return try {
             if (currentSong != null) {
-                mediaPlayer?.duration ?: (currentSong?.duration?.toInt() ?: 0)
+                val dur = player?.duration?.toInt()?.takeIf { it > 0 }
+                dur ?: (currentSong?.duration?.toInt() ?: 0)
             } else 0
         } catch (e: Exception) {
             0
@@ -598,10 +642,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     fun toggleShuffle() {
         isShuffleEnabled = !isShuffleEnabled
         if (isShuffleEnabled) {
-            // When turning ON randomize:
-            // 1. Now playing is set on top of the playlist (index 0)
-            // 2. The bottom after now playing is freshly randomized
-            // 3. Always re-randomizes each time it is turned on
             val current = currentSong ?: originalQueue.firstOrNull()
             if (current != null) {
                 val remaining = originalQueue.filter { it.id != current.id }.shuffled()
@@ -612,8 +652,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                 currentIndex = 0
             }
         } else {
-            // When turning OFF randomize:
-            // Restores the original playlist
             val current = currentSong
             queue = originalQueue.toMutableList()
             currentIndex = if (current != null) {
@@ -633,14 +671,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             else -> REPEAT_OFF
         }
         listeners.forEach { it.onRepeatModeChanged(repeatMode) }
-    }
-
-    override fun onCompletion(mp: MediaPlayer?) {
-        skipNext(forceNext = false)
-    }
-
-    override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
-        return true
     }
 
     private fun startProgressTracker() {
@@ -666,55 +696,6 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private fun stopProgressTracker() {
         progressJob?.cancel()
         progressJob = null
-    }
-
-    private fun requestAudioFocus(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setAcceptsDelayedFocusGain(true)
-                .setOnAudioFocusChangeListener(this)
-                .build()
-            audioFocusRequest = request
-            audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(
-                this,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN
-            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-        }
-    }
-
-    override fun onAudioFocusChange(focusChange: Int) {
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                pause()
-                resumeOnFocusGain = false
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (isPlaying()) {
-                    pause()
-                    resumeOnFocusGain = true
-                }
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                mediaPlayer?.setVolume(0.2f, 0.2f)
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                mediaPlayer?.setVolume(1.0f, 1.0f)
-                if (resumeOnFocusGain) {
-                    play()
-                    resumeOnFocusGain = false
-                }
-            }
-        }
     }
 
     private fun updateMediaMetadata(song: Song, durationMs: Long = song.duration, art: Bitmap? = currentAlbumArt) {
@@ -814,14 +795,14 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+            if (intent?.action == android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
                 pause()
             }
         }
     }
 
     private fun registerBecomingNoisyReceiver() {
-        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        val filter = IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY)
         registerReceiver(noisyReceiver, filter)
     }
 
@@ -839,13 +820,15 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
+        teardownBitPerfectAudio()
         stopProgressTracker()
         try {
             unregisterReceiver(noisyReceiver)
         } catch (e: Exception) {}
-        releaseCurrentFd()
-        mediaPlayer?.release()
-        mediaPlayer = null
+        try {
+            player?.release()
+            player = null
+        } catch (e: Exception) {}
         mediaSession?.release()
         super.onDestroy()
     }
