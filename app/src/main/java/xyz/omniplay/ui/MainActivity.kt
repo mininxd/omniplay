@@ -137,6 +137,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupBackPressHandler()
         setupDefaultView()
         setupInWindowPlaylistPanel()
+        setupBottomSwipeGesture()
         setupAlbumArtSwipeGesture()
         setupListeners()
         bindPlaybackService()
@@ -242,21 +243,106 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             openFolderPicker()
         }
 
-        // Dynamically size peek height to smoothly reach right below playback controls,
-        // maximizing the native draggable range without splitting gestures or causing flicker.
-        binding.root.post {
-            if (::bottomSheetBehavior.isInitialized) {
-                val controlsBottom = binding.controlsLayout.bottom
-                val rootHeight = binding.coordinatorRoot.height
-                val availableSpace = rootHeight - controlsBottom
-                if (availableSpace > 0) {
-                    val density = resources.displayMetrics.density
-                    val desiredPeek = availableSpace.coerceIn(
-                        (72 * density).toInt(),
-                        (140 * density).toInt()
-                    )
-                    bottomSheetBehavior.peekHeight = desiredPeek
+    }
+
+    /**
+     * Interactive gesture listener on the bottom section below playback controls.
+     * Allows real-time dragging/peeking of the playlist panel up and down without snapping directly open.
+     * If dragged back down towards the bottom, the playlist remains collapsed.
+     */
+    private fun setupBottomSwipeGesture() {
+        var startY = 0f
+        var isDraggingSheet = false
+        var velocityTracker: VelocityTracker? = null
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var activeAnimator: ValueAnimator? = null
+
+        binding.bottomGestureArea.setOnTouchListener { _, event ->
+            if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                return@setOnTouchListener false
+            }
+
+            val maxTravel = binding.playlistSlidingPanel.top.toFloat().takeIf { it > 0f }
+                ?: (binding.root.height - bottomSheetBehavior.peekHeight).toFloat().coerceAtLeast(1f)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    activeAnimator?.cancel()
+                    startY = event.rawY
+                    isDraggingSheet = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    true
                 }
+                MotionEvent.ACTION_MOVE -> {
+                    velocityTracker?.addMovement(event)
+                    val deltaTotalY = event.rawY - startY
+
+                    if (!isDraggingSheet && Math.abs(deltaTotalY) > touchSlop) {
+                        if (deltaTotalY < 0) { // Moving upwards
+                            isDraggingSheet = true
+                        }
+                    }
+
+                    if (isDraggingSheet) {
+                        // Clamp translation between -maxTravel (fully expanded) and 0f (collapsed)
+                        val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
+                        binding.playlistSlidingPanel.translationY = targetTranslation
+                        val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
+                        binding.ivChevron.rotation = progress * 180f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    if (isDraggingSheet) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = velocityTracker?.yVelocity ?: 0f
+                        val currentTrans = binding.playlistSlidingPanel.translationY
+                        val progress = (-currentTrans / maxTravel).coerceIn(0f, 1f)
+
+                        // If user flung upward fast (< -800) or dragged past 40% (0.4) and didn't fling downward
+                        val shouldExpand = when {
+                            yVel < -800f -> true
+                            yVel > 800f -> false
+                            else -> progress >= 0.4f
+                        }
+
+                        val targetY = if (shouldExpand) -maxTravel else 0f
+                        val duration = (250 * if (shouldExpand) (1f - progress) else progress).toLong().coerceIn(100L, 300L)
+
+                        activeAnimator = ValueAnimator.ofFloat(currentTrans, targetY).apply {
+                            this.duration = duration
+                            interpolator = DecelerateInterpolator()
+                            addUpdateListener { anim ->
+                                val v = anim.animatedValue as Float
+                                binding.playlistSlidingPanel.translationY = v
+                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 180f
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    binding.playlistSlidingPanel.translationY = 0f
+                                    if (shouldExpand) {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                                        binding.ivChevron.rotation = 180f
+                                    } else {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                                        binding.ivChevron.rotation = 0f
+                                    }
+                                    activeAnimator = null
+                                }
+                            })
+                            start()
+                        }
+                        isDraggingSheet = false
+                    }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
+                    true
+                }
+                else -> false
             }
         }
     }
