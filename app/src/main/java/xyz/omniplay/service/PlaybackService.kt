@@ -42,6 +42,8 @@ import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.ui.MainActivity
 import xyz.omniplay.util.AlbumArtLoader
+import xyz.omniplay.util.AudioInfoExtractor
+import xyz.omniplay.util.AudioTrackInfo
 import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(UnstableApi::class)
@@ -73,6 +75,8 @@ class PlaybackService : Service() {
     // Playback state
     var currentSong: Song? = null
         private set
+    var currentAudioInfo: AudioTrackInfo? = null
+        private set
     var queue: MutableList<Song> = mutableListOf()
         private set
     private var originalQueue: List<Song> = emptyList()
@@ -97,6 +101,7 @@ class PlaybackService : Service() {
         fun onShuffleModeChanged(enabled: Boolean)
         fun onRepeatModeChanged(mode: Int)
         fun onQueueChanged(queue: List<Song>)
+        fun onAudioInfoChanged(audioInfo: AudioTrackInfo?) {}
     }
 
     inner class LocalBinder : Binder() {
@@ -162,6 +167,22 @@ class PlaybackService : Service() {
                     updateNotification(isPlaying = false)
                 }
                 listeners.forEach { it.onPlaybackStateChanged(isPlaying) }
+            }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_AUDIO && group.isSelected) {
+                        for (i in 0 until group.length) {
+                            if (group.isTrackSelected(i)) {
+                                val exoFormat = group.getTrackFormat(i)
+                                val exoInfo = AudioInfoExtractor.fromExoFormat(exoFormat, currentSong?.format ?: "")
+                                currentAudioInfo = AudioInfoExtractor.merge(currentAudioInfo, exoInfo)
+                                notifyAudioInfoChanged(currentAudioInfo)
+                                break
+                            }
+                        }
+                    }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -405,6 +426,7 @@ class PlaybackService : Service() {
     private fun prepareWithoutPlaying(song: Song) {
         currentSong = song
         listeners.forEach { it.onTrackChanged(song) }
+        updateAudioInfoForSong(song)
         serviceScope.launch {
             currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
         }
@@ -424,6 +446,7 @@ class PlaybackService : Service() {
     fun playSong(song: Song) {
         currentSong = song
         listeners.forEach { it.onTrackChanged(song) }
+        updateAudioInfoForSong(song)
         updateMediaMetadata(song)
 
         serviceScope.launch {
@@ -446,6 +469,35 @@ class PlaybackService : Service() {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun updateAudioInfoForSong(song: Song) {
+        currentAudioInfo = AudioTrackInfo(
+            format = song.format,
+            isHiRes = song.isHiRes
+        )
+        notifyAudioInfoChanged(currentAudioInfo)
+
+        serviceScope.launch(Dispatchers.IO) {
+            val extracted = AudioInfoExtractor.extractFromUri(applicationContext, song.contentUri, song.format)
+            val merged = AudioInfoExtractor.merge(extracted, currentAudioInfo)
+            serviceScope.launch(Dispatchers.Main) {
+                if (currentSong?.id == song.id) {
+                    currentAudioInfo = merged
+                    notifyAudioInfoChanged(currentAudioInfo)
+                }
+            }
+        }
+    }
+
+    private fun notifyAudioInfoChanged(info: AudioTrackInfo?) {
+        listeners.forEach {
+            try {
+                it.onAudioInfoChanged(info)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

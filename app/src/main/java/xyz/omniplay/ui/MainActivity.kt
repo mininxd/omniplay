@@ -40,6 +40,7 @@ import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.util.AlbumArtLoader
+import xyz.omniplay.util.AudioTrackInfo
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
@@ -73,6 +74,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 } else if (playbackService?.queue.isNullOrEmpty()) {
                     playbackService?.setSongQueue(scannedSongs, startIndex = 0, startPlaying = false)
                 }
+            }
+
+            if (playbackService?.currentSong != null) {
+                updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
             }
         }
 
@@ -185,6 +190,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.playbackSlider.setProgress(0L)
         binding.playbackSlider.setPlaying(false)
         binding.playbackSlider.isEnabled = false
+
+        updateAudioBadges(null, null)
 
         updateShuffleButton(false)
         updateRepeatButton(PlaybackService.REPEAT_OFF)
@@ -952,6 +959,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         val sizeMb = String.format(Locale.US, "%.2f MB", song.fileSize / (1024.0 * 1024.0))
+        val quality = playbackService?.currentAudioInfo?.formatQualityString()
+            ?.ifEmpty { song.audioQuality } ?: song.audioQuality
+        val hiResText = if (playbackService?.currentAudioInfo?.isHiRes == true || song.isHiRes) " (Hi-Res)" else ""
 
         val details = """
             Title: ${song.title}
@@ -959,6 +969,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             Album: ${song.album}
             Duration: ${Song.formatTime(song.duration)}
             Format: ${song.format}
+            Quality: ${if (quality.isNotEmpty()) "$quality$hiResText" else "Standard"}
             File Size: $sizeMb
             Path: ${song.filePath.ifEmpty { "Audio File" }}
         """.trimIndent()
@@ -1003,6 +1014,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.albumNameText.text = song.album
             binding.totalTimeText.text = Song.formatTime(song.duration)
 
+            updateAudioBadges(song, playbackService?.currentAudioInfo)
+
             binding.playbackSlider.setDuration(song.duration)
             binding.playbackSlider.setProgress(0L)
             binding.playbackSlider.setPlaying(playbackService?.isPlaying() == true)
@@ -1032,6 +1045,45 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                 }
             }
+        }
+    }
+
+    override fun onAudioInfoChanged(audioInfo: AudioTrackInfo?) {
+        runOnUiThread {
+            if (!::binding.isInitialized) return@runOnUiThread
+            updateAudioBadges(playbackService?.currentSong, audioInfo)
+        }
+    }
+
+    private fun updateAudioBadges(song: Song?, audioInfo: AudioTrackInfo?) {
+        if (song == null) {
+            binding.audioBadgeContainer.visibility = View.GONE
+            return
+        }
+
+        val format = audioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song.format
+        val quality = audioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
+        val isHiRes = audioInfo?.isHiRes ?: song.isHiRes
+
+        if (format.isNotEmpty()) {
+            binding.audioBadgeContainer.visibility = View.VISIBLE
+            binding.badgeFormat.text = format
+            binding.badgeFormat.visibility = View.VISIBLE
+
+            if (quality.isNotEmpty()) {
+                binding.badgeQuality.visibility = View.VISIBLE
+                binding.badgeQuality.text = quality
+            } else {
+                binding.badgeQuality.visibility = View.GONE
+            }
+
+            if (isHiRes) {
+                binding.badgeHires.visibility = View.VISIBLE
+            } else {
+                binding.badgeHires.visibility = View.GONE
+            }
+        } else {
+            binding.audioBadgeContainer.visibility = View.GONE
         }
     }
 

@@ -12,6 +12,7 @@ import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xyz.omniplay.model.Song
+import xyz.omniplay.util.AudioInfoExtractor
 import java.io.File
 import java.util.Locale
 
@@ -329,6 +330,9 @@ class MusicScanner(private val context: Context) {
             "AUDIO"
         }
 
+        val audioInfo = AudioInfoExtractor.extractFromUri(context, uri, format)
+        val resolvedFormat = audioInfo.format.ifEmpty { format }
+
         return Song(
             id = (uri.toString() + displayName).hashCode().toLong(),
             title = title,
@@ -337,9 +341,11 @@ class MusicScanner(private val context: Context) {
             duration = duration,
             contentUri = uri,
             albumArtUri = null,
-            format = format,
+            format = resolvedFormat,
             filePath = displayName,
-            fileSize = size
+            fileSize = size,
+            audioQuality = audioInfo.formatQualityString(),
+            isHiRes = audioInfo.isHiRes
         )
     }
 

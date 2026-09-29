@@ -14,7 +14,9 @@ data class Song(
     val albumArtUri: Uri? = null,
     val format: String = "MP3",
     val filePath: String = "",
-    val fileSize: Long = 0L
+    val fileSize: Long = 0L,
+    val audioQuality: String = "",
+    val isHiRes: Boolean = false
 ) : Serializable {
 
     companion object {
