@@ -15,17 +15,33 @@ import xyz.omniplay.model.Song
 object AlbumArtLoader {
 
     suspend fun loadAlbumArt(context: Context, song: Song): Bitmap? = withContext(Dispatchers.IO) {
-        // 1. Try extracting embedded picture directly from audio file
+        // 1. Try extracting embedded picture directly from audio file (works for SAF URIs and Content URIs)
         try {
             if (song.contentUri != Uri.EMPTY) {
                 val retriever = MediaMetadataRetriever()
                 try {
-                    retriever.setDataSource(context, song.contentUri)
-                    val rawPicture = retriever.embeddedPicture
-                    if (rawPicture != null && rawPicture.isNotEmpty()) {
-                        val bitmap = BitmapFactory.decodeByteArray(rawPicture, 0, rawPicture.size)
-                        if (bitmap != null) {
-                            return@withContext bitmap
+                    var loaded = false
+                    try {
+                        context.contentResolver.openFileDescriptor(song.contentUri, "r")?.use { pfd ->
+                            retriever.setDataSource(pfd.fileDescriptor)
+                            loaded = true
+                        }
+                    } catch (ignored: Exception) {}
+
+                    if (!loaded) {
+                        try {
+                            retriever.setDataSource(context, song.contentUri)
+                            loaded = true
+                        } catch (ignored: Exception) {}
+                    }
+
+                    if (loaded) {
+                        val rawPicture = retriever.embeddedPicture
+                        if (rawPicture != null && rawPicture.isNotEmpty()) {
+                            val bitmap = BitmapFactory.decodeByteArray(rawPicture, 0, rawPicture.size)
+                            if (bitmap != null) {
+                                return@withContext bitmap
+                            }
                         }
                     }
                 } finally {

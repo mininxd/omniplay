@@ -60,8 +60,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             isBound = true
             playbackService?.addListener(this@MainActivity)
 
-            if (playbackService?.queue.isNullOrEmpty() && scannedSongs.isNotEmpty()) {
-                playbackService?.setSongQueue(scannedSongs, startIndex = 0, startPlaying = false)
+            if (scannedSongs.isNotEmpty()) {
+                if (playbackService?.currentSong != null) {
+                    playbackService?.refreshQueue(scannedSongs)
+                } else if (playbackService?.queue.isNullOrEmpty()) {
+                    playbackService?.setSongQueue(scannedSongs, startIndex = 0, startPlaying = false)
+                }
             }
         }
 
@@ -91,7 +95,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             loadMusicFromFolder(treeUri)
         } else {
-            loadMusicLibrary()
+            val savedFolderUri = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_MUSIC_FOLDER_URI, null)
+            if (savedFolderUri != null) {
+                loadMusicFromFolder(Uri.parse(savedFolderUri))
+            } else {
+                updateSongList(emptyList())
+                Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -163,7 +174,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                // Smoothly rotate the chevron as the user slides the panel up/down
                 binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
             }
         })
@@ -312,28 +322,40 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         try {
             folderPickerLauncher.launch(null)
         } catch (e: Exception) {
-            loadMusicLibrary()
+            Toast.makeText(this, "Failed to open folder picker: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun loadMusicFromFolder(treeUri: Uri) {
+    private fun loadMusicFromFolder(treeUri: Uri, isRescan: Boolean = false) {
         lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Scanning music folder...", Toast.LENGTH_SHORT).show()
-            val folderSongs = musicScanner.scanFolder(treeUri)
-            val songs = if (folderSongs.isNotEmpty()) {
-                folderSongs
-            } else {
-                musicScanner.scanMediaStore()
+            Toast.makeText(
+                this@MainActivity,
+                if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            val songs = musicScanner.scanFolder(treeUri)
+            updateSongList(songs)
+
+            if (isRescan) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Rescan complete: ${songs.size} songs found",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
-
-            updateSongList(songs)
         }
     }
 
-    private fun loadMusicLibrary() {
-        lifecycleScope.launch {
-            val songs = musicScanner.scanMediaStore()
-            updateSongList(songs)
+    private fun rescanMusic() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
+
+        if (savedFolderUri != null) {
+            loadMusicFromFolder(Uri.parse(savedFolderUri), isRescan = true)
+        } else {
+            Toast.makeText(this, "Select a music folder to scan", Toast.LENGTH_SHORT).show()
+            openFolderPicker()
         }
     }
 
@@ -345,13 +367,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.songCountText.text = "${songs.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
             binding.songsRecyclerView.visibility = View.VISIBLE
-            if (playbackService?.currentSong == null) {
-                playbackService?.setSongQueue(songs, startIndex = 0, startPlaying = false)
+
+            if (isBound && playbackService != null) {
+                playbackService?.refreshQueue(songs)
             }
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
             binding.songsRecyclerView.visibility = View.GONE
+
+            if (isBound && playbackService != null) {
+                playbackService?.refreshQueue(emptyList())
+            } else {
+                setupDefaultView()
+            }
         }
     }
 
@@ -373,7 +402,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     true
                 }
                 R.id.action_rescan -> {
-                    checkFolderOrScan()
+                    rescanMusic()
                     true
                 }
                 R.id.action_about -> {
@@ -471,7 +500,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     // PlaybackListener callbacks
-    override fun onTrackChanged(song: Song) {
+    override fun onTrackChanged(song: Song?) {
+        if (song == null) {
+            setupDefaultView()
+            songAdapter?.setCurrentPlayingSongId(-1L)
+            return
+        }
+
         binding.songTitleText.text = song.title
         binding.artistNameText.text = song.artist
         binding.albumNameText.text = song.album

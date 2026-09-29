@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
@@ -16,18 +17,97 @@ import java.util.Locale
 class MusicScanner(private val context: Context) {
 
     private val supportedExtensions = setOf(
-        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "amr", "mid", "midi", "wma"
+        "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "amr", "mid", "midi", "wma",
+        "m4b", "aiff", "aif", "ape", "webm", "oga", "mp2"
     )
 
     /**
-     * Scans a user-selected folder tree recursively using DocumentFile.
+     * Scans a user-selected folder tree recursively using DocumentsContract,
+     * falling back to DocumentFile if needed.
+     * NEVER falls back to full MediaStore scan so folder selection is strictly honored.
      */
     suspend fun scanFolder(treeUri: Uri): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
-        val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext songsList
+        try {
+            val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
+                DocumentsContract.getDocumentId(treeUri)
+            } else {
+                DocumentsContract.getTreeDocumentId(treeUri)
+            }
+            scanFolderDocumentsContract(treeUri, rootDocId, songsList)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
-        scanDocumentFileRecursive(rootDoc, songsList)
+        // If DocumentsContract traversal returned empty, fallback to DocumentFile traversal
+        if (songsList.isEmpty()) {
+            try {
+                val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
+                if (rootDoc != null) {
+                    scanDocumentFileRecursive(rootDoc, songsList)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         songsList.sortedBy { it.title.lowercase(Locale.ROOT) }
+    }
+
+    private fun scanFolderDocumentsContract(
+        treeUri: Uri,
+        parentDocId: String,
+        songsList: MutableList<Song>
+    ) {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE
+        )
+
+        val subDirs = mutableListOf<String>()
+
+        try {
+            context.contentResolver.query(
+                childrenUri,
+                projection,
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val sizeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+
+                while (cursor.moveToNext()) {
+                    val docId = if (idCol >= 0) cursor.getString(idCol) else continue
+                    val name = if (nameCol >= 0) cursor.getString(nameCol) ?: "" else ""
+                    val mime = if (mimeCol >= 0) cursor.getString(mimeCol) ?: "" else ""
+                    val size = if (sizeCol >= 0) cursor.getLong(sizeCol) else 0L
+
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        subDirs.add(docId)
+                    } else {
+                        val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+                        val isAudio = ext in supportedExtensions || mime.startsWith("audio/") || mime == "application/ogg"
+                        if (isAudio) {
+                            val fileDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size)
+                            songsList.add(song)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        for (subDirDocId in subDirs) {
+            scanFolderDocumentsContract(treeUri, subDirDocId, songsList)
+        }
     }
 
     private fun scanDocumentFileRecursive(directory: DocumentFile, songsList: MutableList<Song>) {
@@ -38,65 +118,94 @@ class MusicScanner(private val context: Context) {
             } else if (file.isFile) {
                 val name = file.name ?: ""
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
-                if (ext in supportedExtensions) {
-                    val song = extractSongFromDocument(file, ext)
-                    if (song != null) {
-                        songsList.add(song)
-                    }
+                val mime = file.type ?: ""
+                if (ext in supportedExtensions || mime.startsWith("audio/") || mime == "application/ogg") {
+                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length())
+                    songsList.add(song)
                 }
             }
         }
     }
 
-    private fun extractSongFromDocument(docFile: DocumentFile, ext: String): Song? {
-        val uri = docFile.uri
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(context, uri)
+    private fun extractSongFromUri(
+        uri: Uri,
+        displayName: String,
+        ext: String,
+        size: Long
+    ): Song {
+        val fallbackTitle = if (displayName.contains('.')) {
+            displayName.substringBeforeLast('.')
+        } else {
+            displayName.ifEmpty { "Track ${uri.hashCode()}" }
+        }
 
-            val rawTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-            val rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-            val rawAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
-            val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val duration = durationStr?.toLongOrNull() ?: 0L
+        var title = fallbackTitle
+        var artist = "Unknown Artist"
+        var album = "Unknown Album"
+        var duration = 0L
 
-            val title = if (!rawTitle.isNullOrBlank() && rawTitle != "<unknown>") {
-                rawTitle
-            } else {
-                docFile.name?.substringBeforeLast('.') ?: "Track ${uri.hashCode()}"
+        var retriever: MediaMetadataRetriever? = null
+        try {
+            retriever = MediaMetadataRetriever()
+            var loaded = false
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    retriever.setDataSource(pfd.fileDescriptor)
+                    loaded = true
+                }
+            } catch (ignored: Exception) {}
+
+            if (!loaded) {
+                try {
+                    retriever.setDataSource(context, uri)
+                    loaded = true
+                } catch (ignored: Exception) {}
             }
 
-            val artist = if (!rawArtist.isNullOrBlank() && rawArtist != "<unknown>") {
-                rawArtist
-            } else {
-                "Unknown Artist"
-            }
+            if (loaded) {
+                val rawTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                val rawAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                val dur = durationStr?.toLongOrNull() ?: 0L
+                if (dur > 0L) duration = dur
 
-            val album = if (!rawAlbum.isNullOrBlank() && rawAlbum != "<unknown>") {
-                rawAlbum
-            } else {
-                "Unknown Album"
+                if (!rawTitle.isNullOrBlank() && rawTitle != "<unknown>") {
+                    title = rawTitle.trim()
+                }
+                if (!rawArtist.isNullOrBlank() && rawArtist != "<unknown>") {
+                    artist = rawArtist.trim()
+                }
+                if (!rawAlbum.isNullOrBlank() && rawAlbum != "<unknown>") {
+                    album = rawAlbum.trim()
+                }
             }
-
-            Song(
-                id = uri.hashCode().toLong(),
-                title = title,
-                artist = artist,
-                album = album,
-                duration = duration,
-                contentUri = uri,
-                albumArtUri = null, // Embedded art is loaded on-demand via AlbumArtLoader
-                format = ext.uppercase(Locale.ROOT),
-                filePath = docFile.name ?: "",
-                fileSize = docFile.length()
-            )
         } catch (e: Exception) {
-            null
+            // Keep fallback metadata
         } finally {
             try {
-                retriever.release()
+                retriever?.release()
             } catch (ignored: Exception) {}
         }
+
+        val format = if (ext.isNotEmpty() && ext.length in 2..5) {
+            ext.uppercase(Locale.ROOT)
+        } else {
+            "AUDIO"
+        }
+
+        return Song(
+            id = (uri.toString() + displayName).hashCode().toLong(),
+            title = title,
+            artist = artist,
+            album = album,
+            duration = duration,
+            contentUri = uri,
+            albumArtUri = null,
+            format = format,
+            filePath = displayName,
+            fileSize = size
+        )
     }
 
     /**

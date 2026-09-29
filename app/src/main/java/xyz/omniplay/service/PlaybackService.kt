@@ -73,6 +73,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     var repeatMode: Int = REPEAT_OFF
         private set
 
+    private var currentAlbumArt: Bitmap? = null
     private var progressJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var resumeOnFocusGain = false
@@ -80,7 +81,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private val listeners = mutableListOf<PlaybackListener>()
 
     interface PlaybackListener {
-        fun onTrackChanged(song: Song)
+        fun onTrackChanged(song: Song?)
         fun onPlaybackStateChanged(isPlaying: Boolean)
         fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int)
         fun onShuffleModeChanged(enabled: Boolean)
@@ -165,26 +166,118 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
             songs.toMutableList()
         }
 
-        currentIndex = if (isShuffleEnabled) 0 else startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
-
-        if (queue.isNotEmpty() && currentIndex in queue.indices) {
-            val song = queue[currentIndex]
-            currentSong = song
-            if (startPlaying) {
+        if (startPlaying) {
+            currentIndex = if (isShuffleEnabled) 0 else startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+            if (queue.isNotEmpty() && currentIndex in queue.indices) {
+                val song = queue[currentIndex]
+                currentSong = song
                 playSong(song)
-            } else {
-                prepareWithoutPlaying(song)
             }
+        } else {
+            if (currentSong == null) {
+                currentIndex = -1
+            } else {
+                currentIndex = if (isShuffleEnabled) {
+                    0
+                } else {
+                    queue.indexOfFirst { it.contentUri == currentSong?.contentUri }.coerceAtLeast(0)
+                }
+            }
+        }
+    }
+
+    /**
+     * Refreshes the active queue with newly scanned songs.
+     * If the current song is still in the list, its metadata is updated and UI notified without interrupting playback.
+     */
+    fun refreshQueue(newSongs: List<Song>) {
+        if (newSongs.isEmpty()) {
+            originalQueue = emptyList()
+            queue.clear()
+            currentIndex = -1
+            currentSong = null
+            currentAlbumArt = null
+            try {
+                if (mediaPlayer?.isPlaying == true) {
+                    mediaPlayer?.pause()
+                }
+                mediaPlayer?.reset()
+            } catch (e: Exception) {}
+            stopProgressTracker()
+            updatePlaybackState(PlaybackStateCompat.STATE_NONE)
+            try {
+                stopForeground(true)
+                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                manager.cancel(NOTIFICATION_ID)
+            } catch (e: Exception) {}
+            listeners.forEach { it.onTrackChanged(null) }
+            listeners.forEach { it.onPlaybackStateChanged(false) }
+            return
+        }
+
+        originalQueue = newSongs.toList()
+        val current = currentSong
+
+        if (current != null) {
+            val matchingSong = newSongs.find {
+                it.contentUri == current.contentUri ||
+                it.id == current.id ||
+                (it.filePath.isNotEmpty() && it.filePath == current.filePath)
+            }
+
+            if (matchingSong != null) {
+                // Currently playing/selected song is still present; refresh its metadata
+                currentSong = matchingSong
+                if (isShuffleEnabled) {
+                    val shuffled = newSongs.toMutableList()
+                    shuffled.remove(matchingSong)
+                    shuffled.shuffle()
+                    shuffled.add(0, matchingSong)
+                    queue = shuffled
+                    currentIndex = 0
+                } else {
+                    queue = newSongs.toMutableList()
+                    currentIndex = queue.indexOfFirst { it.contentUri == matchingSong.contentUri }.coerceAtLeast(0)
+                }
+
+                updateMediaMetadata(matchingSong)
+                serviceScope.launch {
+                    currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, matchingSong)
+                    if (isPlaying()) {
+                        updateNotification(isPlaying = true)
+                    }
+                }
+                // Notify listeners so UI updates immediately with the refreshed metadata
+                listeners.forEach { it.onTrackChanged(matchingSong) }
+            } else {
+                // Previously playing song was removed from folder
+                pause()
+                if (isShuffleEnabled) {
+                    queue = newSongs.shuffled().toMutableList()
+                } else {
+                    queue = newSongs.toMutableList()
+                }
+                currentIndex = 0
+                val nextSong = queue[0]
+                prepareWithoutPlaying(nextSong)
+            }
+        } else {
+            // No song currently playing or selected
+            queue = if (isShuffleEnabled) newSongs.shuffled().toMutableList() else newSongs.toMutableList()
+            currentIndex = -1
         }
     }
 
     private fun prepareWithoutPlaying(song: Song) {
         currentSong = song
         listeners.forEach { it.onTrackChanged(song) }
+        serviceScope.launch {
+            currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+        }
         try {
             mediaPlayer?.reset()
             if (song.contentUri != Uri.EMPTY) {
-                mediaPlayer?.setDataSource(applicationContext, song.contentUri)
+                setMediaPlayerDataSource(song.contentUri)
                 mediaPlayer?.prepareAsync()
             }
         } catch (e: Exception) {
@@ -197,6 +290,13 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         listeners.forEach { it.onTrackChanged(song) }
         updateMediaMetadata(song)
 
+        serviceScope.launch {
+            currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            if (isPlaying()) {
+                updateNotification(isPlaying = true)
+            }
+        }
+
         if (!requestAudioFocus()) {
             return
         }
@@ -204,11 +304,32 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         try {
             mediaPlayer?.reset()
             if (song.contentUri != Uri.EMPTY) {
-                mediaPlayer?.setDataSource(applicationContext, song.contentUri)
+                setMediaPlayerDataSource(song.contentUri)
                 mediaPlayer?.prepareAsync()
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun setMediaPlayerDataSource(uri: Uri) {
+        try {
+            mediaPlayer?.setDataSource(applicationContext, uri)
+        } catch (e: Exception) {
+            val opened = try {
+                applicationContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+                    mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    true
+                } ?: false
+            } catch (ex: Exception) {
+                false
+            }
+
+            if (!opened) {
+                applicationContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    mediaPlayer?.setDataSource(pfd.fileDescriptor)
+                }
+            }
         }
     }
 
@@ -504,15 +625,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                     .setShowActionsInCompactView(0, 1, 2)
             )
 
-        val albumArt: Bitmap? = try {
-            kotlinx.coroutines.runBlocking {
-                AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
-            }
-        } catch (e: Exception) {
-            null
-        }
-
-        albumArt?.let {
+        currentAlbumArt?.let {
             builder.setLargeIcon(it)
         }
 
