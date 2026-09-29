@@ -1,6 +1,9 @@
 package xyz.omniplay.ui
 
 import android.Manifest
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,10 +13,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
+import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -173,6 +178,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.playbackSlider.setDuration(1000L)
         binding.playbackSlider.setProgress(0L)
+        binding.playbackSlider.setPlaying(false)
         binding.playbackSlider.isEnabled = false
 
         updateShuffleButton(false)
@@ -228,53 +234,104 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Gesture listener: only triggers when swiping up from the bottom section below playback controls.
+     * Interactive gesture listener on the bottom section below playback controls.
+     * Allows real-time dragging/peeking of the playlist panel up and down without snapping directly open.
+     * If dragged back down towards the bottom, the playlist remains collapsed.
      */
     private fun setupBottomSwipeGesture() {
-        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            private val swipeThreshold = 30
-            private val swipeVelocityThreshold = 40
-
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                if (e1 == null) return false
-                val diffY = e2.y - e1.y
-                val diffX = e2.x - e1.x
-                // Swipe to top (upwards fling)
-                if (Math.abs(diffY) > Math.abs(diffX) &&
-                    diffY < -swipeThreshold &&
-                    Math.abs(velocityY) > swipeVelocityThreshold
-                ) {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                    return true
-                }
-                return false
-            }
-
-            override fun onScroll(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                distanceX: Float,
-                distanceY: Float
-            ): Boolean {
-                // If scrolling upwards (distanceY > 0 means moving upward)
-                if (distanceY > 15 && Math.abs(distanceY) > Math.abs(distanceX)) {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                    return true
-                }
-                return false
-            }
-
-            override fun onDown(e: MotionEvent): Boolean = true
-        })
+        var startY = 0f
+        var isDraggingSheet = false
+        var velocityTracker: VelocityTracker? = null
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var activeAnimator: ValueAnimator? = null
 
         binding.bottomGestureArea.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            true
+            if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                return@setOnTouchListener false
+            }
+
+            val maxTravel = binding.playlistSlidingPanel.top.toFloat().takeIf { it > 0f }
+                ?: (binding.root.height - bottomSheetBehavior.peekHeight).toFloat().coerceAtLeast(1f)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    activeAnimator?.cancel()
+                    startY = event.rawY
+                    isDraggingSheet = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    velocityTracker?.addMovement(event)
+                    val deltaTotalY = event.rawY - startY
+
+                    if (!isDraggingSheet && Math.abs(deltaTotalY) > touchSlop) {
+                        if (deltaTotalY < 0) { // Moving upwards
+                            isDraggingSheet = true
+                        }
+                    }
+
+                    if (isDraggingSheet) {
+                        // Clamp translation between -maxTravel (fully expanded) and 0f (collapsed)
+                        val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
+                        binding.playlistSlidingPanel.translationY = targetTranslation
+                        val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
+                        binding.ivChevron.rotation = progress * 180f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    if (isDraggingSheet) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = velocityTracker?.yVelocity ?: 0f
+                        val currentTrans = binding.playlistSlidingPanel.translationY
+                        val progress = (-currentTrans / maxTravel).coerceIn(0f, 1f)
+
+                        // If user flung upward fast (< -800) or dragged past 40% (0.4) and didn't fling downward
+                        val shouldExpand = when {
+                            yVel < -800f -> true
+                            yVel > 800f -> false
+                            else -> progress >= 0.4f
+                        }
+
+                        val targetY = if (shouldExpand) -maxTravel else 0f
+                        val duration = (250 * if (shouldExpand) (1f - progress) else progress).toLong().coerceIn(100L, 300L)
+
+                        activeAnimator = ValueAnimator.ofFloat(currentTrans, targetY).apply {
+                            this.duration = duration
+                            interpolator = DecelerateInterpolator()
+                            addUpdateListener { anim ->
+                                val v = anim.animatedValue as Float
+                                binding.playlistSlidingPanel.translationY = v
+                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 180f
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    binding.playlistSlidingPanel.translationY = 0f
+                                    if (shouldExpand) {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                                        binding.ivChevron.rotation = 180f
+                                    } else {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                                        binding.ivChevron.rotation = 0f
+                                    }
+                                    activeAnimator = null
+                                }
+                            })
+                            start()
+                        }
+                        isDraggingSheet = false
+                    }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
+                    true
+                }
+                else -> false
+            }
         }
     }
 
@@ -325,8 +382,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        // Audio Waveform Seek Slider with smooth interactive seeking
-        binding.playbackSlider.seekListener = object : WaveformSeekBar.OnWaveformSeekListener {
+        // Android 13/14 Squiggly Progress Line Seek Bar
+        binding.playbackSlider.seekListener = object : SquigglySeekBar.OnSeekListener {
             override fun onStartTracking() {
                 isUserTrackingSlider = true
             }
@@ -544,9 +601,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.albumNameText.text = song.album
         binding.totalTimeText.text = Song.formatTime(song.duration)
 
-        binding.playbackSlider.setSongSeed(song.id)
         binding.playbackSlider.setDuration(song.duration)
         binding.playbackSlider.setProgress(0L)
+        binding.playbackSlider.setPlaying(playbackService?.isPlaying == true)
         binding.playbackSlider.isEnabled = true
 
         songAdapter?.setCurrentPlayingSongId(song.id)
@@ -564,6 +621,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onPlaybackStateChanged(isPlaying: Boolean) {
         updatePlayPauseButton(isPlaying)
+        binding.playbackSlider.setPlaying(isPlaying)
     }
 
     override fun onProgressUpdate(currentPositionMs: Int, totalDurationMs: Int) {
