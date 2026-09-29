@@ -185,19 +185,9 @@
                 android:contentDescription="Aspect Ratio"
                 android:src="@drawable/ic_aspect_ratio"
                 app:tint="#FFFFFF" />
-
-            <ImageButton
-                android:id="@+id/btn_rotate_screen"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginStart="4dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Rotate Screen"
-                android:src="@drawable/ic_screen_rotation"
-                app:tint="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Center Controls: Rewind, Play/Pause, Forward -->
+        <!-- Center Controls: Rewind, Play/Pause, Forward (YouTube Style) -->
         <LinearLayout
             android:id="@+id/center_controls"
             android:layout_width="wrap_content"
@@ -214,20 +204,20 @@
                 android:id="@+id/btn_rewind_10"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:layout_marginEnd="32dp"
+                android:layout_marginEnd="36dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Rewind 10 seconds"
                 android:src="@drawable/ic_replay_10"
-                app:tint="#E6FFFFFF" />
+                app:tint="#FFFFFF" />
 
-            <!-- Play / Pause Circular Button -->
+            <!-- Play / Pause Circular Card (YouTube Style: Semi-transparent dark circle with crisp white icon) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/btn_play_pause_card"
                 android:layout_width="68dp"
                 android:layout_height="68dp"
-                app:cardBackgroundColor="@color/primary_accent"
+                app:cardBackgroundColor="#59000000"
                 app:cardCornerRadius="34dp"
-                app:cardElevation="6dp"
+                app:cardElevation="0dp"
                 app:strokeWidth="0dp">
 
                 <ImageView
@@ -236,7 +226,7 @@
                     android:layout_height="36dp"
                     android:layout_gravity="center"
                     android:src="@drawable/ic_play"
-                    app:tint="@color/on_primary" />
+                    app:tint="#FFFFFF" />
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Forward 10s -->
@@ -244,14 +234,14 @@
                 android:id="@+id/btn_forward_10"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:layout_marginStart="32dp"
+                android:layout_marginStart="36dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Forward 10 seconds"
                 android:src="@drawable/ic_forward_10"
-                app:tint="#E6FFFFFF" />
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Bottom Bar -->
+        <!-- Bottom Bar (YouTube Style: Current Time, Red Scrubber, Total Time, Fullscreen Rotate Button) -->
         <LinearLayout
             android:id="@+id/bottom_bar"
             android:layout_width="0dp"
@@ -259,10 +249,10 @@
             android:background="@drawable/bg_video_overlay_bottom"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="20dp"
-            android:paddingTop="20dp"
-            android:paddingEnd="20dp"
-            android:paddingBottom="28dp"
+            android:paddingStart="16dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent">
@@ -280,16 +270,16 @@
                 android:id="@+id/video_seek_bar"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_marginEnd="12dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
                 android:layout_weight="1"
                 android:max="1000"
                 android:maxHeight="4dp"
                 android:minHeight="4dp"
                 android:progressDrawable="@android:drawable/progress_horizontal"
-                android:progressTint="@color/primary_accent"
-                android:secondaryProgressTint="#4DB4C8EB"
-                android:thumbTint="@color/primary_accent" />
+                android:progressTint="#FF0000"
+                android:secondaryProgressTint="#66FFFFFF"
+                android:thumbTint="#FF0000" />
 
             <TextView
                 android:id="@+id/total_time_text"
@@ -299,6 +289,16 @@
                 android:text="00:00"
                 android:textColor="#B3FFFFFF"
                 android:textSize="13sp" />
+
+            <ImageButton
+                android:id="@+id/btn_rotate_screen"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Rotate Screen"
+                android:src="@drawable/ic_screen_rotation"
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

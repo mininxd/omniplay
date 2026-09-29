@@ -524,7 +524,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
 
         currentIndex--
         if (currentIndex < 0) {
-            if (repeatMode == REPEAT_ALL) {
+            if (repeatMode == REPEAT_ALL || forcePrevious) {
                 currentIndex = queue.size - 1
             } else {
                 currentIndex = 0
@@ -544,10 +544,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         val nextIdx = currentIndex + 1
         return if (nextIdx < queue.size) {
             queue[nextIdx]
-        } else if (repeatMode == REPEAT_ALL) {
-            queue.firstOrNull()
         } else {
-            null
+            queue.firstOrNull()
         }
     }
 
@@ -559,10 +557,8 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         val prevIdx = currentIndex - 1
         return if (prevIdx >= 0) {
             queue[prevIdx]
-        } else if (repeatMode == REPEAT_ALL) {
-            queue.lastOrNull()
         } else {
-            null
+            queue.lastOrNull()
         }
     }
 

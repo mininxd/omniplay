@@ -54,7 +54,7 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var savedPlaybackPosition = 0
     private var wasPlayingBeforePause = true
 
-    // Touch gesture slider variables (30% left brightness, 30% right volume)
+    // Touch gesture slider variables (30% left brightness, 30% right volume, horizontal seek)
     private var touchSlop = 0
     private var activeTouchZone = TouchZone.NONE
     private var touchDownX = 0f
@@ -63,9 +63,11 @@ class VideoPlayerActivity : AppCompatActivity() {
     private var initialBrightness = 0.5f
     private var initialVolume = 0f
     private var maxVolume = 15f
+    private var initialSeekPosition = 0L
+    private var targetSeekPosition = 0L
 
     private enum class TouchZone {
-        NONE, BRIGHTNESS, VOLUME
+        NONE, BRIGHTNESS, VOLUME, SEEK
     }
 
     private val hideControlsRunnable = Runnable {
@@ -304,35 +306,70 @@ class VideoPlayerActivity : AppCompatActivity() {
                         maxVolume = maxVol.toFloat().coerceAtLeast(1f)
                         initialVolume = curVol.toFloat()
                     }
+
+                    initialSeekPosition = binding.videoView.currentPosition.toLong()
+                    targetSeekPosition = initialSeekPosition
+
                     gestureDetector.onTouchEvent(event)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = event.x - touchDownX
                     val deltaY = touchDownY - event.y // up is positive
+                    val absDeltaX = abs(deltaX)
+                    val absDeltaY = abs(deltaY)
 
-                    if (!isDraggingSlider && activeTouchZone != TouchZone.NONE) {
-                        if (abs(deltaY) > touchSlop && abs(deltaY) > abs(deltaX)) {
+                    if (!isDraggingSlider) {
+                        if (absDeltaY > touchSlop && absDeltaY > absDeltaX) {
+                            // Vertical swipe: left 30% brightness, right 30% volume
+                            val width = binding.videoRootLayout.width.toFloat().coerceAtLeast(1f)
+                            if (touchDownX < width * 0.30f) {
+                                activeTouchZone = TouchZone.BRIGHTNESS
+                                isDraggingSlider = true
+                                handler.removeCallbacks(hideGestureIndicatorRunnable)
+                            } else if (touchDownX > width * 0.70f) {
+                                activeTouchZone = TouchZone.VOLUME
+                                isDraggingSlider = true
+                                handler.removeCallbacks(hideGestureIndicatorRunnable)
+                            }
+                        } else if (absDeltaX > touchSlop && absDeltaX > absDeltaY) {
+                            // Horizontal swipe: seek duration across the video
+                            activeTouchZone = TouchZone.SEEK
                             isDraggingSlider = true
+                            initialSeekPosition = binding.videoView.currentPosition.toLong()
+                            targetSeekPosition = initialSeekPosition
                             handler.removeCallbacks(hideGestureIndicatorRunnable)
                         }
                     }
 
                     if (isDraggingSlider) {
+                        val width = binding.videoRootLayout.width.toFloat().coerceAtLeast(1f)
                         val height = binding.videoRootLayout.height.toFloat().coerceAtLeast(1f)
-                        val deltaPercent = deltaY / (height * 0.75f)
 
-                        if (activeTouchZone == TouchZone.BRIGHTNESS) {
-                            val newBrightness = (initialBrightness + deltaPercent).coerceIn(0.01f, 1f)
-                            val lp = window.attributes
-                            lp.screenBrightness = newBrightness
-                            window.attributes = lp
-                            showBrightnessIndicator(newBrightness)
-                        } else if (activeTouchZone == TouchZone.VOLUME) {
-                            val newFraction = (initialVolume / maxVolume + deltaPercent).coerceIn(0f, 1f)
-                            val targetVol = (newFraction * maxVolume).roundToInt().coerceIn(0, maxVolume.toInt())
-                            audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
-                            showVolumeIndicator(targetVol, maxVolume.toInt())
+                        when (activeTouchZone) {
+                            TouchZone.BRIGHTNESS -> {
+                                val deltaPercent = deltaY / (height * 0.75f)
+                                val newBrightness = (initialBrightness + deltaPercent).coerceIn(0.01f, 1f)
+                                val lp = window.attributes
+                                lp.screenBrightness = newBrightness
+                                window.attributes = lp
+                                showBrightnessIndicator(newBrightness)
+                            }
+                            TouchZone.VOLUME -> {
+                                val deltaPercent = deltaY / (height * 0.75f)
+                                val newFraction = (initialVolume / maxVolume + deltaPercent).coerceIn(0f, 1f)
+                                val targetVol = (newFraction * maxVolume).roundToInt().coerceIn(0, maxVolume.toInt())
+                                audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                                showVolumeIndicator(targetVol, maxVolume.toInt())
+                            }
+                            TouchZone.SEEK -> {
+                                val duration = binding.videoView.duration.toLong().coerceAtLeast(1L)
+                                val seekWindow = (duration * 0.25f).coerceIn(60000L, 300000L)
+                                val deltaMs = ((deltaX / width) * seekWindow).toLong()
+                                targetSeekPosition = (initialSeekPosition + deltaMs).coerceIn(0L, duration)
+                                showSeekIndicator(targetSeekPosition, duration, deltaMs)
+                            }
+                            TouchZone.NONE -> {}
                         }
                         true
                     } else {
@@ -341,10 +378,14 @@ class VideoPlayerActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDraggingSlider) {
+                        if (activeTouchZone == TouchZone.SEEK) {
+                            binding.videoView.seekTo(targetSeekPosition.toInt())
+                            updateProgressUI(targetSeekPosition, binding.videoView.duration.toLong())
+                        }
                         isDraggingSlider = false
                         activeTouchZone = TouchZone.NONE
                         handler.removeCallbacks(hideGestureIndicatorRunnable)
-                        handler.postDelayed(hideGestureIndicatorRunnable, 800)
+                        handler.postDelayed(hideGestureIndicatorRunnable, 600)
                         true
                     } else {
                         activeTouchZone = TouchZone.NONE
@@ -498,6 +539,23 @@ class VideoPlayerActivity : AppCompatActivity() {
         binding.gestureIndicatorCard.animate().cancel()
         binding.gestureIndicatorCard.alpha = 1f
         binding.gestureIndicatorCard.visibility = View.VISIBLE
+    }
+
+    private fun showSeekIndicator(targetMs: Long, totalMs: Long, deltaMs: Long) {
+        val sign = if (deltaMs >= 0) "+" else ""
+        val diffSec = (deltaMs / 1000).toInt()
+        val percent = if (totalMs > 0) ((targetMs.toFloat() / totalMs) * 100).roundToInt().coerceIn(0, 100) else 0
+        val iconRes = if (deltaMs >= 0) R.drawable.ic_forward_10 else R.drawable.ic_replay_10
+        binding.gestureIndicatorIcon.setImageResource(iconRes)
+        binding.gestureIndicatorProgress.progress = percent
+        binding.gestureIndicatorText.text = "${formatTime(targetMs)} [${sign}${diffSec}s]"
+
+        binding.gestureIndicatorCard.animate().cancel()
+        binding.gestureIndicatorCard.alpha = 1f
+        binding.gestureIndicatorCard.visibility = View.VISIBLE
+
+        binding.currentTimeText.text = formatTime(targetMs)
+        binding.videoSeekBar.progress = targetMs.toInt()
     }
 
     private fun hideGestureIndicator() {

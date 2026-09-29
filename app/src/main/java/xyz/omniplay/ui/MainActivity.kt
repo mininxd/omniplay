@@ -250,6 +250,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
      * using BottomSheetBehavior's native animations, avoiding snapping/bouncing bugs.
      */
     private fun setupBottomSwipeGesture() {
+        var startY = 0f
+        var startX = 0f
+
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
 
@@ -262,37 +265,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (e1 == null) return false
                 val diffY = e2.y - e1.y
                 val diffX = e2.x - e1.x
-                // Fast swipe upward
-                if (Math.abs(diffY) > Math.abs(diffX) && diffY < -30 && velocityY < -100) {
+                // Fast deliberate swipe upward
+                if (Math.abs(diffY) > Math.abs(diffX) * 1.2f && diffY < -120f && velocityY < -600f) {
                     if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
                         bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
                         return true
                     }
                 }
                 return false
-            }
-
-            override fun onScroll(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                distanceX: Float,
-                distanceY: Float
-            ): Boolean {
-                // Dragging upward (distanceY > 0)
-                if (distanceY > 20 && Math.abs(distanceY) > Math.abs(distanceX)) {
-                    if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                        return true
-                    }
-                }
-                return false
-            }
-
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                }
-                return true
             }
         })
 
@@ -300,7 +280,27 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
                 return@setOnTouchListener false
             }
-            gestureDetector.onTouchEvent(event)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = event.rawY
+                    startX = event.rawX
+                    gestureDetector.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val deltaY = event.rawY - startY
+                    val deltaX = event.rawX - startX
+                    // Only expand if dragged deliberately upward (more than 180px) without small slide snaps
+                    if (deltaY < -180f && Math.abs(deltaY) > Math.abs(deltaX) * 1.3f) {
+                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                        true
+                    } else {
+                        gestureDetector.onTouchEvent(event)
+                    }
+                }
+                else -> gestureDetector.onTouchEvent(event)
+            }
         }
     }
 
@@ -416,7 +416,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val deltaY = event.rawY - startY
 
                     if (!isDragging) {
-                        if (Math.abs(deltaX) > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.2f) {
+                        val minSlop = (touchSlop * 0.35f).coerceAtLeast(8f)
+                        if (Math.abs(deltaX) > minSlop && Math.abs(deltaX) > Math.abs(deltaY) * 0.7f) {
                             isDragging = true
                             v.parent?.requestDisallowInterceptTouchEvent(true)
                         }
@@ -433,12 +434,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         v.translationX = effectiveDeltaX
                         v.rotation = rotationDeg
 
-                        // Reveal peek card behind
+                        // Reveal peek card behind with swift, responsive scaling
                         if (currentPeekSong != null) {
-                            val progress = (Math.abs(effectiveDeltaX) / cardWidth).coerceIn(0f, 1f)
-                            binding.peekAlbumArtCard.scaleX = 0.90f + 0.10f * progress
-                            binding.peekAlbumArtCard.scaleY = 0.90f + 0.10f * progress
-                            binding.peekAlbumArtCard.alpha = 0.6f + 0.4f * progress
+                            val progress = (Math.abs(effectiveDeltaX) / (cardWidth * 0.35f)).coerceIn(0f, 1f)
+                            binding.peekAlbumArtCard.scaleX = 0.92f + 0.08f * progress
+                            binding.peekAlbumArtCard.scaleY = 0.92f + 0.08f * progress
+                            binding.peekAlbumArtCard.alpha = 0.5f + 0.5f * progress
                         }
                     }
                     true
@@ -452,12 +453,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val xVel = velocityTracker?.xVelocity ?: 0f
                         val currentX = v.translationX
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
-                        val threshold = cardWidth * 0.35f
+                        val threshold = cardWidth * 0.18f
 
                         val commitNext = currentPeekSong != null && peekDirection == -1 &&
-                                ((xVel < -800f) || (currentX < -threshold && xVel < 400f))
+                                ((xVel < -300f) || (currentX < -threshold && xVel < 200f))
                         val commitPrev = currentPeekSong != null && peekDirection == 1 &&
-                                ((xVel > 800f) || (currentX > threshold && xVel > -400f))
+                                ((xVel > 300f) || (currentX > threshold && xVel > -200f))
 
                         val targetSong = currentPeekSong
                         if (commitNext && targetSong != null) {
