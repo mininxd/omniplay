@@ -323,11 +323,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             }
                             addListener(object : AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: Animator) {
-                                    binding.playlistSlidingPanel.translationY = 0f
+                                    val panel = binding.playlistSlidingPanel
                                     if (shouldExpand) {
+                                        val targetTop = bottomSheetBehavior.expandedOffset
+                                        val offset = targetTop - panel.top
+                                        panel.offsetTopAndBottom(offset)
+                                        panel.translationY = 0f
                                         bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
                                         binding.ivChevron.rotation = 180f
                                     } else {
+                                        panel.translationY = 0f
                                         bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                                         binding.ivChevron.rotation = 0f
                                     }

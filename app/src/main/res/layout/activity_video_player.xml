@@ -9,11 +9,14 @@
     android:keepScreenOn="true">
 
     <!-- Video Surface -->
-    <xyz.omniplay.ui.view.ScaleableVideoView
-        android:id="@+id/video_view"
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center" />
+        android:layout_gravity="center"
+        app:use_controller="false"
+        app:surface_type="surface_view"
+        app:resize_mode="fit" />
 
     <!-- Center Buffering / Loading Indicator -->
     <ProgressBar

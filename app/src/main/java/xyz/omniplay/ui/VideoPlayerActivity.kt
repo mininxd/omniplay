@@ -5,8 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -14,7 +12,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
-import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -22,36 +19,50 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityVideoPlayerBinding
 import xyz.omniplay.service.PlaybackService
-import xyz.omniplay.ui.view.ScaleableVideoView
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Dedicated video playback activity for Omniplay.
+ * Dedicated hardware-accelerated video playback activity for Omniplay powered by Media3 ExoPlayer.
  * Launched via file managers or "Open With..." intents.
  * Keeps the main music player UI unchanged while providing a sleek,
- * hardware-accelerated video player with gesture controls.
+ * YouTube-styled video player with gesture controls and support for fragmented MP4, AV1, MKV, TS, etc.
  */
+@OptIn(UnstableApi::class)
 class VideoPlayerActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityVideoPlayerBinding
     private val handler = Looper.myLooper()?.let { Handler(it) } ?: Handler(Looper.getMainLooper())
 
+    private var player: ExoPlayer? = null
     private var audioManager: AudioManager? = null
-    private var audioFocusRequest: AudioFocusRequest? = null
 
     private var isUserTrackingSeekBar = false
     private var areControlsVisible = true
-    private var savedPlaybackPosition = 0
+    private var savedPlaybackPosition = 0L
     private var wasPlayingBeforePause = true
 
     // Touch gesture slider variables (30% left brightness, 30% right volume, horizontal seek)
@@ -80,9 +91,10 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
-            if (::binding.isInitialized && binding.videoView.isPlaying && !isUserTrackingSeekBar) {
-                val current = binding.videoView.currentPosition.toLong()
-                val total = binding.videoView.duration.toLong()
+            val p = player
+            if (::binding.isInitialized && p != null && p.isPlaying && !isUserTrackingSeekBar) {
+                val current = p.currentPosition.coerceAtLeast(0L)
+                val total = p.duration.coerceAtLeast(0L)
                 updateProgressUI(current, total)
             }
             handler.postDelayed(this, 250)
@@ -114,7 +126,7 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
 
         setupVideoTitle(videoUri)
-        setupVideoView(videoUri)
+        initializePlayer(videoUri)
         setupControls()
         setupGestures()
     }
@@ -158,47 +170,87 @@ class VideoPlayerActivity : AppCompatActivity() {
         return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "Video"
     }
 
-    private fun setupVideoView(uri: Uri) {
+    private fun initializePlayer(uri: Uri) {
         binding.loadingProgress.visibility = View.VISIBLE
 
-        binding.videoView.setOnPreparedListener { mp ->
-            binding.loadingProgress.visibility = View.GONE
-            binding.videoView.setVideoDimensions(mp.videoWidth, mp.videoHeight)
+        // Configure extractors with index-seeking enabled for unindexed fragmented MP4 files (like test.mpeg)
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setFragmentedMp4ExtractorFlags(FragmentedMp4Extractor.FLAG_ENABLE_INDEX_SEEKING)
+            .setConstantBitrateSeekingEnabled(true)
 
-            val duration = mp.duration.toLong()
-            binding.totalTimeText.text = formatTime(duration)
-            binding.videoSeekBar.max = mp.duration
+        val dataSourceFactory = DefaultDataSource.Factory(this)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
 
-            if (savedPlaybackPosition > 0) {
-                binding.videoView.seekTo(savedPlaybackPosition)
+        val exoPlayer = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setSeekParameters(SeekParameters.CLOSEST_SYNC)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true // Auto handle audio focus
+            )
+            .build()
+
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> {
+                        binding.loadingProgress.visibility = View.VISIBLE
+                    }
+                    Player.STATE_READY -> {
+                        binding.loadingProgress.visibility = View.GONE
+                        val duration = exoPlayer.duration.coerceAtLeast(0L)
+                        binding.totalTimeText.text = formatTime(duration)
+                        binding.videoSeekBar.max = duration.toInt()
+                        updateProgressUI(exoPlayer.currentPosition.coerceAtLeast(0L), duration)
+                    }
+                    Player.STATE_ENDED -> {
+                        updatePlayPauseButton(false)
+                        exoPlayer.seekTo(0L)
+                        exoPlayer.pause()
+                        updateProgressUI(0L, exoPlayer.duration.coerceAtLeast(0L))
+                        showControls()
+                    }
+                    Player.STATE_IDLE -> {}
+                }
             }
 
-            requestAudioFocus()
-            binding.videoView.start()
-            updatePlayPauseButton(true)
-            startProgressUpdates()
-            scheduleControlsHide(3000)
-        }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updatePlayPauseButton(isPlaying)
+                if (isPlaying) {
+                    scheduleControlsHide(3000)
+                } else {
+                    handler.removeCallbacks(hideControlsRunnable)
+                    showControls()
+                }
+            }
 
-        binding.videoView.setOnCompletionListener {
-            updatePlayPauseButton(false)
-            binding.videoView.seekTo(0)
-            updateProgressUI(0, binding.videoView.duration.toLong())
-            showControls()
-        }
+            override fun onPlayerError(error: PlaybackException) {
+                binding.loadingProgress.visibility = View.GONE
+                MaterialAlertDialogBuilder(this@VideoPlayerActivity)
+                    .setTitle("Playback Error")
+                    .setMessage("Unable to play video (${error.errorCodeName}).")
+                    .setPositiveButton("OK") { _, _ -> finish() }
+                    .setCancelable(false)
+                    .show()
+            }
+        })
 
-        binding.videoView.setOnErrorListener { _, what, extra ->
-            binding.loadingProgress.visibility = View.GONE
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Playback Error")
-                .setMessage("Unable to play video format (code $what, $extra).")
-                .setPositiveButton("OK") { _, _ -> finish() }
-                .setCancelable(false)
-                .show()
-            true
+        val mediaItem = MediaItem.fromUri(uri)
+        exoPlayer.setMediaItem(mediaItem)
+        exoPlayer.prepare()
+        if (savedPlaybackPosition > 0L) {
+            exoPlayer.seekTo(savedPlaybackPosition)
         }
+        exoPlayer.playWhenReady = true
 
-        binding.videoView.setVideoURI(uri)
+        binding.playerView.player = exoPlayer
+        player = exoPlayer
+
+        startProgressUpdates()
+        scheduleControlsHide(3000)
     }
 
     private fun setupControls() {
@@ -211,12 +263,12 @@ class VideoPlayerActivity : AppCompatActivity() {
         }
 
         binding.btnRewind10.setOnClickListener {
-            seekRelative(-10000)
+            seekRelative(-10000L)
             showSeekBadge(isForward = false)
         }
 
         binding.btnForward10.setOnClickListener {
-            seekRelative(10000)
+            seekRelative(10000L)
             showSeekBadge(isForward = true)
         }
 
@@ -242,8 +294,9 @@ class VideoPlayerActivity : AppCompatActivity() {
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 seekBar?.let {
-                    binding.videoView.seekTo(it.progress)
-                    updateProgressUI(it.progress.toLong(), binding.videoView.duration.toLong())
+                    val target = it.progress.toLong()
+                    player?.seekTo(target)
+                    updateProgressUI(target, player?.duration?.coerceAtLeast(0L) ?: 0L)
                 }
                 isUserTrackingSeekBar = false
                 scheduleControlsHide(3000)
@@ -266,10 +319,10 @@ class VideoPlayerActivity : AppCompatActivity() {
                 if (isDraggingSlider) return false
                 val screenWidth = binding.videoRootLayout.width
                 if (e.x < screenWidth / 2) {
-                    seekRelative(-10000)
+                    seekRelative(-10000L)
                     showSeekBadge(isForward = false)
                 } else {
-                    seekRelative(10000)
+                    seekRelative(10000L)
                     showSeekBadge(isForward = true)
                 }
                 return true
@@ -290,24 +343,24 @@ class VideoPlayerActivity : AppCompatActivity() {
                         else -> TouchZone.NONE
                     }
 
-                    if (activeTouchZone == TouchZone.BRIGHTNESS) {
-                        var b = window.attributes.screenBrightness
-                        if (b < 0f) {
-                            try {
-                                b = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
-                            } catch (e: Exception) {
-                                b = 0.5f
-                            }
+                    val lp = window.attributes
+                    initialBrightness = if (lp.screenBrightness < 0f) {
+                        try {
+                            val sys = android.provider.Settings.System.getInt(
+                                contentResolver,
+                                android.provider.Settings.System.SCREEN_BRIGHTNESS
+                            )
+                            (sys / 255f).coerceIn(0.01f, 1f)
+                        } catch (e: Exception) {
+                            0.5f
                         }
-                        initialBrightness = b.coerceIn(0.01f, 1f)
-                    } else if (activeTouchZone == TouchZone.VOLUME) {
-                        val maxVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
-                        val curVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
-                        maxVolume = maxVol.toFloat().coerceAtLeast(1f)
-                        initialVolume = curVol.toFloat()
+                    } else {
+                        lp.screenBrightness.coerceIn(0.01f, 1f)
                     }
 
-                    initialSeekPosition = binding.videoView.currentPosition.toLong()
+                    initialVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC)?.toFloat() ?: 0f
+                    maxVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.toFloat()?.coerceAtLeast(1f) ?: 15f
+                    initialSeekPosition = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
                     targetSeekPosition = initialSeekPosition
 
                     gestureDetector.onTouchEvent(event)
@@ -336,7 +389,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                             // Horizontal swipe: seek duration across the video
                             activeTouchZone = TouchZone.SEEK
                             isDraggingSlider = true
-                            initialSeekPosition = binding.videoView.currentPosition.toLong()
+                            isUserTrackingSeekBar = true
+                            initialSeekPosition = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
                             targetSeekPosition = initialSeekPosition
                             handler.removeCallbacks(hideGestureIndicatorRunnable)
                         }
@@ -363,7 +417,8 @@ class VideoPlayerActivity : AppCompatActivity() {
                                 showVolumeIndicator(targetVol, maxVolume.toInt())
                             }
                             TouchZone.SEEK -> {
-                                val duration = binding.videoView.duration.toLong().coerceAtLeast(1L)
+                                isUserTrackingSeekBar = true
+                                val duration = player?.duration?.coerceAtLeast(1L) ?: 1L
                                 val seekWindow = (duration * 0.25f).coerceIn(60000f, 300000f)
                                 val deltaMs = ((deltaX / width) * seekWindow).toLong()
                                 targetSeekPosition = (initialSeekPosition + deltaMs).coerceIn(0L, duration)
@@ -379,8 +434,9 @@ class VideoPlayerActivity : AppCompatActivity() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDraggingSlider) {
                         if (activeTouchZone == TouchZone.SEEK) {
-                            binding.videoView.seekTo(targetSeekPosition.toInt())
-                            updateProgressUI(targetSeekPosition, binding.videoView.duration.toLong())
+                            player?.seekTo(targetSeekPosition)
+                            updateProgressUI(targetSeekPosition, player?.duration?.coerceAtLeast(0L) ?: 0L)
+                            isUserTrackingSeekBar = false
                         }
                         isDraggingSlider = false
                         activeTouchZone = TouchZone.NONE
@@ -389,6 +445,7 @@ class VideoPlayerActivity : AppCompatActivity() {
                         true
                     } else {
                         activeTouchZone = TouchZone.NONE
+                        isUserTrackingSeekBar = false
                         gestureDetector.onTouchEvent(event)
                     }
                 }
@@ -401,13 +458,13 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun togglePlayPause() {
-        if (binding.videoView.isPlaying) {
-            binding.videoView.pause()
+        val p = player ?: return
+        if (p.isPlaying) {
+            p.pause()
             updatePlayPauseButton(false)
             handler.removeCallbacks(hideControlsRunnable)
         } else {
-            requestAudioFocus()
-            binding.videoView.start()
+            p.play()
             updatePlayPauseButton(true)
             scheduleControlsHide(2500)
         }
@@ -418,12 +475,13 @@ class VideoPlayerActivity : AppCompatActivity() {
         binding.btnPlayPauseIcon.setImageResource(iconRes)
     }
 
-    private fun seekRelative(offsetMs: Int) {
-        val current = binding.videoView.currentPosition
-        val duration = binding.videoView.duration
-        val target = (current + offsetMs).coerceIn(0, duration)
-        binding.videoView.seekTo(target)
-        updateProgressUI(target.toLong(), duration.toLong())
+    private fun seekRelative(offsetMs: Long) {
+        val p = player ?: return
+        val current = p.currentPosition.coerceAtLeast(0L)
+        val duration = p.duration.coerceAtLeast(0L)
+        val target = (current + offsetMs).coerceIn(0L, duration)
+        p.seekTo(target)
+        updateProgressUI(target, duration)
         scheduleControlsHide(3000)
     }
 
@@ -439,17 +497,19 @@ class VideoPlayerActivity : AppCompatActivity() {
     }
 
     private fun cycleAspectRatio() {
-        val nextMode = when (binding.videoView.scaleMode) {
-            ScaleableVideoView.ScaleMode.FIT -> ScaleableVideoView.ScaleMode.FILL
-            ScaleableVideoView.ScaleMode.FILL -> ScaleableVideoView.ScaleMode.STRETCH
-            ScaleableVideoView.ScaleMode.STRETCH -> ScaleableVideoView.ScaleMode.FIT
+        val nextMode = when (binding.playerView.resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
-        binding.videoView.scaleMode = nextMode
+        binding.playerView.resizeMode = nextMode
 
         val label = when (nextMode) {
-            ScaleableVideoView.ScaleMode.FIT -> "Fit to Screen"
-            ScaleableVideoView.ScaleMode.FILL -> "Fill Screen (Crop)"
-            ScaleableVideoView.ScaleMode.STRETCH -> "Stretch to Fill"
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "Fit to Screen"
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Fill Screen (Crop)"
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Stretch to Fill"
+            else -> "Fit to Screen"
         }
         Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
         scheduleControlsHide(3000)
@@ -482,7 +542,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             .start()
 
         keepStatusBarsHidden()
-        if (binding.videoView.isPlaying) {
+        if (player?.isPlaying == true) {
             scheduleControlsHide(3500)
         }
     }
@@ -581,38 +641,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(progressUpdateRunnable)
     }
 
-    private fun requestAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
-                        .build()
-                )
-                .build()
-            audioFocusRequest = req
-            audioManager?.requestAudioFocus(req)
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager?.requestAudioFocus(
-                null,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN
-            )
-        }
-    }
-
-    private fun abandonAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
-            audioFocusRequest = null
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager?.abandonAudioFocus(null)
-        }
-    }
-
     private fun formatTime(ms: Long): String {
         if (ms <= 0) return "00:00"
         val totalSeconds = ms / 1000
@@ -628,35 +656,40 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        wasPlayingBeforePause = binding.videoView.isPlaying
-        if (binding.videoView.isPlaying) {
-            binding.videoView.pause()
-            updatePlayPauseButton(false)
+        val p = player
+        if (p != null) {
+            wasPlayingBeforePause = p.isPlaying
+            if (p.isPlaying) {
+                p.pause()
+                updatePlayPauseButton(false)
+            }
+            savedPlaybackPosition = p.currentPosition
         }
-        savedPlaybackPosition = binding.videoView.currentPosition
         stopProgressUpdates()
-        abandonAudioFocus()
     }
 
     override fun onResume() {
         super.onResume()
-        if (savedPlaybackPosition > 0) {
-            binding.videoView.seekTo(savedPlaybackPosition)
-        }
-        if (wasPlayingBeforePause && !binding.videoView.isPlaying) {
-            requestAudioFocus()
-            binding.videoView.start()
-            updatePlayPauseButton(true)
-            startProgressUpdates()
-            scheduleControlsHide(2500)
+        val p = player
+        if (p != null) {
+            if (savedPlaybackPosition > 0L) {
+                p.seekTo(savedPlaybackPosition)
+            }
+            if (wasPlayingBeforePause && !p.isPlaying) {
+                p.play()
+                updatePlayPauseButton(true)
+                startProgressUpdates()
+                scheduleControlsHide(2500)
+            }
         }
     }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        abandonAudioFocus()
+        stopProgressUpdates()
         try {
-            binding.videoView.stopPlayback()
+            player?.release()
+            player = null
         } catch (ignored: Exception) {}
         super.onDestroy()
     }
