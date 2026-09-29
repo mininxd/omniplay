@@ -246,104 +246,107 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Interactive gesture listener on the bottom section below playback controls.
-     * Forwards touch events directly into BottomSheetBehavior with coordinates mapped
-     * into the playlist peek header, providing smooth 1:1 real-time sliding and settling,
-     * identical to dragging the playlist panel itself.
+     * Allows dragging the playlist up and down smoothly in real-time with the user's finger,
+     * matching the exact behavior of sliding the playlist directly.
+     * Flings or drags past threshold animate smoothly to expanded; otherwise settles back to collapsed.
      */
     private fun setupBottomSwipeGesture() {
-        var isForwarding = false
-        var yOffset = 0f
-        val parentLocation = IntArray(2)
+        var startY = 0f
+        var isDragging = false
+        var velocityTracker: VelocityTracker? = null
+        var settleAnimator: ValueAnimator? = null
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
 
         binding.bottomGestureArea.setOnTouchListener { _, event ->
             if (!::bottomSheetBehavior.isInitialized) {
                 return@setOnTouchListener false
             }
 
+            // Only respond when collapsed or actively dragging from this area
+            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED && !isDragging) {
+                return@setOnTouchListener false
+            }
+
             val parent = binding.coordinatorRoot
-            val child = binding.playlistSlidingPanel
+            val panel = binding.playlistSlidingPanel
+            val collapsedTop = parent.height - bottomSheetBehavior.peekHeight
+            val expandedTop = 0
+            val totalDistance = (collapsedTop - expandedTop).toFloat().coerceAtLeast(1f)
 
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
-                        isForwarding = false
-                        return@setOnTouchListener false
-                    }
-
-                    isForwarding = true
-                    parent.getLocationOnScreen(parentLocation)
-                    val parentX = event.rawX - parentLocation[0]
-                    val parentY = event.rawY - parentLocation[1]
-
-                    val childTop = if (child.top > 0) {
-                        child.top.toFloat()
-                    } else {
-                        (parent.height - bottomSheetBehavior.peekHeight).toFloat()
-                    }
-                    val targetY = childTop + 24f * resources.displayMetrics.density
-                    yOffset = targetY - parentY
-
-                    val transformedEvent = MotionEvent.obtain(event)
-                    transformedEvent.setLocation(parentX, targetY)
-                    try {
-                        bottomSheetBehavior.onInterceptTouchEvent(parent, child, transformedEvent)
-                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
-                    } finally {
-                        transformedEvent.recycle()
-                    }
+                    settleAnimator?.cancel()
+                    startY = event.rawY
+                    isDragging = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain()
+                    velocityTracker?.addMovement(event)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!isForwarding) return@setOnTouchListener false
+                    velocityTracker?.addMovement(event)
+                    val deltaY = event.rawY - startY
 
-                    val parentX = event.rawX - parentLocation[0]
-                    val parentY = event.rawY - parentLocation[1]
-                    val transformedY = parentY + yOffset
+                    if (!isDragging) {
+                        if (Math.abs(deltaY) > touchSlop) {
+                            isDragging = true
+                            startY = event.rawY
+                        }
+                    }
 
-                    val transformedEvent = MotionEvent.obtain(event)
-                    transformedEvent.setLocation(parentX, transformedY)
-                    try {
-                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
-                    } finally {
-                        transformedEvent.recycle()
+                    if (isDragging) {
+                        val currentDeltaY = event.rawY - startY
+                        val newTop = (collapsedTop + currentDeltaY).toInt().coerceIn(expandedTop, collapsedTop)
+                        panel.offsetTopAndBottom(newTop - panel.top)
+
+                        // Update slide offset and chevron rotation in real time
+                        val slideOffset = (collapsedTop - panel.top).toFloat() / totalDistance
+                        binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
                     }
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (!isForwarding) return@setOnTouchListener false
-                    isForwarding = false
+                    if (isDragging) {
+                        velocityTracker?.addMovement(event)
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val velocityY = velocityTracker?.yVelocity ?: 0f
+                        val currentTop = panel.top
+                        val movedDistance = collapsedTop - currentTop
 
-                    val parentX = event.rawX - parentLocation[0]
-                    val parentY = event.rawY - parentLocation[1]
-                    val transformedY = parentY + yOffset
+                        // Commit to expand if fast upward fling or dragged past 30% of total distance
+                        val shouldExpand = velocityY < -600f || (movedDistance > totalDistance * 0.30f && velocityY < 300f)
+                        val targetTop = if (shouldExpand) expandedTop else collapsedTop
 
-                    val transformedEvent = MotionEvent.obtain(event)
-                    transformedEvent.setLocation(parentX, transformedY)
-                    try {
-                        bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
-                    } finally {
-                        transformedEvent.recycle()
+                        settleAnimator?.cancel()
+                        settleAnimator = ValueAnimator.ofInt(currentTop, targetTop).apply {
+                            duration = 280L
+                            interpolator = DecelerateInterpolator(1.5f)
+                            addUpdateListener { animator ->
+                                val animatedTop = animator.animatedValue as Int
+                                panel.offsetTopAndBottom(animatedTop - panel.top)
+                                val slideOffset = (collapsedTop - panel.top).toFloat() / totalDistance
+                                binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (shouldExpand) {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+                                    } else {
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                                    }
+                                    isDragging = false
+                                }
+                            })
+                            start()
+                        }
+                    } else {
+                        isDragging = false
                     }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
                     true
                 }
-                else -> {
-                    if (isForwarding) {
-                        val parentX = event.rawX - parentLocation[0]
-                        val parentY = event.rawY - parentLocation[1]
-                        val transformedY = parentY + yOffset
-
-                        val transformedEvent = MotionEvent.obtain(event)
-                        transformedEvent.setLocation(parentX, transformedY)
-                        try {
-                            bottomSheetBehavior.onTouchEvent(parent, child, transformedEvent)
-                        } finally {
-                            transformedEvent.recycle()
-                        }
-                        true
-                    } else {
-                        false
-                    }
-                }
+                else -> false
             }
         }
     }
@@ -646,10 +649,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         }
                         isDragging = false
                     } else if (event.actionMasked == MotionEvent.ACTION_UP) {
-                        // Tap without drag -> expand playlist panel
-                        if (::bottomSheetBehavior.isInitialized) {
-                            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                        }
                         v.performClick()
                     }
                     velocityTracker?.recycle()
