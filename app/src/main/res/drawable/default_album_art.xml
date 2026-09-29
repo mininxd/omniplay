@@ -5,7 +5,7 @@
     android:viewportWidth="400"
     android:viewportHeight="400">
 
-    <!-- Background Base with subtle gradient -->
+    <!-- Card Background with Material You Gradient -->
     <path
         android:pathData="M0,0h400v400h-400z">
         <aapt:attr name="android:fillColor">
@@ -15,85 +15,66 @@
                 android:endX="400"
                 android:endY="400"
                 android:type="linear">
-                <item android:color="#FFD4E5FF" android:offset="0.0" />
-                <item android:color="#FFE8B4D8" android:offset="0.4" />
-                <item android:color="#FF8AD4E8" android:offset="1.0" />
+                <item android:color="#FF1A1C24" android:offset="0.0" />
+                <item android:color="#FF14161F" android:offset="0.5" />
+                <item android:color="#FF0D0E14" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- Vibrant Central Neon Box -->
+    <!-- Vinyl Outer Ring -->
     <path
-        android:pathData="M150,100h100v100h-100z"
-        android:fillColor="#FF23D2E2" />
+        android:pathData="M200,200m-155,0a155,155 0 1,0 310,0a155,155 0 1,0 -310,0"
+        android:fillColor="#FF181A22" />
 
-    <!-- Magenta overlay glow -->
+    <!-- Vinyl Groove 1 -->
     <path
-        android:pathData="M120,110 Q200,80 250,160 Q260,250 180,260 Q100,240 120,110 Z">
+        android:pathData="M200,200m-140,0a140,140 0 1,0 280,0a140,140 0 1,0 -280,0"
+        android:strokeColor="#1FFFFFFF"
+        android:strokeWidth="1.5" />
+
+    <!-- Vinyl Groove 2 -->
+    <path
+        android:pathData="M200,200m-120,0a120,120 0 1,0 240,0a120,120 0 1,0 -240,0"
+        android:strokeColor="#14FFFFFF"
+        android:strokeWidth="1.5" />
+
+    <!-- Vinyl Groove 3 -->
+    <path
+        android:pathData="M200,200m-100,0a100,100 0 1,0 200,0a100,100 0 1,0 -200,0"
+        android:strokeColor="#1FFFFFFF"
+        android:strokeWidth="1.5" />
+
+    <!-- Vinyl Center Label Glow -->
+    <path
+        android:pathData="M200,200m-72,0a72,72 0 1,0 144,0a72,72 0 1,0 -144,0">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startX="120"
-                android:startY="100"
-                android:endX="260"
-                android:endY="260"
+                android:startX="128"
+                android:startY="128"
+                android:endX="272"
+                android:endY="272"
                 android:type="linear">
-                <item android:color="#FFFF1493" android:offset="0.0" />
-                <item android:color="#FF8A2BE2" android:offset="0.6" />
-                <item android:color="#001E90FF" android:offset="1.0" />
+                <item android:color="#FFB4C8EB" android:offset="0.0" />
+                <item android:color="#FF758AA8" android:offset="1.0" />
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- Stylized Portrait Silhouette -->
+    <!-- Center Spindle Hole Circle -->
     <path
-        android:pathData="M165,105 Q175,90 200,95 Q220,100 215,125 Q212,138 200,145 Q215,160 235,180 Q245,210 240,245 L155,245 Q150,210 162,180 Q170,165 178,145 Q168,135 165,105 Z"
-        android:fillColor="#FF10111A" />
+        android:pathData="M200,200m-24,0a24,24 0 1,0 48,0a24,24 0 1,0 -48,0"
+        android:fillColor="#FF101116" />
 
-    <!-- Subtle Cyan Light Spray at bottom-left -->
-    <path
-        android:pathData="M80,220 Q120,200 160,260 Q180,340 100,340 Q50,300 80,220 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="80"
-                android:startY="220"
-                android:endX="180"
-                android:endY="340"
-                android:type="linear">
-                <item android:color="#B338D9D6" android:offset="0.0" />
-                <item android:color="#0038D9D6" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- C A C I ' M Stylized Letters -->
-    <!-- 'C' -->
-    <path
-        android:pathData="M130,175 C118,175 110,185 110,197 C110,210 118,220 130,220 C138,220 143,215 146,210 L140,206 C138,210 134,213 130,213 C122,213 118,206 118,197 C118,189 122,182 130,182 C134,182 138,185 140,189 L146,185 C143,180 138,175 130,175 Z"
-        android:fillColor="#FFFFFFFF" />
-
-    <!-- 'A' (inverted chevron style) -->
-    <path
-        android:pathData="M165,175 L155,220 L163,220 L166,204 L179,204 L182,220 L190,220 L180,175 Z M172,185 L177,198 L168,198 Z"
-        android:fillColor="#FFFFFFFF" />
-
-    <!-- 'C' -->
-    <path
-        android:pathData="M210,175 C198,175 190,185 190,197 C190,210 198,220 210,220 C218,220 223,215 226,210 L220,206 C218,210 214,213 210,213 C202,213 198,206 198,197 C198,189 202,182 210,182 C214,182 218,185 220,189 L226,185 C223,180 218,175 210,175 Z"
-        android:fillColor="#FFFFFFFF" />
-
-    <!-- 'I' -->
-    <path
-        android:pathData="M233,176 H240 V220 H233 Z"
-        android:fillColor="#FFFFFFFF" />
-
-    <!-- ''' apostrophe -->
-    <path
-        android:pathData="M244,174 L248,174 L246,183 L243,183 Z"
-        android:fillColor="#FFFFFFFF" />
-
-    <!-- 'M' -->
-    <path
-        android:pathData="M253,176 H261 L268,198 L275,176 H283 V220 H276 V189 L270,208 H266 L260,189 V220 H253 Z"
-        android:fillColor="#FFFFFFFF" />
+    <!-- Center Music Symbol -->
+    <group
+        android:scaleX="2.0"
+        android:scaleY="2.0"
+        android:translateX="152"
+        android:translateY="152">
+        <path
+            android:fillColor="#FF101B2E"
+            android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z"/>
+    </group>
 
 </vector>

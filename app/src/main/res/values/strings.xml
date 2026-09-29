@@ -5,21 +5,21 @@
     <string name="default_album_name">Album - Simlom</string>
     <string name="default_current_time">2:15</string>
     <string name="default_total_time">4:30</string>
-    <string name="queue_title">Queue &amp; Library</string>
-    <string name="search_hint">Search songs, artists, albums...</string>
+    <string name="queue_title">Playlist</string>
     <string name="equalizer">Equalizer</string>
     <string name="sleep_timer">Sleep Timer</string>
+    <string name="select_folder">Select Music Folder</string>
     <string name="rescan_library">Rescan Music</string>
     <string name="track_details">Audio Details</string>
     <string name="about_omniplay">About Omniplay</string>
     <string name="permission_audio_needed">Omniplay needs storage permission to scan and play your music library.</string>
     <string name="grant_permission">Grant Permission</string>
-    <string name="no_songs_found">No audio files found. Copy songs to device storage and tap Rescan.</string>
+    <string name="no_songs_found">No audio files found. Tap Select Music Folder to choose your music directory.</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="skip_next">Next Track</string>
     <string name="skip_previous">Previous Track</string>
     <string name="shuffle">Shuffle</string>
     <string name="repeat">Repeat</string>
-    <string name="expand_queue">Expand Queue</string>
+    <string name="expand_queue">Playlist</string>
 </resources>

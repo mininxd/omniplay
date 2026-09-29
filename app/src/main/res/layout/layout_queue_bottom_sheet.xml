@@ -18,7 +18,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Sheet Title -->
+    <!-- Sheet Title: Playlist -->
     <TextView
         android:id="@+id/sheet_title_text"
         android:layout_width="wrap_content"
@@ -43,53 +43,18 @@
         app:layout_constraintStart_toEndOf="@id/sheet_title_text"
         tools:text="(12 songs)" />
 
-    <!-- Search Input -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/search_input_layout"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="16dp"
-        app:boxBackgroundColor="@color/surface_container"
-        app:boxCornerRadiusBottomEnd="16dp"
-        app:boxCornerRadiusBottomStart="16dp"
-        app:boxCornerRadiusTopEnd="16dp"
-        app:boxCornerRadiusTopStart="16dp"
-        app:boxStrokeWidth="0dp"
-        app:boxStrokeWidthFocused="1dp"
-        app:hintEnabled="false"
-        app:startIconDrawable="@drawable/ic_search"
-        app:startIconTint="@color/control_tint"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/sheet_title_text">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/search_edit_text"
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:hint="@string/search_hint"
-            android:imeOptions="actionSearch"
-            android:inputType="text"
-            android:padding="0dp"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_tertiary"
-            android:textSize="14sp" />
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <!-- Song List -->
+    <!-- Song List (Directly below Title, without search bar) -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/songs_recycler_view"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:clipToPadding="false"
         android:paddingBottom="24dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/search_input_layout" />
+        app:layout_constraintTop_toBottomOf="@id/sheet_title_text" />
 
     <!-- Empty State -->
     <LinearLayout
@@ -103,7 +68,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/search_input_layout">
+        app:layout_constraintTop_toBottomOf="@id/sheet_title_text">
 
         <ImageView
             android:layout_width="56dp"
@@ -122,12 +87,12 @@
             android:textSize="14sp" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_rescan_empty"
+            android:id="@+id/btn_select_folder_empty"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:backgroundTint="@color/primary_accent"
-            android:text="@string/rescan_library"
+            android:text="@string/select_folder"
             android:textColor="@color/on_primary"
             app:cornerRadius="20dp" />
     </LinearLayout>

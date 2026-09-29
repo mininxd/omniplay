@@ -575,7 +575,15 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                     .setShowActionsInCompactView(0, 1, 2)
             )
 
-        loadAlbumArtBitmap(song.albumArtUri)?.let {
+        val albumArt = try {
+            kotlinx.coroutines.runBlocking {
+                xyz.omniplay.util.AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+        albumArt?.let {
             builder.setLargeIcon(it)
         }
 

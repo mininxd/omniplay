@@ -6,19 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.graphics.ImageDecoder
 import android.media.audiofx.Equalizer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.os.IBinder
-import android.provider.MediaStore
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -40,10 +35,15 @@ import xyz.omniplay.databinding.DialogEqualizerBinding
 import xyz.omniplay.databinding.LayoutQueueBottomSheetBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
-import java.io.File
+import xyz.omniplay.util.AlbumArtLoader
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
+
+    companion object {
+        private const val PREFS_NAME = "omniplay_prefs"
+        private const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
+    }
 
     private lateinit var binding: ActivityMainBinding
     private var playbackService: PlaybackService? = null
@@ -64,7 +64,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             isBound = true
             playbackService?.addListener(this@MainActivity)
 
-            // If service has no songs yet and we already scanned songs, provide them
             if (playbackService?.queue.isNullOrEmpty() && scannedSongs.isNotEmpty()) {
                 playbackService?.setSongQueue(scannedSongs, startIndex = 0, startPlaying = false)
             }
@@ -74,6 +73,30 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             playbackService?.removeListener(this@MainActivity)
             playbackService = null
             isBound = false
+        }
+    }
+
+    // Storage Access Framework Folder Picker for directory selection
+    private val folderPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri: Uri? ->
+        if (treeUri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    treeUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (ignored: Exception) {}
+
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_MUSIC_FOLDER_URI, treeUri.toString())
+                .apply()
+
+            loadMusicFromFolder(treeUri)
+        } else {
+            // If user dismissed folder picker, load media store as fallback
+            loadMusicLibrary()
         }
     }
 
@@ -87,7 +110,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         if (audioGranted) {
-            loadMusicLibrary()
+            checkFolderOrScan()
         }
     }
 
@@ -98,17 +121,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setupDefaultScreenshotView()
+        setupDefaultView()
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
     }
 
-    /**
-     * Initializes the UI to perfectly reflect the screenshot @[1790665358030.jpg]
-     * Immediately visible upon launch with no blank state or flash.
-     */
-    private fun setupDefaultScreenshotView() {
+    private fun setupDefaultView() {
         val defaultSong = Song.getDefaultMockSong()
         binding.songTitleText.text = defaultSong.title
         binding.artistNameText.text = defaultSong.artist
@@ -186,14 +205,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         })
 
-        // Expand Queue Chevron (^)
+        // Playlist bottom arrow (^)
         binding.btnExpandQueue.setOnClickListener {
-            showQueueBottomSheet()
+            showPlaylistBottomSheet()
         }
 
-        // Album Art click also expands bottom sheet
+        // Album Art click also opens playlist
         binding.albumArtCard.setOnClickListener {
-            showQueueBottomSheet()
+            showPlaylistBottomSheet()
         }
     }
 
@@ -222,13 +241,44 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (permissions.isNotEmpty()) {
             permissionLauncher.launch(permissions.toTypedArray())
         } else {
+            checkFolderOrScan()
+        }
+    }
+
+    /**
+     * Checks if user already selected a music directory. If not (first run), launches folder picker!
+     */
+    private fun checkFolderOrScan() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
+
+        if (savedFolderUri != null) {
+            loadMusicFromFolder(Uri.parse(savedFolderUri))
+        } else {
+            // First run: Open folder selector directly
+            Toast.makeText(this, "Select your music folder to scan songs", Toast.LENGTH_LONG).show()
+            openFolderPicker()
+        }
+    }
+
+    private fun openFolderPicker() {
+        try {
+            folderPickerLauncher.launch(null)
+        } catch (e: Exception) {
             loadMusicLibrary()
         }
     }
 
-    private fun loadMusicLibrary() {
+    private fun loadMusicFromFolder(treeUri: Uri) {
         lifecycleScope.launch {
-            val songs = musicScanner.scanMusic()
+            Toast.makeText(this@MainActivity, "Scanning music folder...", Toast.LENGTH_SHORT).show()
+            val folderSongs = musicScanner.scanFolder(treeUri)
+            val songs = if (folderSongs.isNotEmpty()) {
+                folderSongs
+            } else {
+                musicScanner.scanMediaStore()
+            }
+
             scannedSongs = songs
             songAdapter?.setSongs(songs)
 
@@ -238,7 +288,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
-    private fun showQueueBottomSheet() {
+    private fun loadMusicLibrary() {
+        lifecycleScope.launch {
+            val songs = musicScanner.scanMediaStore()
+            scannedSongs = songs
+            songAdapter?.setSongs(songs)
+
+            if (songs.isNotEmpty()) {
+                playbackService?.setSongQueue(songs, startIndex = 0, startPlaying = false)
+            }
+        }
+    }
+
+    /**
+     * Displays the Playlist bottom sheet (without search bar).
+     */
+    private fun showPlaylistBottomSheet() {
         val bottomSheetDialog = BottomSheetDialog(this, R.style.BottomSheetDialogTheme)
         val sheetBinding = LayoutQueueBottomSheetBinding.inflate(layoutInflater)
         bottomSheetDialog.setContentView(sheetBinding.root)
@@ -263,17 +328,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         sheetBinding.songCountText.text = "(${songsToShow.size} songs)"
 
-        sheetBinding.searchEditText.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                adapter.filter(s?.toString() ?: "")
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-
-        sheetBinding.btnRescanEmpty.setOnClickListener {
-            loadMusicLibrary()
+        sheetBinding.btnSelectFolderEmpty.setOnClickListener {
             bottomSheetDialog.dismiss()
+            openFolderPicker()
         }
 
         bottomSheetDialog.show()
@@ -284,6 +341,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_select_folder -> {
+                    openFolderPicker()
+                    true
+                }
                 R.id.action_equalizer -> {
                     showEqualizerDialog()
                     true
@@ -297,8 +358,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     true
                 }
                 R.id.action_rescan -> {
-                    Toast.makeText(this, "Scanning music library...", Toast.LENGTH_SHORT).show()
-                    loadMusicLibrary()
+                    checkFolderOrScan()
                     true
                 }
                 R.id.action_about -> {
@@ -329,7 +389,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 virt?.enabled = isChecked
             }
 
-            // Bass Boost
             bass?.let {
                 dialogBinding.seekBassBoost.progress = it.roundedStrength.toInt()
                 dialogBinding.seekBassBoost.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -341,7 +400,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 })
             }
 
-            // Virtualizer
             virt?.let {
                 dialogBinding.seekVirtualizer.progress = it.roundedStrength.toInt()
                 dialogBinding.seekVirtualizer.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -353,7 +411,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 })
             }
 
-            // EQ Bands
             val bands = eq.numberOfBands
             val minBandLevel = eq.bandLevelRange[0]
             val maxBandLevel = eq.bandLevelRange[1]
@@ -459,7 +516,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             Duration: ${Song.formatTime(song.duration)}
             Format: ${song.format}
             File Size: $sizeMb
-            Path: ${song.filePath.ifEmpty { "Bundled Demo Track" }}
+            Path: ${song.filePath.ifEmpty { "Default Preview Track" }}
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)
@@ -497,21 +554,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         songAdapter?.setCurrentPlayingSongId(song.id)
 
-        // Load album art
-        if (song.albumArtUri != null) {
-            try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(contentResolver, song.albumArtUri))
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(contentResolver, song.albumArtUri)
-                }
+        // Asynchronously load real album art
+        lifecycleScope.launch {
+            val bitmap = AlbumArtLoader.loadAlbumArt(this@MainActivity, song)
+            if (bitmap != null) {
                 binding.albumArtImage.setImageBitmap(bitmap)
-            } catch (e: Exception) {
+            } else {
                 binding.albumArtImage.setImageResource(R.drawable.default_album_art)
             }
-        } else {
-            binding.albumArtImage.setImageResource(R.drawable.default_album_art)
         }
     }
 
