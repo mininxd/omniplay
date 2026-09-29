@@ -72,6 +72,17 @@ jobs:
           path: app/build/outputs/apk/release/app-universal-release.apk
           if-no-files-found: error
 
+      - name: Create and Upload legacy-all APK (All arch: armv7 + armv8)
+        run: |
+          cp app/build/outputs/apk/release/app-universal-release.apk app/build/outputs/apk/release/app-legacy-all-release.apk
+
+      - name: Upload legacy-all APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-legacy-all-release
+          path: app/build/outputs/apk/release/app-legacy-all-release.apk
+          if-no-files-found: error
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

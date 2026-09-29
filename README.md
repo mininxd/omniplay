@@ -33,15 +33,18 @@
   - **Supported Formats**: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, and more.
   - **Directory-Based SAF Scanner**: Select specific music folders via Android Storage Access Framework (SAF) with on-demand library rescan.
 
-- **Lightweight & Multi-Architecture**:
-  - Highly optimized ProGuard / R8 rules with resource shrinking.
-  - Multi-ABI splits: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`, and Universal APKs.
+- **Legacy & Multi-Architecture Compatibility**:
+  - **Android Version Compatibility**: Supports Android 5.0 (Lollipop, API 21) through Android 14/15, including legacy **Android 7.0/7.1 (Nougat)**.
+  - Dual v1 (JAR) and v2 (Full APK) signing enabled to ensure smooth installation on legacy package managers.
+  - Multi-ABI splits: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`, Universal APK, and `legacy-all` (combining both armv7 and armv8 for all legacy and modern devices).
 
 ---
 
 ## Architecture & Tech Stack
 
 - **Language**: 100% Kotlin
+- **Minimum SDK**: API 21 (Android 5.0 Lollipop)
+- **Target SDK**: API 34 (Android 14)
 - **UI Framework**: Android Jetpack, Material Components 3, View Binding, Custom Views
 - **Concurrency**: Kotlin Coroutines (`Dispatchers.IO`, `Dispatchers.Main`, `SupervisorJob`)
 - **Media Engine**: Native Android `MediaPlayer`, `MediaSessionCompat`, `PlaybackStateCompat`
@@ -62,11 +65,12 @@ This project is fully open source. The release keystore is included in the repos
 ## CI / CD & Artifact Releases
 
 GitHub Actions automatically builds all target architectures upon pushes to `main`:
-- `app-arm64-v8a-release.apk`
-- `app-armeabi-v7a-release.apk`
-- `app-x86-release.apk`
-- `app-x86_64-release.apk`
-- `app-universal-release.apk`
+- `app-legacy-all-release.apk` *(Universal: armv7 + armv8 for Android 7.0+ & all legacy devices)*
+- `app-arm64-v8a-release.apk` *(Modern 64-bit ARM)*
+- `app-armeabi-v7a-release.apk` *(Legacy 32-bit ARM)*
+- `app-x86-release.apk` *(32-bit x86 emulators/tablets)*
+- `app-x86_64-release.apk` *(64-bit x86 emulators)*
+- `app-universal-release.apk` *(Fat APK containing all ABIs)*
 
 ---
 

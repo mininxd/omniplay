@@ -50,7 +50,8 @@
             android:name=".service.PlaybackService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback"
+            tools:targetApi="29" />
 
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"

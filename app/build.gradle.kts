@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "xyz.omniplay"
-        minSdk = 24
+        minSdk = 21
         targetSdk = 34
         versionCode = 1
         versionName = "v0.1"
