@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -18,6 +19,7 @@ import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -77,6 +79,21 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     private var progressJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var resumeOnFocusGain = false
+
+    private var currentAfd: AssetFileDescriptor? = null
+    private var currentPfd: ParcelFileDescriptor? = null
+
+    private fun releaseCurrentFd() {
+        try {
+            currentAfd?.close()
+        } catch (ignored: Exception) {}
+        currentAfd = null
+
+        try {
+            currentPfd?.close()
+        } catch (ignored: Exception) {}
+        currentPfd = null
+    }
 
     private val listeners = mutableListOf<PlaybackListener>()
 
@@ -202,6 +219,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
                     mediaPlayer?.pause()
                 }
                 mediaPlayer?.reset()
+                releaseCurrentFd()
             } catch (e: Exception) {}
             stopProgressTracker()
             updatePlaybackState(PlaybackStateCompat.STATE_NONE)
@@ -313,21 +331,33 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
     }
 
     private fun setMediaPlayerDataSource(uri: Uri) {
+        releaseCurrentFd()
         try {
             mediaPlayer?.setDataSource(applicationContext, uri)
         } catch (e: Exception) {
-            val opened = try {
-                applicationContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
-                    mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    true
-                } ?: false
-            } catch (ex: Exception) {
-                false
-            }
+            var loaded = false
+            try {
+                val afd = applicationContext.contentResolver.openAssetFileDescriptor(uri, "r")
+                if (afd != null) {
+                    currentAfd = afd
+                    if (afd.declaredLength < 0) {
+                        mediaPlayer?.setDataSource(afd.fileDescriptor)
+                    } else {
+                        mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                    }
+                    loaded = true
+                }
+            } catch (ignored: Exception) {}
 
-            if (!opened) {
-                applicationContext.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                    mediaPlayer?.setDataSource(pfd.fileDescriptor)
+            if (!loaded) {
+                try {
+                    val pfd = applicationContext.contentResolver.openFileDescriptor(uri, "r")
+                    if (pfd != null) {
+                        currentPfd = pfd
+                        mediaPlayer?.setDataSource(pfd.fileDescriptor)
+                    }
+                } catch (ex: Exception) {
+                    ex.printStackTrace()
                 }
             }
         }
@@ -683,6 +713,7 @@ class PlaybackService : Service(), MediaPlayer.OnPreparedListener,
         try {
             unregisterReceiver(noisyReceiver)
         } catch (e: Exception) {}
+        releaseCurrentFd()
         mediaPlayer?.release()
         mediaPlayer = null
         mediaSession?.release()

@@ -2,6 +2,7 @@ package xyz.omniplay.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.database.Cursor
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -22,12 +23,60 @@ class MusicScanner(private val context: Context) {
     )
 
     /**
-     * Scans a user-selected folder tree recursively using DocumentsContract,
-     * falling back to DocumentFile if needed.
-     * NEVER falls back to full MediaStore scan so folder selection is strictly honored.
+     * Resolves the relative path or folder name from a Storage Access Framework treeUri.
+     */
+    fun getRelativePathFromTreeUri(treeUri: Uri): String? {
+        val docId = try {
+            if (DocumentsContract.isDocumentUri(context, treeUri)) {
+                DocumentsContract.getDocumentId(treeUri)
+            } else {
+                DocumentsContract.getTreeDocumentId(treeUri)
+            }
+        } catch (e: Exception) {
+            treeUri.lastPathSegment
+        } ?: return null
+
+        return when {
+            docId.startsWith("raw:") -> {
+                val fullPath = docId.removePrefix("raw:")
+                val standardPrefix = "/storage/emulated/0/"
+                if (fullPath.startsWith(standardPrefix)) {
+                    fullPath.removePrefix(standardPrefix).trim('/')
+                } else {
+                    fullPath.trim('/')
+                }
+            }
+            docId.contains(':') -> {
+                val afterColon = docId.substringAfter(':').trim('/')
+                if (afterColon.isNotEmpty()) afterColon else null
+            }
+            docId.equals("downloads", ignoreCase = true) -> {
+                "Download"
+            }
+            else -> {
+                docId.trim('/')
+            }
+        }
+    }
+
+    /**
+     * Scans a user-selected folder tree.
+     * First queries MediaStore filtered by the folder path for fast retrieval and rich metadata.
+     * If MediaStore returns no songs (e.g. unindexed folder, .nomedia), falls back to SAF traversal.
      */
     suspend fun scanFolder(treeUri: Uri): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
+
+        // 1. Try querying MediaStore for this folder path
+        val folderRelativePath = getRelativePathFromTreeUri(treeUri)
+        if (!folderRelativePath.isNullOrEmpty()) {
+            val mediaStoreSongs = scanMediaStoreForFolder(folderRelativePath)
+            if (mediaStoreSongs.isNotEmpty()) {
+                return@withContext mediaStoreSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
+            }
+        }
+
+        // 2. Direct SAF traversal using DocumentsContract
         try {
             val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
                 DocumentsContract.getDocumentId(treeUri)
@@ -39,7 +88,7 @@ class MusicScanner(private val context: Context) {
             e.printStackTrace()
         }
 
-        // If DocumentsContract traversal returned empty, fallback to DocumentFile traversal
+        // 3. Fallback to DocumentFile traversal if DocumentsContract returned empty
         if (songsList.isEmpty()) {
             try {
                 val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
@@ -51,7 +100,76 @@ class MusicScanner(private val context: Context) {
             }
         }
 
+        // 4. If still empty and folder was root storage, fallback to MediaStore scan
+        if (songsList.isEmpty() && folderRelativePath.isNullOrEmpty()) {
+            val allSongs = scanMediaStore()
+            if (allSongs.isNotEmpty()) {
+                return@withContext allSongs
+            }
+        }
+
         songsList.sortedBy { it.title.lowercase(Locale.ROOT) }
+    }
+
+    /**
+     * Queries MediaStore for audio files within a specific folder path.
+     */
+    suspend fun scanMediaStoreForFolder(folderPath: String): List<Song> = withContext(Dispatchers.IO) {
+        val songsList = mutableListOf<Song>()
+        val collection: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        }
+
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.MIME_TYPE
+        )
+
+        val cleanPath = folderPath.trim('/')
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (" +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
+                    "${MediaStore.Audio.Media.RELATIVE_PATH} = ? OR " +
+                    "${MediaStore.Audio.Media.DATA} LIKE ?)"
+            selectionArgs = arrayOf(
+                "$cleanPath/%",
+                "$cleanPath/",
+                "%$cleanPath/%"
+            )
+        } else {
+            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (${MediaStore.Audio.Media.DATA} LIKE ?)"
+            selectionArgs = arrayOf("%/$cleanPath/%")
+        }
+
+        val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )?.use { cursor ->
+                parseSongsFromCursor(cursor, songsList)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        songsList
     }
 
     private fun scanFolderDocumentsContract(
@@ -59,7 +177,12 @@ class MusicScanner(private val context: Context) {
         parentDocId: String,
         songsList: MutableList<Song>
     ) {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+        val childrenUri = try {
+            DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+        } catch (e: Exception) {
+            null
+        } ?: return
+
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -149,17 +272,30 @@ class MusicScanner(private val context: Context) {
             retriever = MediaMetadataRetriever()
             var loaded = false
             try {
-                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                    retriever.setDataSource(pfd.fileDescriptor)
-                    loaded = true
-                }
-            } catch (ignored: Exception) {}
+                retriever.setDataSource(context, uri)
+                loaded = true
+            } catch (ignored: Throwable) {}
 
             if (!loaded) {
                 try {
-                    retriever.setDataSource(context, uri)
-                    loaded = true
-                } catch (ignored: Exception) {}
+                    context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+                        if (afd.declaredLength < 0) {
+                            retriever.setDataSource(afd.fileDescriptor)
+                        } else {
+                            retriever.setDataSource(afd.fileDescriptor, afd.startOffset, afd.declaredLength)
+                        }
+                        loaded = true
+                    }
+                } catch (ignored: Throwable) {}
+            }
+
+            if (!loaded) {
+                try {
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                        retriever.setDataSource(pfd.fileDescriptor)
+                        loaded = true
+                    }
+                } catch (ignored: Throwable) {}
             }
 
             if (loaded) {
@@ -180,12 +316,12 @@ class MusicScanner(private val context: Context) {
                     album = rawAlbum.trim()
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // Keep fallback metadata
         } finally {
             try {
                 retriever?.release()
-            } catch (ignored: Exception) {}
+            } catch (ignored: Throwable) {}
         }
 
         val format = if (ext.isNotEmpty() && ext.length in 2..5) {
@@ -209,7 +345,7 @@ class MusicScanner(private val context: Context) {
     }
 
     /**
-     * Scans MediaStore for audio tracks.
+     * Scans MediaStore for all audio tracks across the device.
      */
     suspend fun scanMediaStore(): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
@@ -231,7 +367,7 @@ class MusicScanner(private val context: Context) {
             MediaStore.Audio.Media.MIME_TYPE
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 5000"
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 1000"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
 
         try {
@@ -242,81 +378,85 @@ class MusicScanner(private val context: Context) {
                 null,
                 sortOrder
             )?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-                val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-                val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
-
-                val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
-
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idColumn)
-                    val rawTitle = cursor.getString(titleColumn)
-                    val rawArtist = cursor.getString(artistColumn)
-                    val rawAlbum = cursor.getString(albumColumn)
-                    val duration = cursor.getLong(durationColumn)
-                    val filePath = cursor.getString(dataColumn) ?: ""
-                    val fileSize = cursor.getLong(sizeColumn)
-                    val albumId = cursor.getLong(albumIdColumn)
-                    val mimeType = cursor.getString(mimeColumn) ?: ""
-
-                    val contentUri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        id
-                    )
-
-                    val albumArtUri = if (albumId > 0) {
-                        ContentUris.withAppendedId(albumArtBaseUri, albumId)
-                    } else {
-                        null
-                    }
-
-                    val title = if (rawTitle.isNullOrBlank() || rawTitle == "<unknown>") {
-                        File(filePath).nameWithoutExtension.ifEmpty { "Audio Track $id" }
-                    } else {
-                        rawTitle
-                    }
-
-                    val artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") {
-                        "Unknown Artist"
-                    } else {
-                        rawArtist
-                    }
-
-                    val album = if (rawAlbum.isNullOrBlank() || rawAlbum == "<unknown>") {
-                        "Unknown Album"
-                    } else {
-                        rawAlbum
-                    }
-
-                    val format = resolveAudioFormat(filePath, mimeType)
-
-                    songsList.add(
-                        Song(
-                            id = id,
-                            title = title,
-                            artist = artist,
-                            album = album,
-                            duration = duration,
-                            contentUri = contentUri,
-                            albumArtUri = albumArtUri,
-                            format = format,
-                            filePath = filePath,
-                            fileSize = fileSize
-                        )
-                    )
-                }
+                parseSongsFromCursor(cursor, songsList)
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
         songsList
+    }
+
+    private fun parseSongsFromCursor(cursor: Cursor, songsList: MutableList<Song>) {
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+        val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+        val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+        val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+
+        val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
+
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idColumn)
+            val rawTitle = cursor.getString(titleColumn)
+            val rawArtist = cursor.getString(artistColumn)
+            val rawAlbum = cursor.getString(albumColumn)
+            val duration = cursor.getLong(durationColumn)
+            val filePath = cursor.getString(dataColumn) ?: ""
+            val fileSize = cursor.getLong(sizeColumn)
+            val albumId = cursor.getLong(albumIdColumn)
+            val mimeType = cursor.getString(mimeColumn) ?: ""
+
+            val contentUri = ContentUris.withAppendedId(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                id
+            )
+
+            val albumArtUri = if (albumId > 0) {
+                ContentUris.withAppendedId(albumArtBaseUri, albumId)
+            } else {
+                null
+            }
+
+            val title = if (rawTitle.isNullOrBlank() || rawTitle == "<unknown>") {
+                File(filePath).nameWithoutExtension.ifEmpty { "Audio Track $id" }
+            } else {
+                rawTitle
+            }
+
+            val artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") {
+                "Unknown Artist"
+            } else {
+                rawArtist
+            }
+
+            val album = if (rawAlbum.isNullOrBlank() || rawAlbum == "<unknown>") {
+                "Unknown Album"
+            } else {
+                rawAlbum
+            }
+
+            val format = resolveAudioFormat(filePath, mimeType)
+
+            songsList.add(
+                Song(
+                    id = id,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    duration = duration,
+                    contentUri = contentUri,
+                    albumArtUri = albumArtUri,
+                    format = format,
+                    filePath = filePath,
+                    fileSize = fileSize
+                )
+            )
+        }
     }
 
     private fun resolveAudioFormat(filePath: String, mimeType: String): String {

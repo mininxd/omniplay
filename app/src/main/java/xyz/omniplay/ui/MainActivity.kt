@@ -100,8 +100,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (savedFolderUri != null) {
                 loadMusicFromFolder(Uri.parse(savedFolderUri))
             } else {
-                updateSongList(emptyList())
-                Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
+                loadAllMusicLibrary()
             }
         }
     }
@@ -200,6 +199,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.btnSelectFolderEmpty.setOnClickListener {
             openFolderPicker()
+        }
+
+        binding.btnScanAllEmpty.setOnClickListener {
+            switchToAllMusic()
         }
     }
 
@@ -304,7 +307,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Checks if user already selected a music directory. If not (first run), launches folder picker.
+     * Checks if user already selected a music directory.
+     * If so, loads from that directory; otherwise, automatically scans all device music.
      */
     private fun checkFolderOrScan() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -313,8 +317,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (savedFolderUri != null) {
             loadMusicFromFolder(Uri.parse(savedFolderUri))
         } else {
-            Toast.makeText(this, "Select your music folder to scan songs", Toast.LENGTH_LONG).show()
-            openFolderPicker()
+            loadAllMusicLibrary()
         }
     }
 
@@ -324,6 +327,36 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         } catch (e: Exception) {
             Toast.makeText(this, "Failed to open folder picker: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun loadAllMusicLibrary(isRescan: Boolean = false) {
+        lifecycleScope.launch {
+            Toast.makeText(
+                this@MainActivity,
+                if (isRescan) "Rescanning music library..." else "Scanning music library...",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            val songs = musicScanner.scanMediaStore()
+            updateSongList(songs)
+
+            if (isRescan) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Rescan complete: ${songs.size} songs found",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun switchToAllMusic() {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .remove(KEY_MUSIC_FOLDER_URI)
+            .apply()
+        Toast.makeText(this, "Switched to all device music", Toast.LENGTH_SHORT).show()
+        loadAllMusicLibrary()
     }
 
     private fun loadMusicFromFolder(treeUri: Uri, isRescan: Boolean = false) {
@@ -337,12 +370,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             val songs = musicScanner.scanFolder(treeUri)
             updateSongList(songs)
 
-            if (isRescan) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Rescan complete: ${songs.size} songs found",
-                    Toast.LENGTH_SHORT
-                ).show()
+            if (isRescan || songs.isEmpty()) {
+                val message = if (songs.isNotEmpty()) {
+                    "Scan complete: ${songs.size} songs found"
+                } else {
+                    "No songs found in selected folder"
+                }
+                Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -354,8 +388,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (savedFolderUri != null) {
             loadMusicFromFolder(Uri.parse(savedFolderUri), isRescan = true)
         } else {
-            Toast.makeText(this, "Select a music folder to scan", Toast.LENGTH_SHORT).show()
-            openFolderPicker()
+            loadAllMusicLibrary(isRescan = true)
         }
     }
 
@@ -389,6 +422,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_scan_all -> {
+                    switchToAllMusic()
+                    true
+                }
                 R.id.action_select_folder -> {
                     openFolderPicker()
                     true

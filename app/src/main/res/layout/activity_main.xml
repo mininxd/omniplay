@@ -380,6 +380,16 @@
                 android:text="@string/select_folder"
                 android:textColor="@color/on_primary"
                 app:cornerRadius="20dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_scan_all_empty"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/all_device_music"
+                android:textColor="@color/text_primary"
+                app:cornerRadius="20dp" />
         </LinearLayout>
     </LinearLayout>
 

@@ -5,6 +5,7 @@
     <string name="queue_title">Playlist</string>
     <string name="sleep_timer">Sleep Timer</string>
     <string name="select_folder">Select Music Folder</string>
+    <string name="all_device_music">Scan All Device Music</string>
     <string name="rescan_library">Rescan Music</string>
     <string name="track_details">Audio Details</string>
     <string name="about_omniplay">About Omniplay</string>
