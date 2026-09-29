@@ -364,7 +364,7 @@ class VideoPlayerActivity : AppCompatActivity() {
                             }
                             TouchZone.SEEK -> {
                                 val duration = binding.videoView.duration.toLong().coerceAtLeast(1L)
-                                val seekWindow = (duration * 0.25f).coerceIn(60000L, 300000L)
+                                val seekWindow = (duration * 0.25f).coerceIn(60000f, 300000f)
                                 val deltaMs = ((deltaX / width) * seekWindow).toLong()
                                 targetSeekPosition = (initialSeekPosition + deltaMs).coerceIn(0L, duration)
                                 showSeekIndicator(targetSeekPosition, duration, deltaMs)
