@@ -99,7 +99,33 @@ object AlbumArtLoader {
                 }
             }
 
-            // 3. Fallback: try file path if contentUri didn't yield artwork
+            // 3. Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
+            if (decodedBitmap == null && (song.format.equals("FLAC", ignoreCase = true) || song.contentUri.toString().endsWith(".flac", ignoreCase = true) || song.filePath.endsWith(".flac", ignoreCase = true))) {
+                try {
+                    context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
+                        val picData = FlacHeaderParser.extractPicture(stream)
+                        if (picData != null && picData.isNotEmpty()) {
+                            decodedBitmap = BitmapFactory.decodeByteArray(picData, 0, picData.size)
+                        }
+                    }
+                } catch (ignored: Throwable) {}
+
+                if (decodedBitmap == null && song.filePath.isNotBlank()) {
+                    try {
+                        val file = java.io.File(song.filePath)
+                        if (file.exists()) {
+                            file.inputStream().use { stream ->
+                                val picData = FlacHeaderParser.extractPicture(stream)
+                                if (picData != null && picData.isNotEmpty()) {
+                                    decodedBitmap = BitmapFactory.decodeByteArray(picData, 0, picData.size)
+                                }
+                            }
+                        }
+                    } catch (ignored: Throwable) {}
+                }
+            }
+
+            // 4. Fallback: try file path if contentUri didn't yield artwork
             if (decodedBitmap == null && song.filePath.isNotBlank()) {
                 val retriever = MediaMetadataRetriever()
                 try {

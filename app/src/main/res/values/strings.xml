@@ -33,4 +33,5 @@
     <string name="mesh_volume_trim">Speaker Volume Balance</string>
     <string name="mesh_connected_to">Connected to</string>
     <string name="mesh_disconnect">Disconnect</string>
+    <string name="open_audio_file">Play Audio File</string>
 </resources>

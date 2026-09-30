@@ -67,17 +67,9 @@ class MusicScanner(private val context: Context) {
      */
     suspend fun scanFolder(treeUri: Uri): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
-
-        // 1. Try querying MediaStore for this folder path
         val folderRelativePath = getRelativePathFromTreeUri(treeUri)
-        if (!folderRelativePath.isNullOrEmpty()) {
-            val mediaStoreSongs = scanMediaStoreForFolder(folderRelativePath)
-            if (mediaStoreSongs.isNotEmpty()) {
-                return@withContext mediaStoreSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
-            }
-        }
 
-        // 2. Direct SAF traversal using DocumentsContract
+        // 1. Direct SAF traversal using DocumentsContract to discover all actual files on disk
         try {
             val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
                 DocumentsContract.getDocumentId(treeUri)
@@ -89,7 +81,7 @@ class MusicScanner(private val context: Context) {
             e.printStackTrace()
         }
 
-        // 3. Fallback to DocumentFile traversal if DocumentsContract returned empty
+        // 2. Fallback to DocumentFile traversal if DocumentsContract returned empty
         if (songsList.isEmpty()) {
             try {
                 val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
@@ -101,15 +93,47 @@ class MusicScanner(private val context: Context) {
             }
         }
 
-        // 4. If still empty and folder was root storage, fallback to MediaStore scan
-        if (songsList.isEmpty() && folderRelativePath.isNullOrEmpty()) {
-            val allSongs = scanMediaStore()
-            if (allSongs.isNotEmpty()) {
-                return@withContext allSongs
-            }
+        // 3. Query MediaStore for this folder path with relaxed filter
+        val mediaStoreSongs = if (!folderRelativePath.isNullOrEmpty()) {
+            scanMediaStoreForFolder(folderRelativePath)
+        } else {
+            emptyList()
         }
 
-        songsList.sortedBy { it.title.lowercase(Locale.ROOT) }
+        // Merge SAF-discovered songs with MediaStore songs (ensuring files like 04. Basket Case.flac are never omitted)
+        val finalSongs = if (songsList.isNotEmpty()) {
+            if (mediaStoreSongs.isNotEmpty()) {
+                val mediaStoreByPath = mediaStoreSongs.associateBy { it.filePath.lowercase(Locale.ROOT) }
+                val mediaStoreByName = mediaStoreSongs.associateBy { File(it.filePath).name.lowercase(Locale.ROOT) }
+
+                songsList.map { safSong ->
+                    val match = mediaStoreByPath[safSong.filePath.lowercase(Locale.ROOT)]
+                        ?: mediaStoreByName[safSong.filePath.lowercase(Locale.ROOT)]
+                    if (match != null) {
+                        safSong.copy(
+                            id = match.id,
+                            albumArtUri = safSong.albumArtUri ?: match.albumArtUri,
+                            title = if (safSong.title == safSong.filePath.substringBeforeLast('.')) match.title else safSong.title,
+                            artist = if (safSong.artist == "Unknown Artist") match.artist else safSong.artist,
+                            album = if (safSong.album == "Unknown Album") match.album else safSong.album,
+                            duration = if (safSong.duration > 0L) safSong.duration else match.duration
+                        )
+                    } else {
+                        safSong
+                    }
+                }
+            } else {
+                songsList
+            }
+        } else if (mediaStoreSongs.isNotEmpty()) {
+            mediaStoreSongs
+        } else if (folderRelativePath.isNullOrEmpty()) {
+            scanMediaStore()
+        } else {
+            emptyList()
+        }
+
+        finalSongs.sortedBy { it.title.lowercase(Locale.ROOT) }
     }
 
     /**
@@ -139,8 +163,16 @@ class MusicScanner(private val context: Context) {
         val selection: String
         val selectionArgs: Array<String>
 
+        val audioFilter = "(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR " +
+                "${MediaStore.Audio.Media.MIME_TYPE} LIKE 'audio/%' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.flac' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.FLAC' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.mp3' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.m4a' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.wav')"
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (" +
+            selection = "$audioFilter AND (" +
                     "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
                     "${MediaStore.Audio.Media.RELATIVE_PATH} = ? OR " +
                     "${MediaStore.Audio.Media.DATA} LIKE ?)"
@@ -150,7 +182,7 @@ class MusicScanner(private val context: Context) {
                 "%$cleanPath/%"
             )
         } else {
-            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (${MediaStore.Audio.Media.DATA} LIKE ?)"
+            selection = "$audioFilter AND (${MediaStore.Audio.Media.DATA} LIKE ?)"
             selectionArgs = arrayOf("%/$cleanPath/%")
         }
 
@@ -218,7 +250,11 @@ class MusicScanner(private val context: Context) {
                         subDirs.add(docId)
                     } else {
                         val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
-                        val isAudio = ext in supportedExtensions || mime.startsWith("audio/") || mime == "application/ogg"
+                        val isAudio = ext in supportedExtensions ||
+                                mime.startsWith("audio/") ||
+                                mime.contains("flac", ignoreCase = true) ||
+                                mime.contains("ogg", ignoreCase = true) ||
+                                (mime == "application/octet-stream" && ext in supportedExtensions)
                         if (isAudio) {
                             val fileDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
                             val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size)
@@ -245,7 +281,12 @@ class MusicScanner(private val context: Context) {
                 val name = file.name ?: ""
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
                 val mime = file.type ?: ""
-                if (ext in supportedExtensions || mime.startsWith("audio/") || mime == "application/ogg") {
+                val isAudio = ext in supportedExtensions ||
+                        mime.startsWith("audio/") ||
+                        mime.contains("flac", ignoreCase = true) ||
+                        mime.contains("ogg", ignoreCase = true) ||
+                        (mime == "application/octet-stream" && ext in supportedExtensions)
+                if (isAudio) {
                     val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length())
                     songsList.add(song)
                 }
@@ -326,6 +367,19 @@ class MusicScanner(private val context: Context) {
             } catch (ignored: Throwable) {}
         }
 
+        if (ext.equals("flac", true)) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    xyz.omniplay.util.FlacHeaderParser.parse(stream)?.let { flacHeader ->
+                        if (!flacHeader.title.isNullOrBlank()) title = flacHeader.title
+                        if (!flacHeader.artist.isNullOrBlank()) artist = flacHeader.artist
+                        if (!flacHeader.album.isNullOrBlank()) album = flacHeader.album
+                        if (flacHeader.durationMs > 0L) duration = flacHeader.durationMs
+                    }
+                }
+            } catch (ignored: Throwable) {}
+        }
+
         if (duration <= 0L && (ext.equals("dsf", true) || ext.equals("dff", true))) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -384,7 +438,17 @@ class MusicScanner(private val context: Context) {
             MediaStore.Audio.Media.MIME_TYPE
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 1000"
+        val selection = "(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR " +
+                "${MediaStore.Audio.Media.MIME_TYPE} LIKE 'audio/%' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.flac' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.FLAC' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.mp3' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.m4a' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.wav' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.ogg' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.opus' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.dsf' OR " +
+                "${MediaStore.Audio.Media.DATA} LIKE '%.dff')"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
 
         try {
@@ -439,26 +503,47 @@ class MusicScanner(private val context: Context) {
                 null
             }
 
-            val title = if (rawTitle.isNullOrBlank() || rawTitle == "<unknown>") {
+            var title = if (rawTitle.isNullOrBlank() || rawTitle == "<unknown>") {
                 File(filePath).nameWithoutExtension.ifEmpty { "Audio Track $id" }
             } else {
                 rawTitle
             }
 
-            val artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") {
+            var artist = if (rawArtist.isNullOrBlank() || rawArtist == "<unknown>") {
                 "Unknown Artist"
             } else {
                 rawArtist
             }
 
-            val album = if (rawAlbum.isNullOrBlank() || rawAlbum == "<unknown>") {
+            var album = if (rawAlbum.isNullOrBlank() || rawAlbum == "<unknown>") {
                 "Unknown Album"
             } else {
                 rawAlbum
             }
 
+            var resolvedDuration = duration
+
+            if ((resolvedDuration <= 0L || artist == "Unknown Artist" || title.startsWith("Audio Track")) &&
+                filePath.endsWith(".flac", ignoreCase = true)
+            ) {
+                try {
+                    val file = File(filePath)
+                    if (file.exists()) {
+                        file.inputStream().use { stream ->
+                            xyz.omniplay.util.FlacHeaderParser.parse(stream)?.let { flacHeader ->
+                                if (!flacHeader.title.isNullOrBlank()) title = flacHeader.title
+                                if (!flacHeader.artist.isNullOrBlank()) artist = flacHeader.artist
+                                if (!flacHeader.album.isNullOrBlank()) album = flacHeader.album
+                                if (flacHeader.durationMs > 0L) resolvedDuration = flacHeader.durationMs
+                            }
+                        }
+                    }
+                } catch (ignored: Throwable) {}
+            }
+
             val format = resolveAudioFormat(filePath, mimeType)
-            val isFormatHiRes = format.startsWith("DSD", true) || format == "DSF" || format == "DFF"
+            val isFormatHiRes = format.startsWith("DSD", true) || format == "DSF" || format == "DFF" ||
+                    (format == "FLAC" && (fileSize > 25_000_000L || (resolvedDuration > 0 && (fileSize * 8) / resolvedDuration > 1500)))
 
             songsList.add(
                 Song(
@@ -466,7 +551,7 @@ class MusicScanner(private val context: Context) {
                     title = title,
                     artist = artist,
                     album = album,
-                    duration = duration,
+                    duration = resolvedDuration,
                     contentUri = contentUri,
                     albumArtUri = albumArtUri,
                     format = format,

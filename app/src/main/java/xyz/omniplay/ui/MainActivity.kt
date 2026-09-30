@@ -119,6 +119,26 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private val audioFilePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (ignored: Exception) {}
+
+            val playIntent = Intent(this, AudioPlayerActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = uri
+                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            startActivity(playIntent)
+        }
+    }
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -150,6 +170,29 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         bindPlaybackService()
         checkAndRequestPermissions()
         xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).addListener(meshListener)
+        handleIncomingIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW) {
+            val audioUri = intent.data ?: intent.clipData?.let {
+                if (it.itemCount > 0) it.getItemAt(0).uri else null
+            }
+            if (audioUri != null) {
+                val playerIntent = Intent(this, AudioPlayerActivity::class.java).apply {
+                    action = Intent.ACTION_VIEW
+                    data = audioUri
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                startActivity(playerIntent)
+            }
+        }
     }
 
     /**
@@ -1059,6 +1102,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     songAdapter?.setShowAlbumArt(newState)
                     true
                 }
+                R.id.action_open_audio_file -> {
+                    openAudioFilePicker()
+                    true
+                }
                 R.id.action_select_folder -> {
                     openFolderPicker()
                     true
@@ -1075,6 +1122,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
         popup.show()
+    }
+
+    private fun openAudioFilePicker() {
+        try {
+            audioFilePickerLauncher.launch(
+                arrayOf(
+                    "audio/*",
+                    "application/ogg",
+                    "application/flac",
+                    "application/x-flac",
+                    "application/octet-stream",
+                    "*/*"
+                )
+            )
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showTrackDetailsDialog() {

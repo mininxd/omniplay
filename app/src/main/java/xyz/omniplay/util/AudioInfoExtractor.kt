@@ -124,8 +124,25 @@ object AudioInfoExtractor {
             } catch (ignored: Throwable) {}
         }
 
-        // 2. FLAC: Read native 42-byte STREAMINFO block for exact bit depth (16/24/32-bit) & sample rate
+        // 2. FLAC: Read native STREAMINFO block for exact bit depth (16/24/32-bit) & sample rate
         if (upperFormat == "FLAC" || uri.toString().endsWith(".flac", ignoreCase = true)) {
+            try {
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        FlacHeaderParser.parse(stream)?.let { flacHeader ->
+                            if (flacHeader.sampleRate > 0) {
+                                return AudioTrackInfo(
+                                    format = "FLAC",
+                                    bitDepth = flacHeader.bitDepth,
+                                    sampleRate = flacHeader.sampleRate,
+                                    channels = flacHeader.channels,
+                                    isHiRes = flacHeader.sampleRate > 48000 || flacHeader.bitDepth > 16
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (ignored: Throwable) {}
             try {
                 context.contentResolver.openInputStream(uri)?.let { raw ->
                     BufferedInputStream(raw).use { stream ->
