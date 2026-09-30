@@ -542,6 +542,7 @@ class PlaybackService : Service() {
                 p.setMediaItem(mediaItem)
                 p.prepare()
                 p.play()
+                xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(song, 0L)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -637,6 +638,9 @@ class PlaybackService : Service() {
                 startProgressTracker()
                 startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
+                currentSong?.let { s ->
+                    xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(s, getCurrentPosition().toLong())
+                }
             }
         }
     }
@@ -649,6 +653,7 @@ class PlaybackService : Service() {
                 updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, getCurrentPosition().toLong())
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
+                xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPause()
             }
         }
     }
@@ -789,6 +794,7 @@ class PlaybackService : Service() {
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
+            xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostSeek(positionMs.toLong())
         } catch (e: Exception) {
             e.printStackTrace()
         }

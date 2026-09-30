@@ -1023,6 +1023,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_mesh_mode -> {
+                    xyz.omniplay.mesh.AcousticMeshBottomSheet.newInstance()
+                        .show(supportFragmentManager, xyz.omniplay.mesh.AcousticMeshBottomSheet.TAG)
+                    true
+                }
                 R.id.action_show_album_art -> {
                     val newState = !item.isChecked
                     item.isChecked = newState
