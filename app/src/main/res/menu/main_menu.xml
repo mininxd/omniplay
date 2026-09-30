@@ -6,10 +6,6 @@
         android:title="@string/mesh_mode"
         android:visible="false" />
     <item
-        android:id="@+id/action_open_audio_file"
-        android:icon="@drawable/ic_music_note"
-        android:title="@string/open_audio_file" />
-    <item
         android:id="@+id/action_select_folder"
         android:icon="@drawable/ic_search"
         android:title="@string/select_folder" />

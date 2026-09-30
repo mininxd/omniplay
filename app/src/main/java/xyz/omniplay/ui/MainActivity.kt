@@ -34,7 +34,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xyz.omniplay.R
 import xyz.omniplay.data.MusicScanner
 import xyz.omniplay.databinding.ActivityMainBinding
@@ -62,12 +64,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var scannedSongs = listOf<Song>()
     private var songAdapter: SongAdapter? = null
 
+    private var pendingExternalUri: Uri? = null
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val binder = service as PlaybackService.LocalBinder
             playbackService = binder.getService()
             isBound = true
             playbackService?.addListener(this@MainActivity)
+
+            val pendingUri = pendingExternalUri
+            if (pendingUri != null) {
+                pendingExternalUri = null
+                playExternalAudioUri(pendingUri)
+            }
 
             if (scannedSongs.isNotEmpty()) {
                 if (playbackService?.currentSong != null) {
@@ -119,26 +129,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
-    private val audioFilePickerLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (ignored: Exception) {}
-
-            val playIntent = Intent(this, AudioPlayerActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                data = uri
-                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            }
-            startActivity(playIntent)
-        }
-    }
-
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -185,12 +175,32 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (it.itemCount > 0) it.getItemAt(0).uri else null
             }
             if (audioUri != null) {
-                val playerIntent = Intent(this, AudioPlayerActivity::class.java).apply {
-                    action = Intent.ACTION_VIEW
-                    data = audioUri
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        audioUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (ignored: Exception) {}
+
+                playExternalAudioUri(audioUri)
+            }
+        }
+    }
+
+    private fun playExternalAudioUri(uri: Uri) {
+        val s = playbackService
+        if (s == null || !isBound) {
+            pendingExternalUri = uri
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            val externalSong = musicScanner.extractSongFromUri(uri)
+            withContext(Dispatchers.Main) {
+                s.playExternalSong(externalSong)
+                updateAudioBadges(externalSong, s.currentAudioInfo)
+                if (::bottomSheetBehavior.isInitialized) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                 }
-                startActivity(playerIntent)
             }
         }
     }
@@ -1102,10 +1112,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     songAdapter?.setShowAlbumArt(newState)
                     true
                 }
-                R.id.action_open_audio_file -> {
-                    openAudioFilePicker()
-                    true
-                }
                 R.id.action_select_folder -> {
                     openFolderPicker()
                     true
@@ -1122,23 +1128,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
         popup.show()
-    }
-
-    private fun openAudioFilePicker() {
-        try {
-            audioFilePickerLauncher.launch(
-                arrayOf(
-                    "audio/*",
-                    "application/ogg",
-                    "application/flac",
-                    "application/x-flac",
-                    "application/octet-stream",
-                    "*/*"
-                )
-            )
-        } catch (e: Exception) {
-            Toast.makeText(this, "Failed to open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun showTrackDetailsDialog() {

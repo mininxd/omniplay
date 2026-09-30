@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -294,16 +295,39 @@ class MusicScanner(private val context: Context) {
         }
     }
 
-    private fun extractSongFromUri(
+    fun extractSongFromUri(
         uri: Uri,
-        displayName: String,
-        ext: String,
-        size: Long
+        displayName: String = "",
+        ext: String = "",
+        size: Long = 0L
     ): Song {
-        val fallbackTitle = if (displayName.contains('.')) {
-            displayName.substringBeforeLast('.')
+        var resolvedName = displayName
+        var resolvedSize = size
+        if (resolvedName.isEmpty()) {
+            try {
+                context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            resolvedName = cursor.getString(nameIndex) ?: ""
+                        }
+                        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                        if (sizeIndex != -1 && resolvedSize <= 0L) {
+                            resolvedSize = cursor.getLong(sizeIndex)
+                        }
+                    }
+                }
+            } catch (ignored: Throwable) {}
+        }
+        if (resolvedName.isEmpty()) {
+            resolvedName = uri.lastPathSegment?.substringAfterLast('/') ?: "audio_track"
+        }
+        val resolvedExt = if (ext.isNotEmpty()) ext else resolvedName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+
+        val fallbackTitle = if (resolvedName.contains('.')) {
+            resolvedName.substringBeforeLast('.')
         } else {
-            displayName.ifEmpty { "Track ${uri.hashCode()}" }
+            resolvedName.ifEmpty { "Track ${uri.hashCode()}" }
         }
 
         var title = fallbackTitle
@@ -367,7 +391,7 @@ class MusicScanner(private val context: Context) {
             } catch (ignored: Throwable) {}
         }
 
-        if (ext.equals("flac", true)) {
+        if (resolvedExt.equals("flac", true)) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     xyz.omniplay.util.FlacHeaderParser.parse(stream)?.let { flacHeader ->
@@ -380,7 +404,7 @@ class MusicScanner(private val context: Context) {
             } catch (ignored: Throwable) {}
         }
 
-        if (duration <= 0L && (ext.equals("dsf", true) || ext.equals("dff", true))) {
+        if (duration <= 0L && (resolvedExt.equals("dsf", true) || resolvedExt.equals("dff", true))) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     xyz.omniplay.dsd.DsdHeaderParser.parse(stream)?.let { dsdHeader ->
@@ -390,8 +414,8 @@ class MusicScanner(private val context: Context) {
             } catch (ignored: Throwable) {}
         }
 
-        val format = if (ext.isNotEmpty() && ext.length in 2..5) {
-            ext.uppercase(Locale.ROOT)
+        val format = if (resolvedExt.isNotEmpty() && resolvedExt.length in 2..5) {
+            resolvedExt.uppercase(Locale.ROOT)
         } else {
             "AUDIO"
         }
@@ -400,7 +424,7 @@ class MusicScanner(private val context: Context) {
         val resolvedFormat = audioInfo.format.ifEmpty { format }
 
         return Song(
-            id = (uri.toString() + displayName).hashCode().toLong(),
+            id = (uri.toString() + resolvedName).hashCode().toLong(),
             title = title,
             artist = artist,
             album = album,
@@ -408,8 +432,8 @@ class MusicScanner(private val context: Context) {
             contentUri = uri,
             albumArtUri = null,
             format = resolvedFormat,
-            filePath = displayName,
-            fileSize = size,
+            filePath = resolvedName,
+            fileSize = resolvedSize,
             audioQuality = audioInfo.formatQualityString(),
             isHiRes = audioInfo.isHiRes
         )
