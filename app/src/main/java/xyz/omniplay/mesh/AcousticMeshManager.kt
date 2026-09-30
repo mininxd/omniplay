@@ -301,7 +301,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
     fun broadcastHostPlay(song: Song, positionMs: Long) {
         if (currentRole != MeshRole.HOST) return
         streamServer.currentSongUri = song.contentUri
-        streamServer.currentMimeType = song.mimeType
+        val mime = context.contentResolver.getType(song.contentUri) ?: when (song.format.uppercase()) {
+            "FLAC" -> "audio/flac"
+            "WAV" -> "audio/wav"
+            "OGG", "OPUS" -> "audio/ogg"
+            "M4A", "AAC" -> "audio/mp4"
+            else -> "audio/mpeg"
+        }
+        streamServer.currentMimeType = mime
 
         val scheduledAt = System.currentTimeMillis() + 180L // Scheduled presentation timestamp
         val json = JSONObject().apply {
