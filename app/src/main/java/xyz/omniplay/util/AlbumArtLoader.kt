@@ -143,12 +143,13 @@ object AlbumArtLoader {
             }
 
             // 4. Validate decoded bitmap: reject corrupted or solid black/blank placeholders
-            if (decodedBitmap != null) {
-                if (isSolidOrBlankBitmap(decodedBitmap)) {
+            val finalBitmap = decodedBitmap
+            if (finalBitmap != null) {
+                if (isSolidOrBlankBitmap(finalBitmap)) {
                     return@withContext null
                 }
-                memoryCache.put(song.id, decodedBitmap)
-                return@withContext decodedBitmap
+                memoryCache.put(song.id, finalBitmap)
+                return@withContext finalBitmap
             }
 
             null
