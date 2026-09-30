@@ -329,7 +329,7 @@
                 android:paddingTop="3dp"
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
-                android:text="hi-res"
+                android:text="Hi-Res"
                 android:textColor="#F6C445"
                 android:textSize="11sp"
                 android:visibility="gone" />
