@@ -997,42 +997,32 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val inputChannels = "${info?.channels ?: 2}.0 Stereo"
 
         val pipelineProcessing = when {
-            format.startsWith("DSD") && isBitPerfect -> "Bit-Perfect DoP Direct Native Stream (No decimation, 1:1 DSD)"
             format.startsWith("DSD") -> "64-tap Blackman-Nuttall Windowed-Sinc FIR Filter -> Studio 32-bit Float PCM"
-            isHiRes && isBitPerfect -> "Direct 1:1 Bit-Exact Stream (Lossless Pass-Through)"
-            isHiRes -> "Native 32-bit Float High-Res Audio Engine (Lossless, Non-Truncating)"
             else -> "Native 32-bit Float Audio Engine"
         }
 
         val outputMode = if (isBitPerfect) {
-            "Bit-Perfect Direct HAL (Bypassing Android OS Mixer & Resampler)"
+            "Direct HAL / USB Hardware Pass-Through"
         } else {
             "Android AudioTrack (High-Res 32-bit Float Engine)"
         }
 
-        val bitPerfectStatus = if (isBitPerfect) {
-            "ACTIVE (1:1 Bit-Exact Master Audio)"
-        } else {
-            "Direct High-Res Float (32-bit PCM)"
-        }
-
         val details = """
-            ─── AUDIO INPUT (SOURCE) ───
-            Source Format: $format ${if (isHiRes) "(Hi-Res Audio)" else ""}
+            AUDIO INPUT
+            Source Format: $format
             Resolution: $inputResolution
             Bitrate: $inputBitrate
             Channels: $inputChannels
 
-            ─── PROCESSING PIPELINE ───
+            PROCESSING PIPELINE
             Audio Engine: 32-bit Floating Point High-Res PCM
             Signal Processing: $pipelineProcessing
-            Software Resampling: ${if (isBitPerfect) "Bypassed (Zero Resampling)" else "Direct Float"}
+            Software Resampling: ${if (isBitPerfect) "Bypassed (Bit-Exact)" else "Direct Float"}
             Hardware Acceleration: Enabled (Zero-Copy Buffer Queue)
 
-            ─── AUDIO OUTPUT (HARDWARE) ───
+            AUDIO OUTPUT
             Active Device: $outputDevice
             Output Mode: $outputMode
-            Bit-Perfect Status: $bitPerfectStatus
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)

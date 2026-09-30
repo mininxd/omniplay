@@ -251,26 +251,47 @@ class PlaybackService : Service() {
     }
 
     /**
-     * Silent Bit-Perfect activation for USB DACs on Android 14+ (API 34).
-     * Bypasses OS software resampling/mixing without displaying any UI or settings.
+     * Checks if a bit-perfect capable audio output (such as an external USB DAC)
+     * is connected and active.
      */
-    private fun setupBitPerfectAudio() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            applyBitPerfectIfCapable()
-
-            audioDeviceCallback = object : AudioDeviceCallback() {
-                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-                    applyBitPerfectIfCapable()
-                }
-
-                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-                    applyBitPerfectIfCapable()
-                }
+    fun checkBitPerfectCapability(): Boolean {
+        return try {
+            val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+            devices.any {
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
             }
-            try {
-                audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
-            } catch (ignored: Throwable) {}
+        } catch (e: Throwable) {
+            false
         }
+    }
+
+    private fun setupBitPerfectAudio() {
+        updateBitPerfectState()
+
+        audioDeviceCallback = object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                updateBitPerfectState()
+            }
+
+            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                updateBitPerfectState()
+            }
+        }
+        try {
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+        } catch (ignored: Throwable) {}
+    }
+
+    private fun updateBitPerfectState() {
+        val hasUsbDac = checkBitPerfectCapability()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && hasUsbDac) {
+            applyBitPerfectIfCapable()
+        }
+        isBitPerfectActive = hasUsbDac
+        currentAudioInfo = currentAudioInfo?.copy(isBitPerfect = isBitPerfectActive)
+        notifyAudioInfoChanged(currentAudioInfo)
     }
 
     private fun applyBitPerfectIfCapable() {
@@ -282,7 +303,6 @@ class PlaybackService : Service() {
                     .build()
 
                 val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
-                var bitPerfectApplied = false
                 for (device in devices) {
                     if (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
                         device.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
@@ -294,7 +314,6 @@ class PlaybackService : Service() {
                         }
                         if (bitPerfectAttr != null) {
                             audioManager.setPreferredMixerAttributes(mediaAttributes, device, bitPerfectAttr)
-                            bitPerfectApplied = true
                         } else {
                             try {
                                 val customBitPerfect = AudioMixerAttributes.Builder(
@@ -307,29 +326,21 @@ class PlaybackService : Service() {
                                     .setMixerBehavior(AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT)
                                     .build()
                                 audioManager.setPreferredMixerAttributes(mediaAttributes, device, customBitPerfect)
-                                bitPerfectApplied = true
                             } catch (ignored: Throwable) {}
                         }
                     }
-                }
-                isBitPerfectActive = bitPerfectApplied
-                currentAudioInfo?.let {
-                    currentAudioInfo = it.copy(isBitPerfect = isBitPerfectActive)
-                    notifyAudioInfoChanged(currentAudioInfo)
                 }
             } catch (ignored: Throwable) {}
         }
     }
 
     private fun teardownBitPerfectAudio() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            try {
-                audioDeviceCallback?.let {
-                    audioManager.unregisterAudioDeviceCallback(it)
-                }
-                audioDeviceCallback = null
-            } catch (ignored: Throwable) {}
-        }
+        try {
+            audioDeviceCallback?.let {
+                audioManager.unregisterAudioDeviceCallback(it)
+            }
+            audioDeviceCallback = null
+        } catch (ignored: Throwable) {}
     }
 
     private fun initMediaSession() {
