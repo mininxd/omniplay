@@ -10,10 +10,6 @@
         android:checked="true"
         android:title="@string/show_album_art_in_playlist" />
     <item
-        android:id="@+id/action_track_details"
-        android:icon="@drawable/ic_info"
-        android:title="@string/track_details" />
-    <item
         android:id="@+id/action_rescan"
         android:icon="@drawable/ic_refresh"
         android:title="@string/rescan_library" />

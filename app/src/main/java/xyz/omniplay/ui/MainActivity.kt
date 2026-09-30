@@ -739,6 +739,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             showOptionsMenu(view)
         }
 
+        // Material You Audio Info Badges -> tap to inspect track and audio details
+        val badgeClickListener = View.OnClickListener {
+            showTrackDetailsDialog()
+        }
+        binding.audioBadgeContainer.setOnClickListener(badgeClickListener)
+        binding.badgeFormat.setOnClickListener(badgeClickListener)
+        binding.badgeQuality.setOnClickListener(badgeClickListener)
+        binding.badgeHires.setOnClickListener(badgeClickListener)
+
         // Play / Pause Circular Card
         binding.btnPlayPauseCard.setOnClickListener {
             if (isBound) {
@@ -931,10 +940,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 R.id.action_select_folder -> {
                     openFolderPicker()
-                    true
-                }
-                R.id.action_track_details -> {
-                    showTrackDetailsDialog()
                     true
                 }
                 R.id.action_rescan -> {
