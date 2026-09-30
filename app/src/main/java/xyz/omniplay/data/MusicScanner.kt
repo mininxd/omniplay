@@ -20,7 +20,7 @@ class MusicScanner(private val context: Context) {
 
     private val supportedExtensions = setOf(
         "mp3", "wav", "flac", "aac", "m4a", "ogg", "opus", "amr", "mid", "midi", "wma",
-        "m4b", "aiff", "aif", "ape", "webm", "oga", "mp2"
+        "m4b", "aiff", "aif", "ape", "webm", "oga", "mp2", "dsf", "dff"
     )
 
     /**
@@ -321,6 +321,16 @@ class MusicScanner(private val context: Context) {
         } finally {
             try {
                 retriever.release()
+            } catch (ignored: Throwable) {}
+        }
+
+        if (duration <= 0L && (ext.equals("dsf", true) || ext.equals("dff", true))) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    xyz.omniplay.dsd.DsdHeaderParser.parse(stream)?.let { dsdHeader ->
+                        if (dsdHeader.durationMs > 0L) duration = dsdHeader.durationMs
+                    }
+                }
             } catch (ignored: Throwable) {}
         }
 

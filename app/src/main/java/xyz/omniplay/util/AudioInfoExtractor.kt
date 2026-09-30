@@ -19,6 +19,17 @@ data class AudioTrackInfo(
 ) : Serializable {
 
     fun formatQualityString(): String {
+        if (bitDepth == 1 || format.startsWith("DSD")) {
+            val mhz = when {
+                sampleRate >= 11289600 -> "11.28 MHz"
+                sampleRate >= 5644800 -> "5.64 MHz"
+                sampleRate >= 2822400 -> "2.82 MHz"
+                sampleRate > 1000000 -> String.format(Locale.US, "%.2f MHz", sampleRate / 1000000.0)
+                else -> "2.82 MHz"
+            }
+            return "1-bit • $mhz"
+        }
+
         val srText = when {
             sampleRate <= 0 -> ""
             sampleRate % 1000 == 0 -> "${sampleRate / 1000}khz"
@@ -41,13 +52,32 @@ object AudioInfoExtractor {
 
     /**
      * Extracts audio resolution, bit depth, sample rate, and format from URI.
-     * Uses direct stream header inspection for FLAC (STREAMINFO) and WAV (fmt)
-     * for instant, 100% accurate bit depth and sample rate detection.
+     * Uses direct stream header inspection for FLAC (STREAMINFO), WAV (fmt),
+     * and DSD (DSF/DFF) for instant, 100% accurate bit depth and sample rate detection.
      */
     fun extractFromUri(context: Context, uri: Uri, fallbackFormat: String): AudioTrackInfo {
         val upperFormat = fallbackFormat.uppercase(Locale.ROOT)
 
-        // 1. FLAC: Read native 42-byte STREAMINFO block for exact bit depth (16/24/32-bit) & sample rate
+        // 1. DSD (DSF / DFF): Read DSD stream header for exact sample rate (2.8MHz/5.6MHz) and 1-bit PDM
+        if (upperFormat in listOf("DSF", "DFF", "DSD", "DSD64", "DSD128", "DSD256", "DSD512") ||
+            uri.toString().endsWith(".dsf", ignoreCase = true) ||
+            uri.toString().endsWith(".dff", ignoreCase = true)) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    xyz.omniplay.dsd.DsdHeaderParser.parse(stream)?.let { dsdHeader ->
+                        return AudioTrackInfo(
+                            format = dsdHeader.formatName,
+                            bitDepth = 1,
+                            sampleRate = dsdHeader.sampleRate,
+                            bitrate = dsdHeader.bitrateKbps * 1000,
+                            isHiRes = true
+                        )
+                    }
+                }
+            } catch (ignored: Throwable) {}
+        }
+
+        // 2. FLAC: Read native 42-byte STREAMINFO block for exact bit depth (16/24/32-bit) & sample rate
         if (upperFormat == "FLAC" || uri.toString().endsWith(".flac", ignoreCase = true)) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -56,7 +86,7 @@ object AudioInfoExtractor {
             } catch (ignored: Throwable) {}
         }
 
-        // 2. WAV: Read RIFF fmt chunk for bit depth (16/24/32-bit) & sample rate
+        // 3. WAV: Read RIFF fmt chunk for bit depth (16/24/32-bit) & sample rate
         if (upperFormat == "WAV" || uri.toString().endsWith(".wav", ignoreCase = true)) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -65,7 +95,7 @@ object AudioInfoExtractor {
             } catch (ignored: Throwable) {}
         }
 
-        // 3. Fallback: MediaMetadataRetriever
+        // 4. Fallback: MediaMetadataRetriever
         return extractFromRetriever(context, uri, fallbackFormat)
     }
 
@@ -216,6 +246,17 @@ object AudioInfoExtractor {
      * Converts ExoPlayer's resolved Format to an AudioTrackInfo.
      */
     fun fromExoFormat(format: Format, fallbackFormat: String): AudioTrackInfo {
+        if (format.id == "dsd" || fallbackFormat.startsWith("DSD") || fallbackFormat == "DSF" || fallbackFormat == "DFF") {
+            val dsdRate = if (format.sampleRate > 0) format.sampleRate * 32 else 2822400
+            val dsdName = if (fallbackFormat.startsWith("DSD")) fallbackFormat else xyz.omniplay.dsd.DsdHeader.getFormatName(dsdRate)
+            return AudioTrackInfo(
+                format = dsdName,
+                bitDepth = 1,
+                sampleRate = dsdRate,
+                isHiRes = true
+            )
+        }
+
         val sampleRate = if (format.sampleRate > 0) format.sampleRate else 0
         val bitDepth = when (format.pcmEncoding) {
             C.ENCODING_PCM_16BIT -> 16

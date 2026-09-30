@@ -41,6 +41,10 @@ import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.ui.MainActivity
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ExtractorsFactory
+import xyz.omniplay.dsd.DsdExtractor
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioInfoExtractor
 import xyz.omniplay.util.AudioTrackInfo
@@ -128,7 +132,16 @@ class PlaybackService : Service() {
             .setEnableAudioFloatOutput(true) // Native 32-bit float Hi-Res output
             .setEnableAudioTrackPlaybackParams(true)
 
+        val extractorsFactory = ExtractorsFactory {
+            arrayOf(
+                DsdExtractor(),
+                *DefaultExtractorsFactory().createExtractors()
+            )
+        }
+        val mediaSourceFactory = DefaultMediaSourceFactory(applicationContext, extractorsFactory)
+
         val exo = ExoPlayer.Builder(applicationContext, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)

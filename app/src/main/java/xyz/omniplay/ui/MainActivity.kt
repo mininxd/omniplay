@@ -968,13 +968,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             ?.ifEmpty { song.audioQuality } ?: song.audioQuality
         val hiResText = if (playbackService?.currentAudioInfo?.isHiRes == true || song.isHiRes) " (Hi-Res)" else ""
 
+        val formatDisplay = if (song.format.startsWith("DSD")) {
+            "${song.format} (Direct Stream Digital 1-bit PDM)"
+        } else {
+            song.format
+        }
+
+        val dsdPipeline = if (song.format.startsWith("DSD")) {
+            "\nSignal: Bit-Perfect USB DAC (DoP) / Studio 32-bit Float Decimation"
+        } else ""
+
         val details = """
             Title: ${song.title}
             Artist: ${song.artist}
             Album: ${song.album}
             Duration: ${Song.formatTime(song.duration)}
-            Format: ${song.format}
-            Quality: ${if (quality.isNotEmpty()) "$quality$hiResText" else "Standard"}
+            Format: $formatDisplay
+            Quality: ${if (quality.isNotEmpty()) "$quality$hiResText" else "Standard"}$dsdPipeline
             File Size: $sizeMb
             Path: ${song.filePath.ifEmpty { "Audio File" }}
         """.trimIndent()
@@ -991,7 +1001,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             Omniplay v0.1
             Open Source Material You Music Player
             
-            Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, and more.
+            Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
             Architectures: armv7, armv8, x86, x86_64, Universal
             
             Built with pure Android & Material You Design.
