@@ -176,8 +176,10 @@ class MusicScanner(private val context: Context) {
     private fun scanFolderDocumentsContract(
         treeUri: Uri,
         parentDocId: String,
-        songsList: MutableList<Song>
+        songsList: MutableList<Song>,
+        visitedDocIds: MutableSet<String> = mutableSetOf()
     ) {
+        if (!visitedDocIds.add(parentDocId)) return
         val childrenUri = try {
             DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
         } catch (e: Exception) {
@@ -230,7 +232,7 @@ class MusicScanner(private val context: Context) {
         }
 
         for (subDirDocId in subDirs) {
-            scanFolderDocumentsContract(treeUri, subDirDocId, songsList)
+            scanFolderDocumentsContract(treeUri, subDirDocId, songsList, visitedDocIds)
         }
     }
 
@@ -403,28 +405,28 @@ class MusicScanner(private val context: Context) {
     }
 
     private fun parseSongsFromCursor(cursor: Cursor, songsList: MutableList<Song>) {
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-        val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-        val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-        val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-        val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-        val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-        val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-        val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-        val mimeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
+        val idColumn = cursor.getColumnIndex(MediaStore.Audio.Media._ID)
+        val titleColumn = cursor.getColumnIndex(MediaStore.Audio.Media.TITLE)
+        val artistColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST)
+        val albumColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM)
+        val durationColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DURATION)
+        val dataColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+        val sizeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
+        val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
+        val mimeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.MIME_TYPE)
 
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
         while (cursor.moveToNext()) {
-            val id = cursor.getLong(idColumn)
-            val rawTitle = cursor.getString(titleColumn)
-            val rawArtist = cursor.getString(artistColumn)
-            val rawAlbum = cursor.getString(albumColumn)
-            val duration = cursor.getLong(durationColumn)
-            val filePath = cursor.getString(dataColumn) ?: ""
-            val fileSize = cursor.getLong(sizeColumn)
-            val albumId = cursor.getLong(albumIdColumn)
-            val mimeType = cursor.getString(mimeColumn) ?: ""
+            val id = if (idColumn >= 0) cursor.getLong(idColumn) else cursor.position.toLong()
+            val rawTitle = if (titleColumn >= 0) cursor.getString(titleColumn) else null
+            val rawArtist = if (artistColumn >= 0) cursor.getString(artistColumn) else null
+            val rawAlbum = if (albumColumn >= 0) cursor.getString(albumColumn) else null
+            val duration = if (durationColumn >= 0) cursor.getLong(durationColumn) else 0L
+            val filePath = if (dataColumn >= 0) cursor.getString(dataColumn) ?: "" else ""
+            val fileSize = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
+            val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else -1L
+            val mimeType = if (mimeColumn >= 0) cursor.getString(mimeColumn) ?: "" else ""
 
             val contentUri = ContentUris.withAppendedId(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,

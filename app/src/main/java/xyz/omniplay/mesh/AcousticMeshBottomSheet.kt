@@ -154,6 +154,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         container.removeAllViews()
 
         if (rooms.isEmpty()) {
+            (binding.joinEmptyRoomsText.parent as? ViewGroup)?.removeView(binding.joinEmptyRoomsText)
             container.addView(binding.joinEmptyRoomsText)
             binding.joinEmptyRoomsText.visibility = View.VISIBLE
             return
@@ -178,6 +179,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         container.removeAllViews()
 
         if (peers.isEmpty()) {
+            (binding.hostEmptySpeakersText.parent as? ViewGroup)?.removeView(binding.hostEmptySpeakersText)
             container.addView(binding.hostEmptySpeakersText)
             binding.hostEmptySpeakersText.visibility = View.VISIBLE
             return

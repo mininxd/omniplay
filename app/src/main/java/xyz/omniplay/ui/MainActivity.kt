@@ -954,24 +954,33 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun loadMusicFromFolder(treeUri: Uri, isUserInitiated: Boolean = false, isRescan: Boolean = false) {
         lifecycleScope.launch {
-            if (isUserInitiated) {
-                Toast.makeText(
-                    this@MainActivity,
-                    if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-
-            val songs = musicScanner.scanFolder(treeUri)
-            updateSongList(songs)
-
-            if (isUserInitiated) {
-                val message = if (songs.isNotEmpty()) {
-                    "Scan complete: ${songs.size} songs found"
-                } else {
-                    "No songs found in selected folder"
+            try {
+                if (isUserInitiated) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-                Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+
+                val songs = try {
+                    musicScanner.scanFolder(treeUri)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                updateSongList(songs)
+
+                if (isUserInitiated) {
+                    val message = if (songs.isNotEmpty()) {
+                        "Scan complete: ${songs.size} songs found"
+                    } else {
+                        "No songs found in selected folder"
+                    }
+                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                updateSongList(emptyList())
+                Toast.makeText(this@MainActivity, "Error scanning folder: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1154,7 +1163,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun showAboutDialog() {
         val message = """
-            Omniplay v0.1
+            Omniplay v0.2
             Open Source Material You Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.

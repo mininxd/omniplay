@@ -171,10 +171,14 @@ class PlaybackService : Service() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
+                if (isPlaying && currentSong != null) {
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, exo.currentPosition.coerceAtLeast(0L))
                     startProgressTracker()
-                    startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                    try {
+                        startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, exo.currentPosition.coerceAtLeast(0L))
@@ -452,11 +456,16 @@ class PlaybackService : Service() {
             } catch (e: Exception) {}
             stopProgressTracker()
             updatePlaybackState(PlaybackStateCompat.STATE_NONE)
+            mediaSession?.setMetadata(null)
             updateNotification(isPlaying = false)
             listeners.forEach {
-                it.onTrackChanged(null)
-                it.onQueueChanged(emptyList())
-                it.onPlaybackStateChanged(false)
+                try {
+                    it.onTrackChanged(null)
+                    it.onQueueChanged(emptyList())
+                    it.onPlaybackStateChanged(false)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             return
         }
@@ -636,7 +645,11 @@ class PlaybackService : Service() {
                 it.play()
                 updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, getCurrentPosition().toLong())
                 startProgressTracker()
-                startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                try {
+                    startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
                 currentSong?.let { s ->
                     xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(s, getCurrentPosition().toLong())
@@ -911,7 +924,11 @@ class PlaybackService : Service() {
     }
 
     private fun buildNotification(isPlaying: Boolean): Notification {
-        val song = currentSong ?: return NotificationCompat.Builder(this, CHANNEL_ID).build()
+        val song = currentSong ?: return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentTitle("Omniplay")
+            .setContentText("No track playing")
+            .build()
 
         val mainIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -957,7 +974,26 @@ class PlaybackService : Service() {
 
     private fun updateNotification(isPlaying: Boolean) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(isPlaying))
+        if (currentSong == null) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                manager.cancel(NOTIFICATION_ID)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return
+        }
+
+        try {
+            manager.notify(NOTIFICATION_ID, buildNotification(isPlaying))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun createNotificationChannel() {
