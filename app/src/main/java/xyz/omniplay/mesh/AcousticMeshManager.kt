@@ -13,6 +13,7 @@ import android.os.PowerManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -42,7 +43,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class AcousticMeshManager private constructor(private val context: Context) {
 
     companion object {
-        const val SERVICE_TYPE = "_omniplay-mesh._tcp."
+        const val SERVICE_TYPE = "_omniplay-mesh._tcp"
         const val CONTROL_PORT = 8999
         const val STREAM_PORT = 8998
         const val TIME_SYNC_PORT = 8997
@@ -68,7 +69,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
     }
 
     private val listeners = CopyOnWriteArrayList<MeshListener>()
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
@@ -128,7 +129,11 @@ class AcousticMeshManager private constructor(private val context: Context) {
     val discoveredRooms = CopyOnWriteArrayList<MeshRoom>()
 
     private var hostControlServerJob: Job? = null
+    private var hostControlServerSocket: ServerSocket? = null
     private var hostTimeServerJob: Job? = null
+    private var hostTimeSocket: DatagramSocket? = null
+    private val pendingResolves = ArrayDeque<NsdServiceInfo>()
+    private var isResolving = false
     private var clientSocket: Socket? = null
     private var clientJob: Job? = null
     private var timeSyncJob: Job? = null
@@ -238,11 +243,13 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
         // Sync currently playing track if any
         hostSongProvider?.invoke()?.let { song ->
+            streamServer.currentSong = song
             streamServer.currentSongUri = song.contentUri
-            val mime = context.contentResolver.getType(song.contentUri) ?: when (song.format.uppercase()) {
+            val mime = when (song.format.uppercase()) {
                 "FLAC" -> "audio/flac"
                 "WAV" -> "audio/wav"
-                "OGG", "OPUS" -> "audio/ogg"
+                "OGG" -> "audio/ogg"
+                "OPUS" -> "audio/opus"
                 "M4A", "AAC" -> "audio/mp4"
                 else -> "audio/mpeg"
             }
@@ -283,10 +290,15 @@ class AcousticMeshManager private constructor(private val context: Context) {
     }
 
     private fun startHostControlServer() {
+        hostControlServerJob?.cancel()
+        try { hostControlServerSocket?.close() } catch (ignored: Exception) {}
         hostControlServerJob = scope.launch {
-            var server: ServerSocket? = null
             try {
-                server = ServerSocket(CONTROL_PORT)
+                val server = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(CONTROL_PORT))
+                }
+                hostControlServerSocket = server
                 while (isActive && !server.isClosed) {
                     val client = server.accept()
                     client.tcpNoDelay = true
@@ -295,7 +307,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
             } catch (ignored: Exception) {
             } finally {
-                try { server?.close() } catch (ignored: Exception) {}
+                try { hostControlServerSocket?.close() } catch (ignored: Exception) {}
+                hostControlServerSocket = null
             }
         }
     }
@@ -351,11 +364,21 @@ class AcousticMeshManager private constructor(private val context: Context) {
                         val isPlaying = hostIsPlayingProvider?.invoke() == true
                         val positionMs = hostPlaybackPositionProvider?.invoke() ?: 0L
                         if (playingSong != null && isPlaying) {
+                            streamServer.currentSong = playingSong
                             streamServer.currentSongUri = playingSong.contentUri
+                            val ext = when (playingSong.format.uppercase()) {
+                                "FLAC" -> "flac"
+                                "WAV" -> "wav"
+                                "OGG" -> "ogg"
+                                "OPUS" -> "opus"
+                                "M4A", "AAC" -> "m4a"
+                                else -> "mp3"
+                            }
                             val scheduledAt = System.currentTimeMillis() + 220L
                             val playCmd = JSONObject().apply {
                                 put("action", "PLAY")
                                 put("hostIp", hostIp)
+                                put("formatExt", ext)
                                 put("songTitle", playingSong.title)
                                 put("songArtist", playingSong.artist)
                                 put("songDuration", playingSong.duration)
@@ -390,10 +413,15 @@ class AcousticMeshManager private constructor(private val context: Context) {
     }
 
     private fun startHostTimeServer() {
+        hostTimeServerJob?.cancel()
+        try { hostTimeSocket?.close() } catch (ignored: Exception) {}
         hostTimeServerJob = scope.launch {
-            var socket: DatagramSocket? = null
             try {
-                socket = DatagramSocket(TIME_SYNC_PORT)
+                val socket = DatagramSocket(null).apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(TIME_SYNC_PORT))
+                }
+                hostTimeSocket = socket
                 val buffer = ByteArray(32)
                 val packet = DatagramPacket(buffer, buffer.size)
 
@@ -414,28 +442,40 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
             } catch (ignored: Exception) {
             } finally {
-                socket?.close()
+                try { hostTimeSocket?.close() } catch (ignored: Exception) {}
+                hostTimeSocket = null
             }
         }
     }
 
     fun broadcastHostPlay(song: Song, positionMs: Long) {
         if (currentRole != MeshRole.HOST) return
+        streamServer.currentSong = song
         streamServer.currentSongUri = song.contentUri
-        val mime = context.contentResolver.getType(song.contentUri) ?: when (song.format.uppercase()) {
+        val mime = when (song.format.uppercase()) {
             "FLAC" -> "audio/flac"
             "WAV" -> "audio/wav"
-            "OGG", "OPUS" -> "audio/ogg"
+            "OGG" -> "audio/ogg"
+            "OPUS" -> "audio/opus"
             "M4A", "AAC" -> "audio/mp4"
             else -> "audio/mpeg"
         }
         streamServer.currentMimeType = mime
 
         val hostIp = getLocalIPv4Address()
+        val ext = when (song.format.uppercase()) {
+            "FLAC" -> "flac"
+            "WAV" -> "wav"
+            "OGG" -> "ogg"
+            "OPUS" -> "opus"
+            "M4A", "AAC" -> "m4a"
+            else -> "mp3"
+        }
         val scheduledAt = System.currentTimeMillis() + 180L // Scheduled presentation timestamp
         val json = JSONObject().apply {
             put("action", "PLAY")
             hostIp?.let { put("hostIp", it) }
+            put("formatExt", ext)
             put("songTitle", song.title)
             put("songArtist", song.artist)
             put("songDuration", song.duration)
@@ -511,36 +551,115 @@ class AcousticMeshManager private constructor(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        probeGatewayHost()
     }
 
+    private fun probeGatewayHost() {
+        scope.launch {
+            try {
+                val dhcp = wifiManager.dhcpInfo
+                val gatewayInt = dhcp?.gateway ?: 0
+                val candidates = mutableListOf<String>()
+                if (gatewayInt != 0) {
+                    val gwIp = String.format(
+                        java.util.Locale.US,
+                        "%d.%d.%d.%d",
+                        gatewayInt and 0xff,
+                        gatewayInt shr 8 and 0xff,
+                        gatewayInt shr 16 and 0xff,
+                        gatewayInt shr 24 and 0xff
+                    )
+                    if (gwIp != "0.0.0.0") candidates.add(gwIp)
+                }
+                candidates.add("192.168.43.1")
+                candidates.add("192.168.49.1")
+
+                for (ip in candidates.distinct()) {
+                    if (discoveredRooms.any { it.hostAddress == ip }) continue
+                    try {
+                        Socket().use { s ->
+                            s.connect(InetSocketAddress(ip, CONTROL_PORT), 600)
+                            val room = MeshRoom(
+                                roomName = "Host ($ip)",
+                                hostName = "Host",
+                                hostAddress = ip,
+                                port = CONTROL_PORT,
+                                streamPort = STREAM_PORT
+                            )
+                            if (!discoveredRooms.any { it.hostAddress == ip }) {
+                                discoveredRooms.add(room)
+                                notifyRoomsDiscovered()
+                            }
+                        }
+                    } catch (ignored: Exception) {}
+                }
+            } catch (ignored: Exception) {}
+        }
+    }
+
+    @Synchronized
     private fun resolveService(serviceInfo: NsdServiceInfo) {
+        pendingResolves.add(serviceInfo)
+        processNextResolve()
+    }
+
+    @Synchronized
+    private fun processNextResolve() {
+        if (isResolving || pendingResolves.isEmpty()) return
+        val next = pendingResolves.removeFirst()
+        isResolving = true
+        resolveServiceInternal(next)
+    }
+
+    private fun resolveServiceInternal(serviceInfo: NsdServiceInfo) {
         try {
             nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
-                    val addrs = try {
-                        val hostName = resolved.host?.hostName ?: resolved.host?.hostAddress
-                        if (hostName != null) java.net.InetAddress.getAllByName(hostName) else arrayOf(resolved.host)
-                    } catch (e: Exception) {
-                        arrayOf(resolved.host)
-                    }
-                    val ipv4 = addrs?.firstOrNull { it is java.net.Inet4Address }?.hostAddress
-                    val rawHost = ipv4 ?: resolved.host?.hostAddress ?: return
-                    val host = if (rawHost.contains('%')) rawHost.substringBefore('%') else rawHost
-                    val room = MeshRoom(
-                        roomName = resolved.serviceName,
-                        hostName = resolved.serviceName,
-                        hostAddress = host,
-                        port = resolved.port,
-                        streamPort = STREAM_PORT
-                    )
-                    if (!discoveredRooms.any { it.roomName == room.roomName }) {
-                        discoveredRooms.add(room)
-                        notifyRoomsDiscovered()
+                    try {
+                        val addrs = try {
+                            val hostName = resolved.host?.hostName ?: resolved.host?.hostAddress
+                            if (hostName != null) java.net.InetAddress.getAllByName(hostName) else arrayOf(resolved.host)
+                        } catch (e: Exception) {
+                            arrayOf(resolved.host)
+                        }
+                        val ipv4 = addrs?.firstOrNull { it is java.net.Inet4Address }?.hostAddress
+                        val rawHost = ipv4 ?: resolved.host?.hostAddress
+                        if (rawHost != null) {
+                            val host = if (rawHost.contains('%')) rawHost.substringBefore('%') else rawHost
+                            val room = MeshRoom(
+                                roomName = resolved.serviceName,
+                                hostName = resolved.serviceName,
+                                hostAddress = host,
+                                port = resolved.port,
+                                streamPort = STREAM_PORT
+                            )
+                            if (!discoveredRooms.any { it.roomName == room.roomName }) {
+                                discoveredRooms.add(room)
+                                notifyRoomsDiscovered()
+                            }
+                        }
+                    } finally {
+                        synchronized(this@AcousticMeshManager) {
+                            isResolving = false
+                            processNextResolve()
+                        }
                     }
                 }
-                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
+
+                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    synchronized(this@AcousticMeshManager) {
+                        isResolving = false
+                        processNextResolve()
+                    }
+                }
             })
-        } catch (ignored: Exception) {}
+        } catch (e: Exception) {
+            synchronized(this) {
+                isResolving = false
+                processNextResolve()
+            }
+        }
     }
 
     fun stopScanningRooms() {
@@ -597,7 +716,10 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
             } catch (e: Exception) {
                 notifyError("Connection to room failed: ${e.localizedMessage}")
-                leaveRoom()
+            } finally {
+                if (currentRole == MeshRole.SATELLITE) {
+                    leaveRoom()
+                }
             }
         }
     }
@@ -665,6 +787,10 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 if (ip.isNotEmpty()) {
                     currentHostIp = ip
                 }
+                val rName = json.optString("roomName")
+                if (rName.isNotEmpty()) {
+                    currentRoomName = rName
+                }
             }
             "PLAY" -> {
                 val ipFromCmd = json.optString("hostIp")
@@ -672,9 +798,10 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 val port = json.optInt("streamPort", streamPort)
                 val positionMs = json.optLong("positionMs", 0L)
                 val scheduledAt = json.optLong("scheduledAt", System.currentTimeMillis())
+                val ext = json.optString("formatExt", "mp3")
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
-                val streamUrl = "http://$formattedHost:$port/stream"
+                val streamUrl = "http://$formattedHost:$port/stream.$ext"
 
                 val songTitle = json.optString("songTitle")
                 val songArtist = json.optString("songArtist")
@@ -722,6 +849,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
                             .setUsage(AudioAttributes.USAGE_MEDIA)
                             .build()
                     )
+                    setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
                 }
                 satellitePlayer = player
             } else {
@@ -735,15 +863,17 @@ class AcousticMeshManager private constructor(private val context: Context) {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
+                player.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
             }
 
-            player.setOnErrorListener { _, what, extra ->
+            player.setOnErrorListener { mp, what, extra ->
                 notifyError("Satellite stream error ($what, $extra)")
+                try { mp.reset() } catch (ignored: Exception) {}
                 true
             }
 
             player.setOnPreparedListener { mp ->
-                applyChannelToPlayer(mp)
+                mp.setVolume(volumeTrim, volumeTrim)
                 schedulePlaybackStart(mp, positionMs, scheduledAt)
             }
 
@@ -759,11 +889,6 @@ class AcousticMeshManager private constructor(private val context: Context) {
         val targetLocalTime = scheduledAt - clockOffsetMs
         val now = System.currentTimeMillis()
         val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
-        val effectivePosition = if (targetLocalTime < now && positionMs >= 0L) {
-            positionMs + (now - targetLocalTime)
-        } else {
-            positionMs
-        }
 
         scheduledPlayJob?.cancel()
         scheduledPlayJob = scope.launch(Dispatchers.Main) {
@@ -771,8 +896,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 delay(delayMs)
             }
             try {
-                if (effectivePosition > 500L) {
-                    player.seekTo(effectivePosition.toInt())
+                if (positionMs > 2000L) {
+                    player.seekTo(positionMs.toInt())
                 }
                 player.start()
             } catch (e: Exception) {
@@ -786,41 +911,21 @@ class AcousticMeshManager private constructor(private val context: Context) {
         val targetLocalTime = scheduledAt - clockOffsetMs
         val now = System.currentTimeMillis()
         val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
-        val effectivePosition = if (targetLocalTime < now && positionMs >= 0L) {
-            positionMs + (now - targetLocalTime)
-        } else {
-            positionMs
-        }
 
         scope.launch(Dispatchers.Main) {
             if (delayMs > 0L) {
                 delay(delayMs)
             }
             try {
-                player.seekTo(effectivePosition.toInt())
+                player.seekTo(positionMs.toInt())
             } catch (ignored: Exception) {}
         }
     }
 
     fun setChannel(channel: AudioChannel) {
-        currentChannel = channel
+        currentChannel = AudioChannel.STEREO
         satellitePlayer?.let { applyChannelToPlayer(it) }
-        notifyChannelChanged(channel)
-
-        // Inform host of channel selection
-        if (currentRole == MeshRole.SATELLITE) {
-            scope.launch {
-                try {
-                    val json = JSONObject().apply {
-                        put("action", "SET_CHANNEL")
-                        put("channel", channel.name)
-                    }
-                    clientSocket?.getOutputStream()?.let {
-                        PrintWriter(it, true).println(json.toString())
-                    }
-                } catch (ignored: Exception) {}
-            }
-        }
+        notifyChannelChanged(AudioChannel.STEREO)
     }
 
     fun setVolumeBalance(trim: Float) {
@@ -830,12 +935,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private fun applyChannelToPlayer(player: MediaPlayer) {
         try {
-            when (currentChannel) {
-                AudioChannel.STEREO -> player.setVolume(volumeTrim, volumeTrim)
-                AudioChannel.LEFT_ONLY -> player.setVolume(volumeTrim, 0f)
-                AudioChannel.RIGHT_ONLY -> player.setVolume(0f, volumeTrim)
-                AudioChannel.CENTER -> player.setVolume(volumeTrim * 0.85f, volumeTrim * 0.85f)
-            }
+            player.setVolume(volumeTrim, volumeTrim)
         } catch (ignored: Exception) {}
     }
 
@@ -859,8 +959,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
         hostControlServerJob?.cancel()
         hostControlServerJob = null
 
+        try { hostControlServerSocket?.close() } catch (ignored: Exception) {}
+        hostControlServerSocket = null
+
         hostTimeServerJob?.cancel()
         hostTimeServerJob = null
+
+        try { hostTimeSocket?.close() } catch (ignored: Exception) {}
+        hostTimeSocket = null
 
         timeSyncJob?.cancel()
         timeSyncJob = null

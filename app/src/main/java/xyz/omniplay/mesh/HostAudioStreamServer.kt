@@ -8,9 +8,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import xyz.omniplay.model.Song
+import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.RandomAccessFile
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 
@@ -27,16 +31,22 @@ class HostAudioStreamServer(
     private val scope = CoroutineScope(Dispatchers.IO)
 
     @Volatile
+    var currentSong: Song? = null
+
+    @Volatile
     var currentSongUri: Uri? = null
 
     @Volatile
     var currentMimeType: String = "audio/mpeg"
 
     fun start() {
-        if (serverSocket != null) return
+        stop()
         serverJob = scope.launch {
             try {
-                val server = ServerSocket(port)
+                val server = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(port))
+                }
                 serverSocket = server
                 while (isActive && !server.isClosed) {
                     try {
@@ -70,21 +80,33 @@ class HostAudioStreamServer(
                     line = input.readLine()
                 }
 
-                val uri = currentSongUri
-                if (uri == null) {
+                val song = currentSong
+                val uri = currentSongUri ?: song?.contentUri
+                if (uri == null && song == null) {
                     send404(output)
                     return
                 }
 
-                serveAudioStream(uri, output, rangeHeader, isHeadRequest)
+                serveAudioStream(song, uri, output, rangeHeader, isHeadRequest)
             }
         } catch (ignored: Exception) {
             // Client disconnected or aborted
         }
     }
 
-    private fun serveAudioStream(uri: Uri, output: OutputStream, rangeHeader: String?, isHeadRequest: Boolean) {
-        val totalBytes = getFileSize(uri)
+    private fun serveAudioStream(song: Song?, uri: Uri?, output: OutputStream, rangeHeader: String?, isHeadRequest: Boolean) {
+        val file = song?.filePath?.let { if (it.isNotEmpty()) File(it) else null }
+        val canReadFile = file != null && file.exists() && file.canRead() && file.length() > 0L
+
+        val totalBytes: Long = if (canReadFile) {
+            file!!.length()
+        } else if (song != null && song.fileSize > 0L) {
+            song.fileSize
+        } else if (uri != null) {
+            getFileSize(uri)
+        } else {
+            -1L
+        }
 
         var startByte = 0L
         var endByte = if (totalBytes > 0L) totalBytes - 1L else -1L
@@ -108,10 +130,19 @@ class HostAudioStreamServer(
 
         val contentLength = if (endByte >= startByte) (endByte - startByte + 1L) else -1L
 
+        val effectiveMime = when (song?.format?.uppercase()) {
+            "FLAC" -> "audio/flac"
+            "WAV" -> "audio/wav"
+            "OGG" -> "audio/ogg"
+            "OPUS" -> "audio/opus"
+            "M4A", "AAC" -> "audio/mp4"
+            else -> currentMimeType
+        }
+
         val statusLine = if (isRange) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
         val headers = StringBuilder().apply {
             append(statusLine)
-            append("Content-Type: $currentMimeType\r\n")
+            append("Content-Type: $effectiveMime\r\n")
             append("Accept-Ranges: bytes\r\n")
             if (contentLength > 0L) {
                 append("Content-Length: $contentLength\r\n")
@@ -128,27 +159,55 @@ class HostAudioStreamServer(
 
         if (isHeadRequest) return
 
-        // Prefer direct file descriptor seek
-        val pfd = try {
-            context.contentResolver.openFileDescriptor(uri, "r")
-        } catch (e: Exception) {
-            null
+        // 1. Try direct RandomAccessFile if direct file is accessible
+        if (canReadFile) {
+            try {
+                RandomAccessFile(file, "r").use { raf ->
+                    if (startByte > 0L) {
+                        raf.seek(startByte)
+                    }
+                    val buffer = ByteArray(65536)
+                    var remaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
+                    while (remaining > 0L) {
+                        val toRead = Math.min(buffer.size.toLong(), remaining).toInt()
+                        val read = raf.read(buffer, 0, toRead)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        remaining -= read
+                    }
+                    output.flush()
+                }
+                return
+            } catch (ignored: Exception) {}
         }
 
-        if (pfd != null) {
-            pfd.use { fd ->
-                FileInputStream(fd.fileDescriptor).use { fis ->
-                    if (startByte > 0L) {
-                        try {
-                            fis.channel.position(startByte)
-                        } catch (e: Exception) {
-                            skipBytes(fis, startByte)
+        // 2. Try ParcelFileDescriptor via ContentResolver
+        if (uri != null) {
+            val pfd = try {
+                context.contentResolver.openFileDescriptor(uri, "r")
+            } catch (e: Exception) {
+                null
+            }
+
+            if (pfd != null) {
+                try {
+                    pfd.use { fd ->
+                        FileInputStream(fd.fileDescriptor).use { fis ->
+                            if (startByte > 0L) {
+                                try {
+                                    fis.channel.position(startByte)
+                                } catch (e: Exception) {
+                                    skipBytes(fis, startByte)
+                                }
+                            }
+                            writeStreamToOutput(fis, output, contentLength)
                         }
                     }
-                    writeStreamToOutput(fis, output, contentLength)
-                }
+                    return
+                } catch (ignored: Exception) {}
             }
-        } else {
+
+            // 3. Fallback to openInputStream
             var inputStream: InputStream? = null
             try {
                 inputStream = context.contentResolver.openInputStream(uri)
@@ -180,7 +239,7 @@ class HostAudioStreamServer(
     }
 
     private fun writeStreamToOutput(input: InputStream, output: OutputStream, contentLength: Long) {
-        val buffer = ByteArray(32768)
+        val buffer = ByteArray(65536)
         var bytesRemaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
         while (bytesRemaining > 0L) {
             val toRead = Math.min(buffer.size.toLong(), bytesRemaining).toInt()

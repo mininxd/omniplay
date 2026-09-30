@@ -78,16 +78,6 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
     }
 
     private fun setupSatelliteView() {
-        binding.channelChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
-            val channel = when (checkedIds.firstOrNull()) {
-                R.id.chip_left -> AudioChannel.LEFT_ONLY
-                R.id.chip_right -> AudioChannel.RIGHT_ONLY
-                R.id.chip_center -> AudioChannel.CENTER
-                else -> AudioChannel.STEREO
-            }
-            meshManager.setChannel(channel)
-        }
-
         binding.satelliteVolumeSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -114,6 +104,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.btnHostAction.text = getString(R.string.mesh_stop_broadcast)
                 binding.hostStatusText.text = "Broadcasting master audio on local network"
                 binding.meshSyncBadge.text = "Master Host"
+                onPeersChanged(meshManager.connectedPeers)
             }
             MeshRole.SATELLITE -> {
                 binding.hostLayoutContainer.visibility = View.GONE
@@ -123,14 +114,8 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.meshModeToggleGroup.check(R.id.btn_tab_join)
                 binding.satelliteRoomNameText.text = meshManager.currentRoomName ?: "Connected Room"
                 binding.meshSyncBadge.text = "Satellite Node"
-
-                when (meshManager.currentChannel) {
-                    AudioChannel.STEREO -> binding.chipStereo.isChecked = true
-                    AudioChannel.LEFT_ONLY -> binding.chipLeft.isChecked = true
-                    AudioChannel.RIGHT_ONLY -> binding.chipRight.isChecked = true
-                    AudioChannel.CENTER -> binding.chipCenter.isChecked = true
-                }
                 binding.satelliteVolumeSlider.progress = (meshManager.volumeTrim * 100).toInt()
+                binding.satelliteLatencyBadge.text = "${meshManager.roundTripLatencyMs}ms"
             }
             MeshRole.STANDALONE -> {
                 val isHostTab = binding.meshModeToggleGroup.checkedButtonId == R.id.btn_tab_host
@@ -141,6 +126,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.joinScanningContainer.visibility = View.VISIBLE
                 binding.satelliteControlsContainer.visibility = View.GONE
                 binding.meshSyncBadge.text = "Offline P2P"
+                onRoomsDiscovered(meshManager.discoveredRooms)
             }
         }
     }
@@ -198,7 +184,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
             val itemBinding = ItemConnectedSpeakerBinding.inflate(inflater, container, false)
             itemBinding.speakerNameText.text = peer.name
             itemBinding.speakerIpText.text = "${peer.ip} • Locked"
-            itemBinding.speakerChannelBadge.text = peer.channel.displayName
+            itemBinding.speakerChannelBadge.text = "Connected"
             container.addView(itemBinding.root)
         }
     }

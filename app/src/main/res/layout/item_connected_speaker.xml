@@ -61,7 +61,7 @@
             android:paddingTop="3dp"
             android:paddingEnd="8dp"
             android:paddingBottom="3dp"
-            android:text="Stereo"
+            android:text="Speaker"
             android:textColor="@color/primary_accent"
             android:textSize="11sp" />
     </LinearLayout>
