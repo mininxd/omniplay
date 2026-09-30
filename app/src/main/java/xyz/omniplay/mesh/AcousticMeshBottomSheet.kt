@@ -159,7 +159,9 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
             val itemBinding = ItemDiscoveredRoomBinding.inflate(inflater, container, false)
             itemBinding.roomNameText.text = room.roomName
             itemBinding.roomHostText.text = "${room.hostAddress} • Ready"
-            itemBinding.btnJoinRoom.setOnClickListener {
+            itemBinding.btnJoinRoom.setOnClickListener { v ->
+                v.isEnabled = false
+                (v as? com.google.android.material.button.MaterialButton)?.text = "Joining..."
                 meshManager.joinRoom(room)
             }
             container.addView(itemBinding.root)

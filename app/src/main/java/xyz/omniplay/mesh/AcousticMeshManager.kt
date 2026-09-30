@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -673,6 +674,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
     }
 
     fun joinRoom(room: MeshRoom) {
+        if (currentRole == MeshRole.SATELLITE && currentRoomName == room.roomName && clientSocket?.isClosed == false) {
+            return
+        }
         stopAll()
         currentRole = MeshRole.SATELLITE
         currentRoomName = room.roomName
@@ -680,8 +684,10 @@ class AcousticMeshManager private constructor(private val context: Context) {
         notifyRoleChanged(MeshRole.SATELLITE)
 
         clientJob = scope.launch {
+            var activeSocket: Socket? = null
             try {
                 val socket = Socket()
+                activeSocket = socket
                 socket.tcpNoDelay = true
                 socket.keepAlive = true
                 socket.connect(InetSocketAddress(room.hostAddress, room.port), 5000)
@@ -698,7 +704,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     put("action", "HELLO")
                     put("peerId", deviceId)
                     put("peerName", deviceName)
-                    put("channel", currentChannel.name)
+                    put("channel", "STEREO")
                 }
                 writer.println(hello.toString())
 
@@ -715,10 +721,20 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     handleSatelliteCommand(json, currentHostIp ?: room.hostAddress, room.streamPort)
                 }
             } catch (e: Exception) {
-                notifyError("Connection to room failed: ${e.localizedMessage}")
+                if (e is CancellationException) throw e
+                if (isActive && currentRole == MeshRole.SATELLITE && activeSocket?.isClosed == false) {
+                    val msg = e.localizedMessage ?: "Connection error"
+                    if (!msg.contains("closed", ignoreCase = true) && !msg.contains("interrupted", ignoreCase = true)) {
+                        notifyError("Connection to room failed: $msg")
+                    }
+                }
             } finally {
-                if (currentRole == MeshRole.SATELLITE) {
-                    leaveRoom()
+                try { activeSocket?.close() } catch (ignored: Exception) {}
+                if (clientSocket === activeSocket) {
+                    clientSocket = null
+                    if (currentRole == MeshRole.SATELLITE) {
+                        leaveRoom()
+                    }
                 }
             }
         }
@@ -980,8 +996,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
         clientJob?.cancel()
         clientJob = null
 
-        try { clientSocket?.close() } catch (ignored: Exception) {}
+        val oldSocket = clientSocket
         clientSocket = null
+        try { oldSocket?.close() } catch (ignored: Exception) {}
 
         peerWriters.clear()
         connectedPeers.clear()

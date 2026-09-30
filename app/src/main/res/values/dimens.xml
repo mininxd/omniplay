@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Responsive layout dimensions for compact / 16:9 displays -->
+    <dimen name="album_art_max_size">220dp</dimen>
+    <dimen name="album_art_margin_horizontal">44dp</dimen>
+    <dimen name="album_art_margin_vertical">6dp</dimen>
+    <dimen name="song_title_margin_top">8dp</dimen>
+    <dimen name="song_title_text_size">18sp</dimen>
+    <dimen name="artist_name_text_size">13sp</dimen>
+    <dimen name="album_name_text_size">11sp</dimen>
+    <dimen name="playback_slider_height">40dp</dimen>
+    <dimen name="controls_margin_top">6dp</dimen>
+    <dimen name="controls_margin_bottom">60dp</dimen>
+</resources>
