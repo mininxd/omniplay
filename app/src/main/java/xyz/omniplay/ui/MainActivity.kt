@@ -1430,7 +1430,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     updatePlayPauseButton(isPlaying = true)
                 } else if (role == xyz.omniplay.mesh.MeshRole.STANDALONE) {
                     playbackService?.currentSong?.let {
-                        updateSongInfo(it)
+                        onTrackChanged(it)
                         updatePlayPauseButton(playbackService?.isPlaying() == true)
                     } ?: run {
                         binding.songTitleText.text = getString(R.string.no_track_selected)
