@@ -349,21 +349,15 @@ class SquigglySeekBar @JvmOverloads constructor(
         currentProgressMs = progress
         displayedProgressMs = progress.toFloat()
 
-        // Calculate initial playing position on screen
-        val initialRatio = (initialPlayingProgressMs.toFloat() / max(1L, maxDurationMs)).coerceIn(0f, 1f)
-        val initialX = startX + initialRatio * trackWidth
-        val distPx = abs(touchX - initialX)
+        val gapMs = min(5000L, max(1000L, maxDurationMs / 2))
         val distMs = abs(progress - initialPlayingProgressMs)
 
-        val thresholdPx = 24f * density
-        val thresholdMs = max(2000L, (maxDurationMs * 0.025f).toLong())
-
-        // User must slide away before bringing it back can trigger cancel
-        if (distPx > thresholdPx * 1.25f || distMs > max(3000L, (maxDurationMs * 0.035f).toLong())) {
+        // User must slide away past the 5-second gap before bringing it back can trigger cancel
+        if (distMs > gapMs) {
             hasSlidAway = true
         }
 
-        val newCancelled = hasSlidAway && (distPx <= thresholdPx || distMs <= thresholdMs)
+        val newCancelled = hasSlidAway && (distMs <= gapMs)
         if (newCancelled != isSeekCancelled) {
             isSeekCancelled = newCancelled
             try {

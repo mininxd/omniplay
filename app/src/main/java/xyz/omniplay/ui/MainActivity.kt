@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -144,6 +145,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupInWindowPlaylistPanel()
         setupBottomSwipeGesture()
         setupAlbumArtSwipeGesture()
+        setupTitleDoubleTapGestures()
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
@@ -180,7 +182,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
      */
     private fun setupDefaultView() {
         binding.songTitleText.text = getString(R.string.no_track_selected)
+        binding.songTitleText.isSelected = true
         binding.artistNameText.text = ""
+        binding.artistNameText.isSelected = true
         binding.albumNameText.text = ""
         binding.currentTimeText.text = getString(R.string.default_time)
         binding.totalTimeText.text = getString(R.string.default_time)
@@ -757,6 +761,63 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    /**
+     * Handles double tap in the empty space left and right of the song titles to seek 5 seconds.
+     * Double-tap on the left side seeks backward -5s, and double-tap on the right side seeks forward +5s.
+     */
+    private fun setupTitleDoubleTapGestures() {
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val width = binding.titleGestureArea.width.toFloat().coerceAtLeast(1f)
+                if (e.x < width / 2f) {
+                    seekRelative(-5000L)
+                    showTitleSeekBadge(isForward = false)
+                } else {
+                    seekRelative(5000L)
+                    showTitleSeekBadge(isForward = true)
+                }
+                return true
+            }
+        })
+
+        binding.titleGestureArea.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            true
+        }
+    }
+
+    private fun seekRelative(offsetMs: Long) {
+        val service = playbackService ?: return
+        if (service.currentSong == null) return
+        val current = service.getCurrentPosition().toLong()
+        val duration = service.getDuration().toLong()
+        val target = if (duration > 0L) {
+            (current + offsetMs).coerceIn(0L, duration)
+        } else {
+            (current + offsetMs).coerceAtLeast(0L)
+        }
+        service.seekTo(target.toInt())
+        binding.playbackSlider.setProgress(target)
+        binding.currentTimeText.text = Song.formatTime(target)
+        try {
+            binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        } catch (ignored: Exception) {}
+    }
+
+    private fun showTitleSeekBadge(isForward: Boolean) {
+        val badge = if (isForward) binding.titleSeekBadgeForward else binding.titleSeekBadgeRewind
+        badge.animate().cancel()
+        badge.alpha = 1f
+        badge.visibility = View.VISIBLE
+        badge.animate()
+            .alpha(0f)
+            .setDuration(600L)
+            .withEndAction { badge.visibility = View.GONE }
+            .start()
+    }
+
     private fun setupListeners() {
         // Menu button (Hamburger)
         binding.btnMenu.setOnClickListener { view ->
@@ -818,24 +879,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.playbackSlider.seekListener = object : SquigglySeekBar.OnSeekListener {
             override fun onStartTracking() {
                 isUserTrackingSlider = true
-                binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
             }
 
             override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
                 if (fromUser) {
-                    if (isCancelled) {
-                        binding.currentTimeText.text = getString(R.string.release_to_cancel)
-                        binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.slider_cancel_accent))
-                    } else {
-                        binding.currentTimeText.text = Song.formatTime(progressMs)
-                        binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
-                    }
+                    binding.currentTimeText.text = Song.formatTime(progressMs)
                 }
             }
 
             override fun onStopTracking(progressMs: Long, isCancelled: Boolean) {
                 isUserTrackingSlider = false
-                binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
                 if (isCancelled) {
                     val currentPos = playbackService?.getCurrentPosition()?.toLong() ?: progressMs
                     binding.playbackSlider.setProgress(currentPos)
@@ -1123,7 +1176,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             binding.songTitleText.text = song.title
+            binding.songTitleText.isSelected = true
             binding.artistNameText.text = song.artist
+            binding.artistNameText.isSelected = true
             binding.albumNameText.text = song.album
             binding.totalTimeText.text = Song.formatTime(song.duration)
 

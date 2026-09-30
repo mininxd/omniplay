@@ -28,6 +28,6 @@
     <color name="status_bar_color">#101116</color>
     <color name="navigation_bar_color">#101116</color>
 
-    <!-- Seek cancel indicator -->
-    <color name="slider_cancel_accent">#FF8A80</color>
+    <!-- Seek cancel indicator (muted terracotta/rose red) -->
+    <color name="slider_cancel_accent">#BA7272</color>
 </resources>
