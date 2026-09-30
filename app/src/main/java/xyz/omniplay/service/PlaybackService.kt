@@ -549,33 +549,40 @@ class PlaybackService : Service() {
     }
 
     private fun updateAudioInfoForSong(song: Song) {
-        val q = song.audioQuality.lowercase(Locale.ROOT)
+        val qNorm = song.audioQuality.lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
         val initialHiRes = song.isHiRes ||
                 song.format.startsWith("DSD", true) ||
                 song.format.equals("DSF", true) ||
                 song.format.equals("DFF", true) ||
-                q.contains("24bit") || q.contains("32bit") ||
-                q.contains("96khz") || q.contains("88.2khz") ||
-                q.contains("176.4khz") || q.contains("192khz") ||
-                q.contains("352.8khz") || q.contains("384khz") || q.contains("mhz")
+                qNorm.contains("24bit") || qNorm.contains("32bit") ||
+                qNorm.contains("24/") || qNorm.contains("32/") ||
+                qNorm.contains("/24") || qNorm.contains("/32") ||
+                qNorm.contains("96khz") || qNorm.contains("88.2khz") ||
+                qNorm.contains("176.4khz") || qNorm.contains("192khz") ||
+                qNorm.contains("352.8khz") || qNorm.contains("384khz") ||
+                qNorm.contains("88.2") || qNorm.contains("96") ||
+                qNorm.contains("176.4") || qNorm.contains("192") ||
+                qNorm.contains("352.8") || qNorm.contains("384") ||
+                qNorm.contains("mhz") || qNorm.contains("dsd") ||
+                qNorm.contains("hires") || qNorm.contains("hi-res")
 
         val initialBitDepth = when {
-            q.contains("32bit") -> 32
-            q.contains("24bit") -> 24
-            q.contains("16bit") -> 16
+            qNorm.contains("32bit") || qNorm.contains("32/") || qNorm.contains("/32") -> 32
+            qNorm.contains("24bit") || qNorm.contains("24/") || qNorm.contains("/24") -> 24
+            qNorm.contains("16bit") || qNorm.contains("16/") || qNorm.contains("/16") -> 16
             song.format.startsWith("DSD", true) || song.format.equals("DSF", true) || song.format.equals("DFF", true) -> 1
             else -> 0
         }
 
         val initialSampleRate = when {
-            q.contains("384khz") -> 384000
-            q.contains("352.8khz") -> 352800
-            q.contains("192khz") -> 192000
-            q.contains("176.4khz") -> 176400
-            q.contains("96khz") -> 96000
-            q.contains("88.2khz") -> 88200
-            q.contains("48khz") -> 48000
-            q.contains("44.1khz") -> 44100
+            qNorm.contains("384khz") || qNorm.contains("384000") || qNorm.contains("384") -> 384000
+            qNorm.contains("352.8khz") || qNorm.contains("352800") || qNorm.contains("352.8") -> 352800
+            qNorm.contains("192khz") || qNorm.contains("192000") || qNorm.contains("192") -> 192000
+            qNorm.contains("176.4khz") || qNorm.contains("176400") || qNorm.contains("176.4") -> 176400
+            qNorm.contains("96khz") || qNorm.contains("96000") || qNorm.contains("96") -> 96000
+            qNorm.contains("88.2khz") || qNorm.contains("88200") || qNorm.contains("88.2") -> 88200
+            qNorm.contains("48khz") || qNorm.contains("48000") -> 48000
+            qNorm.contains("44.1khz") || qNorm.contains("44100") || qNorm.contains("44.1") -> 44100
             else -> 0
         }
 

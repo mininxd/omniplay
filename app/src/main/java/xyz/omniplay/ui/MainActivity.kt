@@ -966,7 +966,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val info = playbackService?.currentAudioInfo
         val format = info?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song.format
-        val isHiRes = info?.isHiRes ?: song.isHiRes
+        val quality = info?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
+        val isHiRes = isHiResAudio(song, info, format, quality)
         val isBitPerfect = info?.isBitPerfect == true || playbackService?.isBitPerfectActive == true
         val outputDevice = playbackService?.getAudioOutputDeviceInfo() ?: "Default Audio Output"
 
@@ -998,13 +999,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val pipelineProcessing = when {
             format.startsWith("DSD") -> "64-tap Blackman-Nuttall Windowed-Sinc FIR Filter -> Studio 32-bit Float PCM"
+            isHiRes -> "Native 32-bit Float High-Res Audio Engine"
             else -> "Native 32-bit Float Audio Engine"
+        }
+
+        val audioEngine = if (isHiRes) {
+            "32-bit Floating Point High-Res PCM"
+        } else {
+            "32-bit Floating Point PCM"
         }
 
         val outputMode = if (isBitPerfect) {
             "Direct HAL / USB Hardware Pass-Through"
-        } else {
+        } else if (isHiRes) {
             "Android AudioTrack (High-Res 32-bit Float Engine)"
+        } else {
+            "Android AudioTrack (Direct 32-bit Float Engine)"
         }
 
         val details = """
@@ -1015,7 +1025,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             Channels: $inputChannels
 
             PROCESSING PIPELINE
-            Audio Engine: 32-bit Floating Point High-Res PCM
+            Audio Engine: $audioEngine
             Signal Processing: $pipelineProcessing
             Software Resampling: ${if (isBitPerfect) "Bypassed (Bit-Exact)" else "Direct Float"}
             Hardware Acceleration: Enabled (Zero-Copy Buffer Queue)
@@ -1106,6 +1116,51 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private fun isHiResAudio(song: Song?, audioInfo: AudioTrackInfo?, format: String, quality: String): Boolean {
+        if (song == null) return false
+        val qNorm = quality.lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
+        val isHiResQuality = qNorm.contains("24bit") ||
+                qNorm.contains("32bit") ||
+                qNorm.contains("24/") ||
+                qNorm.contains("32/") ||
+                qNorm.contains("/24") ||
+                qNorm.contains("/32") ||
+                qNorm.contains("88.2") ||
+                qNorm.contains("96") ||
+                qNorm.contains("176.4") ||
+                qNorm.contains("192") ||
+                qNorm.contains("352.8") ||
+                qNorm.contains("384") ||
+                qNorm.contains("mhz") ||
+                qNorm.contains("dsd") ||
+                qNorm.contains("hires") ||
+                qNorm.contains("hi-res")
+
+        val sampleRate = maxOf(audioInfo?.sampleRate ?: 0, 0)
+        val bitDepth = maxOf(audioInfo?.bitDepth ?: 0, 0)
+        val isHiResNumeric = sampleRate > 48000 || bitDepth > 16 || bitDepth == 1
+
+        val isHiResFormat = format.startsWith("DSD", true) ||
+                format.equals("DSF", true) ||
+                format.equals("DFF", true)
+
+        val pathNorm = song.filePath.lowercase(Locale.ROOT)
+        val isHiResPath = pathNorm.contains("hires") ||
+                pathNorm.contains("hi-res") ||
+                pathNorm.contains("24bit") ||
+                pathNorm.contains("32bit") ||
+                pathNorm.contains("96khz") ||
+                pathNorm.contains("192khz") ||
+                pathNorm.contains("dsd")
+
+        return (audioInfo?.checkHiRes() == true) ||
+                song.isHiRes ||
+                isHiResNumeric ||
+                isHiResFormat ||
+                isHiResQuality ||
+                isHiResPath
+    }
+
     private fun updateAudioBadges(song: Song?, audioInfo: AudioTrackInfo?) {
         if (song == null) {
             binding.audioBadgeContainer.visibility = View.GONE
@@ -1114,23 +1169,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val format = audioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song.format
         val quality = audioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
-        val isHiRes = (audioInfo?.checkHiRes() == true) ||
-                song.isHiRes ||
-                (audioInfo?.sampleRate ?: 0) > 48000 ||
-                (audioInfo?.bitDepth ?: 0) > 16 ||
-                (audioInfo?.bitDepth ?: 0) == 1 ||
-                format.startsWith("DSD", ignoreCase = true) ||
-                format.equals("DSF", ignoreCase = true) ||
-                format.equals("DFF", ignoreCase = true) ||
-                quality.contains("24bit", ignoreCase = true) ||
-                quality.contains("32bit", ignoreCase = true) ||
-                quality.contains("88.2khz", ignoreCase = true) ||
-                quality.contains("96khz", ignoreCase = true) ||
-                quality.contains("176.4khz", ignoreCase = true) ||
-                quality.contains("192khz", ignoreCase = true) ||
-                quality.contains("352.8khz", ignoreCase = true) ||
-                quality.contains("384khz", ignoreCase = true) ||
-                quality.contains("mhz", ignoreCase = true)
+        val isHiRes = isHiResAudio(song, audioInfo, format, quality)
 
         if (format.isNotEmpty()) {
             binding.audioBadgeContainer.visibility = View.VISIBLE
