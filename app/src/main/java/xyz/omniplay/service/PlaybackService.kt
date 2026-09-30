@@ -48,6 +48,7 @@ import xyz.omniplay.dsd.DsdExtractor
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioInfoExtractor
 import xyz.omniplay.util.AudioTrackInfo
+import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(UnstableApi::class)
