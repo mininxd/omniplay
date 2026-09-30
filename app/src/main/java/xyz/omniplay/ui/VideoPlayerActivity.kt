@@ -32,9 +32,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ExtractorsFactory
@@ -92,6 +95,12 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     private val hideGestureIndicatorRunnable = Runnable {
         hideGestureIndicator()
+    }
+
+    private val showBufferingRunnable = Runnable {
+        if (player?.playbackState == Player.STATE_BUFFERING) {
+            binding.loadingProgress.visibility = View.VISIBLE
+        }
     }
 
     private val progressUpdateRunnable = object : Runnable {
@@ -251,14 +260,39 @@ class VideoPlayerActivity : AppCompatActivity() {
         val dataSourceFactory = DefaultDataSource.Factory(this)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
 
-        // Renderers with automatic software decoder fallback for AV1 / VP9 / HEVC
+        // Hardware-first codec selector: prioritize dedicated GPU/SoC hardware decoders
+        val hardwareFirstSelector = MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
+            val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecure, requiresTunneling)
+            decoders.sortedWith(
+                compareByDescending<MediaCodecInfo> { it.hardwareAccelerated }
+                    .thenBy { it.softwareOnly }
+            )
+        }
+
+        // Hardware-accelerated renderers with async buffer queueing and fallback
         val renderersFactory = DefaultRenderersFactory(this)
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
+            .setMediaCodecSelector(hardwareFirstSelector)
+            .forceEnableMediaCodecAsynchronousQueueing()
+            .setAllowedVideoJoiningTimeMs(1000)
+
+        // Ultra-low latency buffer tuning for instant seek without render stalling
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 50_000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(/* backBufferDurationMs = */ 10_000, /* retainBackBufferFromKeyframe = */ true)
+            .build()
 
         val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
-            .setSeekParameters(SeekParameters.EXACT)
+            .setLoadControl(loadControl)
+            .setSeekParameters(SeekParameters.CLOSEST_SYNC)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -272,15 +306,18 @@ class VideoPlayerActivity : AppCompatActivity() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_BUFFERING -> {
-                        binding.loadingProgress.visibility = View.VISIBLE
+                        handler.removeCallbacks(showBufferingRunnable)
+                        handler.postDelayed(showBufferingRunnable, 150)
                     }
                     Player.STATE_READY -> {
+                        handler.removeCallbacks(showBufferingRunnable)
                         binding.loadingProgress.visibility = View.GONE
                         val duration = exoPlayer.duration
                         val total = if (duration > 0L) duration else 0L
                         updateProgressUI(exoPlayer.currentPosition.coerceAtLeast(0L), total)
                     }
                     Player.STATE_ENDED -> {
+                        handler.removeCallbacks(showBufferingRunnable)
                         updatePlayPauseButton(false)
                         exoPlayer.seekTo(0L)
                         exoPlayer.pause()
@@ -288,8 +325,19 @@ class VideoPlayerActivity : AppCompatActivity() {
                         updateProgressUI(0L, if (duration > 0L) duration else 0L)
                         showControls()
                     }
-                    Player.STATE_IDLE -> {}
+                    Player.STATE_IDLE -> {
+                        handler.removeCallbacks(showBufferingRunnable)
+                    }
                 }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                val duration = exoPlayer.duration
+                updateProgressUI(newPosition.positionMs, if (duration > 0L) duration else 0L)
             }
 
             override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -310,6 +358,7 @@ class VideoPlayerActivity : AppCompatActivity() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                handler.removeCallbacks(showBufferingRunnable)
                 binding.loadingProgress.visibility = View.GONE
                 MaterialAlertDialogBuilder(this@VideoPlayerActivity)
                     .setTitle("Playback Error")
