@@ -126,6 +126,22 @@ class PlaybackService : Service() {
         mesh.hostSongProvider = { currentSong }
         mesh.hostPlaybackPositionProvider = { getCurrentPosition().toLong() }
         mesh.hostIsPlayingProvider = { isPlaying() }
+        mesh.addListener(meshListener)
+    }
+
+    private val meshListener = object : xyz.omniplay.mesh.AcousticMeshManager.MeshListener {
+        override fun onRoleChanged(role: xyz.omniplay.mesh.MeshRole) {
+            if (role == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                if (isPlaying()) {
+                    pause()
+                }
+            }
+        }
+        override fun onRoomsDiscovered(rooms: List<xyz.omniplay.mesh.MeshRoom>) {}
+        override fun onPeersChanged(peers: List<xyz.omniplay.mesh.MeshPeer>) {}
+        override fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long) {}
+        override fun onChannelChanged(channel: xyz.omniplay.mesh.AudioChannel) {}
+        override fun onError(message: String) {}
     }
 
     /**
@@ -534,6 +550,9 @@ class PlaybackService : Service() {
     }
 
     fun playSong(song: Song) {
+        if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+            return
+        }
         currentSong = song
         updateAudioInfoForSong(song)
         listeners.forEach { it.onTrackChanged(song) }
@@ -637,6 +656,9 @@ class PlaybackService : Service() {
     }
 
     fun play() {
+        if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+            return
+        }
         if (currentSong == null) {
             if (queue.isNotEmpty()) {
                 currentIndex = 0
@@ -1044,6 +1066,7 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         val mesh = xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext)
+        mesh.removeListener(meshListener)
         mesh.hostSongProvider = null
         mesh.hostPlaybackPositionProvider = null
         mesh.hostIsPlayingProvider = null

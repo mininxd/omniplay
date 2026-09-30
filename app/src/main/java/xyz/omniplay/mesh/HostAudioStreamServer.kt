@@ -2,11 +2,13 @@ package xyz.omniplay.mesh
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
@@ -39,6 +41,7 @@ class HostAudioStreamServer(
                 while (isActive && !server.isClosed) {
                     try {
                         val client = server.accept()
+                        client.tcpNoDelay = true
                         launch { handleClient(client) }
                     } catch (e: Exception) {
                         if (!isActive || server.isClosed) break
@@ -57,6 +60,7 @@ class HostAudioStreamServer(
                 val output = socket.getOutputStream()
 
                 val requestLine = input.readLine() ?: return
+                val isHeadRequest = requestLine.startsWith("HEAD", ignoreCase = true)
                 var line = input.readLine()
                 var rangeHeader: String? = null
                 while (!line.isNullOrEmpty()) {
@@ -72,85 +76,140 @@ class HostAudioStreamServer(
                     return
                 }
 
-                serveAudioStream(uri, output, rangeHeader)
+                serveAudioStream(uri, output, rangeHeader, isHeadRequest)
             }
         } catch (ignored: Exception) {
             // Client disconnected or aborted
         }
     }
 
-    private fun serveAudioStream(uri: Uri, output: OutputStream, rangeHeader: String?) {
-        var inputStream: InputStream? = null
-        try {
-            val totalBytes = getFileSize(uri)
-            inputStream = context.contentResolver.openInputStream(uri)
-            if (inputStream == null) {
-                send404(output)
-                return
+    private fun serveAudioStream(uri: Uri, output: OutputStream, rangeHeader: String?, isHeadRequest: Boolean) {
+        val totalBytes = getFileSize(uri)
+
+        var startByte = 0L
+        var endByte = if (totalBytes > 0L) totalBytes - 1L else -1L
+        var isRange = false
+
+        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+            isRange = true
+            val rangeVal = rangeHeader.removePrefix("bytes=").trim()
+            val parts = rangeVal.split("-")
+            if (parts.isNotEmpty() && parts[0].isNotEmpty()) {
+                startByte = parts[0].toLongOrNull() ?: 0L
             }
+            if (parts.size > 1 && parts[1].isNotEmpty()) {
+                endByte = parts[1].toLongOrNull() ?: endByte
+            }
+        }
 
-            var startByte = 0L
-            var endByte = if (totalBytes > 0L) totalBytes - 1L else -1L
+        if (endByte < startByte && totalBytes > 0L) {
+            endByte = totalBytes - 1L
+        }
 
-            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                val ranges = rangeHeader.removePrefix("bytes=").split("-")
-                startByte = ranges[0].toLongOrNull() ?: 0L
-                if (ranges.size > 1 && ranges[1].isNotEmpty()) {
-                    endByte = ranges[1].toLongOrNull() ?: endByte
+        val contentLength = if (endByte >= startByte) (endByte - startByte + 1L) else -1L
+
+        val statusLine = if (isRange) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
+        val headers = StringBuilder().apply {
+            append(statusLine)
+            append("Content-Type: $currentMimeType\r\n")
+            append("Accept-Ranges: bytes\r\n")
+            if (contentLength > 0L) {
+                append("Content-Length: $contentLength\r\n")
+            }
+            if (isRange && totalBytes > 0L) {
+                append("Content-Range: bytes $startByte-$endByte/$totalBytes\r\n")
+            }
+            append("Connection: close\r\n")
+            append("\r\n")
+        }.toString()
+
+        output.write(headers.toByteArray(Charsets.UTF_8))
+        output.flush()
+
+        if (isHeadRequest) return
+
+        // Prefer direct file descriptor seek
+        val pfd = try {
+            context.contentResolver.openFileDescriptor(uri, "r")
+        } catch (e: Exception) {
+            null
+        }
+
+        if (pfd != null) {
+            pfd.use { fd ->
+                FileInputStream(fd.fileDescriptor).use { fis ->
+                    if (startByte > 0L) {
+                        try {
+                            fis.channel.position(startByte)
+                        } catch (e: Exception) {
+                            skipBytes(fis, startByte)
+                        }
+                    }
+                    writeStreamToOutput(fis, output, contentLength)
                 }
             }
-
-            if (startByte > 0) {
-                inputStream.skip(startByte)
-            }
-
-            val contentLength = if (endByte >= startByte) (endByte - startByte + 1L) else -1L
-            val isPartial = rangeHeader != null && startByte > 0
-
-            val statusLine = if (isPartial) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
-            val headers = StringBuilder().apply {
-                append(statusLine)
-                append("Content-Type: $currentMimeType\r\n")
-                append("Accept-Ranges: bytes\r\n")
-                if (contentLength > 0L) {
-                    append("Content-Length: $contentLength\r\n")
-                }
-                if (isPartial && totalBytes > 0L) {
-                    append("Content-Range: bytes $startByte-$endByte/$totalBytes\r\n")
-                }
-                append("Connection: close\r\n")
-                append("\r\n")
-            }.toString()
-
-            output.write(headers.toByteArray(Charsets.UTF_8))
-            output.flush()
-
-            val buffer = ByteArray(16384) // 16KB chunk
-            var bytesRemaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
-            while (bytesRemaining > 0L) {
-                val readToTake = Math.min(buffer.size.toLong(), bytesRemaining).toInt()
-                val read = inputStream.read(buffer, 0, readToTake)
-                if (read == -1) break
-                output.write(buffer, 0, read)
-                bytesRemaining -= read
-            }
-            output.flush()
-        } catch (ignored: Exception) {
-        } finally {
+        } else {
+            var inputStream: InputStream? = null
             try {
-                inputStream?.close()
-            } catch (ignored: Exception) {}
+                inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    if (startByte > 0L) {
+                        skipBytes(inputStream, startByte)
+                    }
+                    writeStreamToOutput(inputStream, output, contentLength)
+                }
+            } finally {
+                try { inputStream?.close() } catch (ignored: Exception) {}
+            }
         }
     }
 
-    private fun getFileSize(uri: Uri): Long {
-        return try {
-            context.contentResolver.openFileDescriptor(uri, "r")?.use {
-                it.statSize
-            } ?: -1L
-        } catch (e: Exception) {
-            -1L
+    private fun skipBytes(input: InputStream, bytesToSkip: Long) {
+        var remaining = bytesToSkip
+        val tempBuf = ByteArray(8192)
+        while (remaining > 0L) {
+            val skipped = input.skip(remaining)
+            if (skipped <= 0L) {
+                val read = input.read(tempBuf, 0, Math.min(tempBuf.size.toLong(), remaining).toInt())
+                if (read == -1) break
+                remaining -= read
+            } else {
+                remaining -= skipped
+            }
         }
+    }
+
+    private fun writeStreamToOutput(input: InputStream, output: OutputStream, contentLength: Long) {
+        val buffer = ByteArray(32768)
+        var bytesRemaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
+        while (bytesRemaining > 0L) {
+            val toRead = Math.min(buffer.size.toLong(), bytesRemaining).toInt()
+            val read = input.read(buffer, 0, toRead)
+            if (read == -1) break
+            output.write(buffer, 0, read)
+            bytesRemaining -= read
+        }
+        output.flush()
+    }
+
+    private fun getFileSize(uri: Uri): Long {
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use {
+                if (it.statSize > 0) return it.statSize
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (idx != -1 && cursor.moveToFirst()) {
+                    val size = cursor.getLong(idx)
+                    if (size > 0) return size
+                }
+            }
+        } catch (ignored: Exception) {}
+
+        return -1L
     }
 
     private fun send404(output: OutputStream) {

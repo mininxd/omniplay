@@ -289,7 +289,7 @@
                                 android:paddingTop="3dp"
                                 android:paddingEnd="8dp"
                                 android:paddingBottom="3dp"
-                                android:text="⚡ 0ms"
+                                android:text="0ms"
                                 android:textColor="@color/primary_accent"
                                 android:textSize="11sp" />
                         </LinearLayout>

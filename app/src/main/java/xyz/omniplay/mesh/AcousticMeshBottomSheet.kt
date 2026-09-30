@@ -205,7 +205,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
 
     override fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long) {
         if (_binding != null) {
-            binding.satelliteLatencyBadge.text = "⚡ ${latencyMs}ms"
+            binding.satelliteLatencyBadge.text = "${latencyMs}ms"
         }
     }
 

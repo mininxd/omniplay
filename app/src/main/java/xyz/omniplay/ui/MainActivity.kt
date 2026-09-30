@@ -149,6 +149,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
+        xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).addListener(meshListener)
     }
 
     /**
@@ -238,6 +239,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
         songAdapter = SongAdapter(showAlbumArt = isShowArt) { song, index ->
+            if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                Toast.makeText(this, "Mesh Mode active: Disconnect from Mesh to play local media", Toast.LENGTH_SHORT).show()
+                return@SongAdapter
+            }
             playbackService?.let { service ->
                 if (service.queue.isEmpty() && scannedSongs.isNotEmpty()) {
                     service.setSongQueue(scannedSongs, startIndex = index, startPlaying = true)
@@ -836,6 +841,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Play / Pause Circular Card
         binding.btnPlayPauseCard.setOnClickListener {
+            if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                Toast.makeText(this, "Mesh Mode active: Listening to host broadcast. Disconnect to play local media.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.let {
                     if (it.currentSong == null && scannedSongs.isNotEmpty()) {
@@ -849,6 +858,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Next
         binding.btnNext.setOnClickListener {
+            if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.skipNext(forceNext = true)
             }
@@ -856,6 +868,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Previous
         binding.btnPrevious.setOnClickListener {
+            if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.skipPrevious(forcePrevious = false)
             }
@@ -1405,7 +1420,51 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private val meshListener = object : xyz.omniplay.mesh.AcousticMeshManager.MeshListener {
+        override fun onRoleChanged(role: xyz.omniplay.mesh.MeshRole) {
+            runOnUiThread {
+                if (role == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                    val roomName = xyz.omniplay.mesh.AcousticMeshManager.getInstance(this@MainActivity).currentRoomName
+                    binding.albumNameText.text = "Connected to ${roomName ?: "Mesh Room"}"
+                    binding.playbackSlider.isEnabled = false
+                    updatePlayPauseButton(isPlaying = true)
+                } else if (role == xyz.omniplay.mesh.MeshRole.STANDALONE) {
+                    playbackService?.currentSong?.let {
+                        updateSongInfo(it)
+                        updatePlayPauseButton(playbackService?.isPlaying() == true)
+                    } ?: run {
+                        binding.songTitleText.text = getString(R.string.no_track_selected)
+                        binding.artistNameText.text = ""
+                        binding.albumNameText.text = ""
+                        updatePlayPauseButton(false)
+                    }
+                }
+            }
+        }
+
+        override fun onTrackInfoReceived(title: String, artist: String) {
+            runOnUiThread {
+                if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                    if (title.isNotEmpty()) {
+                        binding.songTitleText.text = title
+                        binding.artistNameText.text = if (artist.isNotEmpty()) "$artist (Host)" else "Host Broadcast"
+                        val roomName = xyz.omniplay.mesh.AcousticMeshManager.getInstance(this@MainActivity).currentRoomName
+                        binding.albumNameText.text = "Connected to ${roomName ?: "Mesh Room"}"
+                        updatePlayPauseButton(isPlaying = true)
+                    }
+                }
+            }
+        }
+
+        override fun onRoomsDiscovered(rooms: List<xyz.omniplay.mesh.MeshRoom>) {}
+        override fun onPeersChanged(peers: List<xyz.omniplay.mesh.MeshPeer>) {}
+        override fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long) {}
+        override fun onChannelChanged(channel: xyz.omniplay.mesh.AudioChannel) {}
+        override fun onError(message: String) {}
+    }
+
     override fun onDestroy() {
+        xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).removeListener(meshListener)
         if (isBound) {
             playbackService?.removeListener(this)
             unbindService(serviceConnection)

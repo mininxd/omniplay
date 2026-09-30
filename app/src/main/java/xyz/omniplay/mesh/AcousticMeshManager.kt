@@ -64,6 +64,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
         fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long)
         fun onChannelChanged(channel: AudioChannel)
         fun onError(message: String)
+        fun onTrackInfoReceived(title: String, artist: String) {}
     }
 
     private val listeners = CopyOnWriteArrayList<MeshListener>()
@@ -94,6 +95,28 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     var currentRoomName: String? = null
         private set
+
+    var currentHostIp: String? = null
+        private set
+
+    fun getLocalIPv4Address(): String? {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return null
+            for (iface in interfaces) {
+                if (iface.isLoopback || !iface.isUp) continue
+                val addrs = iface.inetAddresses
+                for (addr in addrs) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val host = addr.hostAddress
+                        if (!host.isNullOrEmpty() && !host.startsWith("127.")) {
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (ignored: Exception) {}
+        return null
+    }
 
     var clockOffsetMs: Long = 0L
         private set
@@ -309,11 +332,16 @@ class AcousticMeshManager private constructor(private val context: Context) {
                         connectedPeers.add(peer)
                         notifyPeersChanged()
 
+                        val hostIp = (socket.localAddress as? java.net.Inet4Address)?.hostAddress
+                            ?: getLocalIPv4Address()
+                            ?: socket.localAddress.hostAddress
+
                         // Send Welcome State back
                         val welcome = JSONObject().apply {
                             put("action", "WELCOME")
                             put("roomName", currentRoomName)
                             put("hostName", deviceName)
+                            put("hostIp", hostIp)
                             put("streamPort", STREAM_PORT)
                         }
                         writer.println(welcome.toString())
@@ -327,6 +355,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
                             val scheduledAt = System.currentTimeMillis() + 220L
                             val playCmd = JSONObject().apply {
                                 put("action", "PLAY")
+                                put("hostIp", hostIp)
                                 put("songTitle", playingSong.title)
                                 put("songArtist", playingSong.artist)
                                 put("songDuration", playingSong.duration)
@@ -402,9 +431,11 @@ class AcousticMeshManager private constructor(private val context: Context) {
         }
         streamServer.currentMimeType = mime
 
+        val hostIp = getLocalIPv4Address()
         val scheduledAt = System.currentTimeMillis() + 180L // Scheduled presentation timestamp
         val json = JSONObject().apply {
             put("action", "PLAY")
+            hostIp?.let { put("hostIp", it) }
             put("songTitle", song.title)
             put("songArtist", song.artist)
             put("songDuration", song.duration)
@@ -486,7 +517,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
         try {
             nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
-                    val rawHost = resolved.host?.hostAddress ?: return
+                    val addrs = try {
+                        val hostName = resolved.host?.hostName ?: resolved.host?.hostAddress
+                        if (hostName != null) java.net.InetAddress.getAllByName(hostName) else arrayOf(resolved.host)
+                    } catch (e: Exception) {
+                        arrayOf(resolved.host)
+                    }
+                    val ipv4 = addrs?.firstOrNull { it is java.net.Inet4Address }?.hostAddress
+                    val rawHost = ipv4 ?: resolved.host?.hostAddress ?: return
                     val host = if (rawHost.contains('%')) rawHost.substringBefore('%') else rawHost
                     val room = MeshRoom(
                         roomName = resolved.serviceName,
@@ -530,6 +568,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 socket.connect(InetSocketAddress(room.hostAddress, room.port), 5000)
                 clientSocket = socket
 
+                val remoteIp = (socket.remoteSocketAddress as? InetSocketAddress)?.address?.hostAddress ?: room.hostAddress
+                currentHostIp = remoteIp
+
                 val writer = PrintWriter(socket.getOutputStream(), true)
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
@@ -552,7 +593,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 while (isActive && !socket.isClosed) {
                     val line = withContext(Dispatchers.IO) { reader.readLine() } ?: break
                     val json = JSONObject(line)
-                    handleSatelliteCommand(json, room.hostAddress, room.streamPort)
+                    handleSatelliteCommand(json, currentHostIp ?: room.hostAddress, room.streamPort)
                 }
             } catch (e: Exception) {
                 notifyError("Connection to room failed: ${e.localizedMessage}")
@@ -619,10 +660,27 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private fun handleSatelliteCommand(json: JSONObject, hostIp: String, streamPort: Int) {
         val action = json.optString("action")
         when (action) {
+            "WELCOME" -> {
+                val ip = json.optString("hostIp")
+                if (ip.isNotEmpty()) {
+                    currentHostIp = ip
+                }
+            }
             "PLAY" -> {
+                val ipFromCmd = json.optString("hostIp")
+                val streamIp = if (ipFromCmd.isNotEmpty()) ipFromCmd else (currentHostIp ?: hostIp)
+                val port = json.optInt("streamPort", streamPort)
                 val positionMs = json.optLong("positionMs", 0L)
                 val scheduledAt = json.optLong("scheduledAt", System.currentTimeMillis())
-                val streamUrl = "http://$hostIp:$streamPort/stream"
+
+                val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
+                val streamUrl = "http://$formattedHost:$port/stream"
+
+                val songTitle = json.optString("songTitle")
+                val songArtist = json.optString("songArtist")
+                if (songTitle.isNotEmpty()) {
+                    notifyTrackInfo(songTitle, songArtist)
+                }
 
                 scope.launch(Dispatchers.Main) {
                     playSatelliteStream(streamUrl, positionMs, scheduledAt)
@@ -699,7 +757,13 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private fun schedulePlaybackStart(player: MediaPlayer, positionMs: Long, scheduledAt: Long) {
         val targetLocalTime = scheduledAt - clockOffsetMs
-        val delayMs = (targetLocalTime - System.currentTimeMillis()).coerceAtLeast(0L)
+        val now = System.currentTimeMillis()
+        val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
+        val effectivePosition = if (targetLocalTime < now && positionMs >= 0L) {
+            positionMs + (now - targetLocalTime)
+        } else {
+            positionMs
+        }
 
         scheduledPlayJob?.cancel()
         scheduledPlayJob = scope.launch(Dispatchers.Main) {
@@ -707,25 +771,33 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 delay(delayMs)
             }
             try {
-                if (positionMs > 0L) {
-                    player.seekTo(positionMs.toInt())
+                if (effectivePosition > 500L) {
+                    player.seekTo(effectivePosition.toInt())
                 }
                 player.start()
-            } catch (ignored: Exception) {}
+            } catch (e: Exception) {
+                try { player.start() } catch (ignored: Exception) {}
+            }
         }
     }
 
     private fun seekSatelliteStream(positionMs: Long, scheduledAt: Long) {
         val player = satellitePlayer ?: return
         val targetLocalTime = scheduledAt - clockOffsetMs
-        val delayMs = (targetLocalTime - System.currentTimeMillis()).coerceAtLeast(0L)
+        val now = System.currentTimeMillis()
+        val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
+        val effectivePosition = if (targetLocalTime < now && positionMs >= 0L) {
+            positionMs + (now - targetLocalTime)
+        } else {
+            positionMs
+        }
 
         scope.launch(Dispatchers.Main) {
             if (delayMs > 0L) {
                 delay(delayMs)
             }
             try {
-                player.seekTo(positionMs.toInt())
+                player.seekTo(effectivePosition.toInt())
             } catch (ignored: Exception) {}
         }
     }
@@ -815,6 +887,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
         satellitePlayer = null
 
         releaseMeshLocks()
+        currentHostIp = null
+        notifyTrackInfo("", "")
     }
 
     // =========================================================================
@@ -856,6 +930,12 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private fun notifyError(msg: String) {
         mainHandler.post {
             listeners.forEach { it.onError(msg) }
+        }
+    }
+
+    private fun notifyTrackInfo(title: String, artist: String) {
+        mainHandler.post {
+            listeners.forEach { it.onTrackInfoReceived(title, artist) }
         }
     }
 }
