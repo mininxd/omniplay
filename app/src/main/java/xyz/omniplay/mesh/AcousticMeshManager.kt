@@ -9,6 +9,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -71,7 +72,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
     private val wifiManager by lazy { context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager }
+    private val powerManager by lazy { context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    var hostSongProvider: (() -> Song?)? = null
+    var hostPlaybackPositionProvider: (() -> Long)? = null
+    var hostIsPlayingProvider: (() -> Boolean)? = null
 
     val streamServer = HostAudioStreamServer(context, STREAM_PORT)
 
@@ -101,6 +109,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private var clientSocket: Socket? = null
     private var clientJob: Job? = null
     private var timeSyncJob: Job? = null
+    private var pingJob: Job? = null
+    private var scheduledPlayJob: Job? = null
     private var satellitePlayer: MediaPlayer? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
@@ -130,21 +140,63 @@ class AcousticMeshManager private constructor(private val context: Context) {
         listeners.remove(listener)
     }
 
-    private fun acquireMulticastLock() {
+    private fun acquireMeshLocks() {
         try {
             if (multicastLock == null) {
-                multicastLock = wifiManager.createMulticastLock("omniplay_mesh_lock").apply {
-                    setReferenceCounted(true)
+                multicastLock = wifiManager.createMulticastLock("omniplay:mesh_mcast_lock").apply {
+                    setReferenceCounted(false)
                 }
             }
-            multicastLock?.acquire()
+            if (multicastLock?.isHeld != true) {
+                multicastLock?.acquire()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            if (wifiLock == null) {
+                val lockType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                }
+                wifiLock = wifiManager.createWifiLock(lockType, "omniplay:mesh_wifi_lock").apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (wifiLock?.isHeld != true) {
+                wifiLock?.acquire()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            if (wakeLock == null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "omniplay:mesh_wake_lock").apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (wakeLock?.isHeld != true) {
+                wakeLock?.acquire(24 * 60 * 60 * 1000L)
+            }
         } catch (ignored: Exception) {}
     }
 
-    private fun releaseMulticastLock() {
+    private fun releaseMeshLocks() {
         try {
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
             }
         } catch (ignored: Exception) {}
     }
@@ -159,7 +211,20 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
         currentRole = MeshRole.HOST
         currentRoomName = roomName
-        acquireMulticastLock()
+        acquireMeshLocks()
+
+        // Sync currently playing track if any
+        hostSongProvider?.invoke()?.let { song ->
+            streamServer.currentSongUri = song.contentUri
+            val mime = context.contentResolver.getType(song.contentUri) ?: when (song.format.uppercase()) {
+                "FLAC" -> "audio/flac"
+                "WAV" -> "audio/wav"
+                "OGG", "OPUS" -> "audio/ogg"
+                "M4A", "AAC" -> "audio/mp4"
+                else -> "audio/mpeg"
+            }
+            streamServer.currentMimeType = mime
+        }
 
         streamServer.start()
         startHostControlServer()
@@ -201,6 +266,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 server = ServerSocket(CONTROL_PORT)
                 while (isActive && !server.isClosed) {
                     val client = server.accept()
+                    client.tcpNoDelay = true
+                    client.keepAlive = true
                     launch { handleHostPeerConnection(client) }
                 }
             } catch (ignored: Exception) {
@@ -214,9 +281,11 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private suspend fun handleHostPeerConnection(socket: Socket) {
         var peerId: String? = null
+        var currentWriter: PrintWriter? = null
         try {
             val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
             val writer = PrintWriter(socket.getOutputStream(), true)
+            currentWriter = writer
             peerWriters.add(writer)
 
             val clientIp = socket.inetAddress.hostAddress ?: "Unknown"
@@ -248,6 +317,25 @@ class AcousticMeshManager private constructor(private val context: Context) {
                             put("streamPort", STREAM_PORT)
                         }
                         writer.println(welcome.toString())
+
+                        // If host is currently playing, immediately sync this peer
+                        val playingSong = hostSongProvider?.invoke()
+                        val isPlaying = hostIsPlayingProvider?.invoke() == true
+                        val positionMs = hostPlaybackPositionProvider?.invoke() ?: 0L
+                        if (playingSong != null && isPlaying) {
+                            streamServer.currentSongUri = playingSong.contentUri
+                            val scheduledAt = System.currentTimeMillis() + 220L
+                            val playCmd = JSONObject().apply {
+                                put("action", "PLAY")
+                                put("songTitle", playingSong.title)
+                                put("songArtist", playingSong.artist)
+                                put("songDuration", playingSong.duration)
+                                put("positionMs", positionMs)
+                                put("scheduledAt", scheduledAt)
+                                put("streamPort", STREAM_PORT)
+                            }.toString()
+                            writer.println(playCmd)
+                        }
                     }
                     "SET_CHANNEL" -> {
                         val ch = json.optString("channel", "STEREO")
@@ -256,10 +344,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
                             notifyPeersChanged()
                         }
                     }
+                    "PING" -> {
+                        writer.println(JSONObject().apply { put("action", "PONG") }.toString())
+                    }
                 }
             }
         } catch (ignored: Exception) {
         } finally {
+            currentWriter?.let { peerWriters.remove(it) }
             peerId?.let { id ->
                 connectedPeers.removeAll { it.id == id }
                 notifyPeersChanged()
@@ -394,7 +486,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
         try {
             nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
-                    val host = resolved.host?.hostAddress ?: return
+                    val rawHost = resolved.host?.hostAddress ?: return
+                    val host = if (rawHost.contains('%')) rawHost.substringBefore('%') else rawHost
                     val room = MeshRoom(
                         roomName = resolved.serviceName,
                         hostName = resolved.serviceName,
@@ -423,12 +516,15 @@ class AcousticMeshManager private constructor(private val context: Context) {
         stopAll()
         currentRole = MeshRole.SATELLITE
         currentRoomName = room.roomName
+        acquireMeshLocks()
         notifyRoleChanged(MeshRole.SATELLITE)
 
         clientJob = scope.launch {
             try {
                 val socket = Socket()
-                socket.connect(InetSocketAddress(room.hostAddress, room.port), 4000)
+                socket.tcpNoDelay = true
+                socket.keepAlive = true
+                socket.connect(InetSocketAddress(room.hostAddress, room.port), 5000)
                 clientSocket = socket
 
                 val writer = PrintWriter(socket.getOutputStream(), true)
@@ -446,6 +542,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 // Start Micro-NTP Clock Sync loop with Host
                 startTimeSyncLoop(room.hostAddress)
 
+                // Start periodic ping loop to keep socket active through sleep/menu close
+                startPingLoop(writer)
+
                 // Listen for Host Sync Commands
                 while (isActive && !socket.isClosed) {
                     val line = withContext(Dispatchers.IO) { reader.readLine() } ?: break
@@ -455,6 +554,21 @@ class AcousticMeshManager private constructor(private val context: Context) {
             } catch (e: Exception) {
                 notifyError("Connection to room failed: ${e.localizedMessage}")
                 leaveRoom()
+            }
+        }
+    }
+
+    private fun startPingLoop(writer: PrintWriter) {
+        pingJob?.cancel()
+        pingJob = scope.launch {
+            while (isActive) {
+                delay(8000L)
+                try {
+                    val ping = JSONObject().apply { put("action", "PING") }
+                    writer.println(ping.toString())
+                } catch (e: Exception) {
+                    break
+                }
             }
         }
     }
@@ -512,8 +626,13 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
             }
             "PAUSE" -> {
+                scheduledPlayJob?.cancel()
                 scope.launch(Dispatchers.Main) {
-                    satellitePlayer?.pause()
+                    try {
+                        if (satellitePlayer?.isPlaying == true) {
+                            satellitePlayer?.pause()
+                        }
+                    } catch (ignored: Exception) {}
                 }
             }
             "SEEK" -> {
@@ -523,11 +642,16 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     seekSatelliteStream(positionMs, scheduledAt)
                 }
             }
+            "PONG" -> {
+                // Heartbeat response acknowledged
+            }
         }
     }
 
     private fun playSatelliteStream(url: String, positionMs: Long, scheduledAt: Long) {
         try {
+            scheduledPlayJob?.cancel()
+
             var player = satellitePlayer
             if (player == null) {
                 player = MediaPlayer().apply {
@@ -537,20 +661,36 @@ class AcousticMeshManager private constructor(private val context: Context) {
                             .setUsage(AudioAttributes.USAGE_MEDIA)
                             .build()
                     )
-                    setOnPreparedListener { mp ->
-                        applyChannelToPlayer(mp)
-                        schedulePlaybackStart(mp, positionMs, scheduledAt)
-                    }
                 }
                 satellitePlayer = player
-                player.setDataSource(url)
-                player.prepareAsync()
             } else {
-                applyChannelToPlayer(player)
-                schedulePlaybackStart(player, positionMs, scheduledAt)
+                try {
+                    if (player.isPlaying) player.stop()
+                } catch (ignored: Exception) {}
+                player.reset()
+                player.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
             }
+
+            player.setOnErrorListener { _, what, extra ->
+                notifyError("Satellite stream error ($what, $extra)")
+                true
+            }
+
+            player.setOnPreparedListener { mp ->
+                applyChannelToPlayer(mp)
+                schedulePlaybackStart(mp, positionMs, scheduledAt)
+            }
+
+            player.setDataSource(url)
+            player.prepareAsync()
         } catch (e: Exception) {
             e.printStackTrace()
+            notifyError("Failed to stream: ${e.localizedMessage}")
         }
     }
 
@@ -558,7 +698,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
         val targetLocalTime = scheduledAt - clockOffsetMs
         val delayMs = (targetLocalTime - System.currentTimeMillis()).coerceAtLeast(0L)
 
-        scope.launch(Dispatchers.Main) {
+        scheduledPlayJob?.cancel()
+        scheduledPlayJob = scope.launch(Dispatchers.Main) {
             if (delayMs > 0L) {
                 delay(delayMs)
             }
@@ -649,6 +790,12 @@ class AcousticMeshManager private constructor(private val context: Context) {
         timeSyncJob?.cancel()
         timeSyncJob = null
 
+        pingJob?.cancel()
+        pingJob = null
+
+        scheduledPlayJob?.cancel()
+        scheduledPlayJob = null
+
         clientJob?.cancel()
         clientJob = null
 
@@ -664,7 +811,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
         } catch (ignored: Exception) {}
         satellitePlayer = null
 
-        releaseMulticastLock()
+        releaseMeshLocks()
     }
 
     // =========================================================================

@@ -121,6 +121,11 @@ class PlaybackService : Service() {
         initPlayer()
         setupBitPerfectAudio()
         registerBecomingNoisyReceiver()
+
+        val mesh = xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext)
+        mesh.hostSongProvider = { currentSong }
+        mesh.hostPlaybackPositionProvider = { getCurrentPosition().toLong() }
+        mesh.hostIsPlayingProvider = { isPlaying() }
     }
 
     /**
@@ -1038,6 +1043,11 @@ class PlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
+        val mesh = xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext)
+        mesh.hostSongProvider = null
+        mesh.hostPlaybackPositionProvider = null
+        mesh.hostIsPlayingProvider = null
+
         teardownBitPerfectAudio()
         stopProgressTracker()
         try {

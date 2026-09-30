@@ -771,10 +771,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 val width = binding.titleGestureArea.width.toFloat().coerceAtLeast(1f)
-                if (e.x < width / 2f) {
+                if (e.x <= width * 0.40f) {
                     seekRelative(-5000L)
                     showTitleSeekBadge(isForward = false)
-                } else {
+                } else if (e.x >= width * 0.60f) {
                     seekRelative(5000L)
                     showTitleSeekBadge(isForward = true)
                 }
@@ -1163,7 +1163,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun showAboutDialog() {
         val message = """
-            Omniplay v0.2
+            Omniplay 0.2
             Open Source Material You Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.

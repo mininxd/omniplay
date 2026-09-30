@@ -108,15 +108,19 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
     private fun updateUIForCurrentRole(role: MeshRole) {
         when (role) {
             MeshRole.HOST -> {
+                binding.hostLayoutContainer.visibility = View.VISIBLE
+                binding.joinLayoutContainer.visibility = View.GONE
                 binding.meshModeToggleGroup.check(R.id.btn_tab_host)
                 binding.btnHostAction.text = getString(R.string.mesh_stop_broadcast)
                 binding.hostStatusText.text = "Broadcasting master audio on local network"
                 binding.meshSyncBadge.text = "Master Host"
             }
             MeshRole.SATELLITE -> {
-                binding.meshModeToggleGroup.check(R.id.btn_tab_join)
+                binding.hostLayoutContainer.visibility = View.GONE
+                binding.joinLayoutContainer.visibility = View.VISIBLE
                 binding.joinScanningContainer.visibility = View.GONE
                 binding.satelliteControlsContainer.visibility = View.VISIBLE
+                binding.meshModeToggleGroup.check(R.id.btn_tab_join)
                 binding.satelliteRoomNameText.text = meshManager.currentRoomName ?: "Connected Room"
                 binding.meshSyncBadge.text = "Satellite Node"
 
@@ -129,6 +133,9 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.satelliteVolumeSlider.progress = (meshManager.volumeTrim * 100).toInt()
             }
             MeshRole.STANDALONE -> {
+                val isHostTab = binding.meshModeToggleGroup.checkedButtonId == R.id.btn_tab_host
+                binding.hostLayoutContainer.visibility = if (isHostTab) View.VISIBLE else View.GONE
+                binding.joinLayoutContainer.visibility = if (isHostTab) View.GONE else View.VISIBLE
                 binding.btnHostAction.text = getString(R.string.mesh_start_broadcast)
                 binding.hostStatusText.text = "Ready to broadcast local audio to nearby friends"
                 binding.joinScanningContainer.visibility = View.VISIBLE
