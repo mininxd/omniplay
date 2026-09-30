@@ -752,30 +752,32 @@ class PlaybackService : Service() {
     }
 
     fun getNextSong(): Song? {
-        if (queue.isEmpty()) return null
-        if (queue.size == 1) return currentSong
+        if (queue.isEmpty() || queue.size <= 1) return null
         if (isShuffleEnabled) {
-            return queue.getOrNull(1) ?: queue.firstOrNull()
+            return queue.getOrNull(1)
         }
         val nextIdx = currentIndex + 1
         return if (nextIdx < queue.size) {
             queue[nextIdx]
-        } else {
+        } else if (repeatMode == REPEAT_ALL) {
             queue.firstOrNull()
+        } else {
+            null
         }
     }
 
     fun getPreviousSong(): Song? {
-        if (queue.isEmpty()) return null
-        if (queue.size == 1) return currentSong
+        if (queue.isEmpty() || queue.size <= 1) return null
         if (isShuffleEnabled) {
             return queue.lastOrNull()
         }
         val prevIdx = currentIndex - 1
         return if (prevIdx >= 0) {
             queue[prevIdx]
-        } else {
+        } else if (repeatMode == REPEAT_ALL) {
             queue.lastOrNull()
+        } else {
+            null
         }
     }
 

@@ -450,6 +450,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     activeAnimator?.cancel()
+                    binding.peekAlbumArtCard.animate().cancel()
                     startX = event.rawX
                     startY = event.rawY
                     isDragging = false
@@ -510,15 +511,28 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val xVel = velocityTracker?.xVelocity ?: 0f
                         val currentX = v.translationX
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
-                        val threshold = cardWidth * 0.12f
+                        val absX = Math.abs(currentX)
+                        val ratio = absX / cardWidth
+                        val isCanceled = (event.actionMasked == MotionEvent.ACTION_CANCEL)
 
-                        val commitNext = peekDirection == -1 &&
-                                ((xVel < -180f) || (currentX < -threshold && xVel < 150f))
-                        val commitPrev = peekDirection == 1 &&
-                                ((xVel > 180f) || (currentX > threshold && xVel > -150f))
+                        // 1. Swiping over 50% unconditionally commits as long as target exists.
+                        // 2. Swiping 18% - 50% commits unless explicitly flung backward with high velocity.
+                        // 3. Small movements commit on flick (>250 px/s).
+                        val isSwipeNext = !isCanceled && currentX < 0 && (
+                            ratio >= 0.50f ||
+                            (ratio >= 0.18f && xVel < 350f) ||
+                            (absX >= 15f && xVel < -250f)
+                        )
+                        val isSwipePrev = !isCanceled && currentX > 0 && (
+                            ratio >= 0.50f ||
+                            (ratio >= 0.18f && xVel > -350f) ||
+                            (absX >= 15f && xVel > 250f)
+                        )
 
-                        val targetSong = currentPeekSong ?: (if (peekDirection == -1) playbackService?.getNextSong() else playbackService?.getPreviousSong())
-                        if (commitNext && targetSong != null) {
+                        val nextSong = currentPeekSong ?: playbackService?.getNextSong()
+                        val prevSong = currentPeekSong ?: playbackService?.getPreviousSong()
+
+                        if (isSwipeNext && nextSong != null) {
                             val targetX = -cardWidth * 1.25f
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(1f).scaleY(1f).alpha(1f)
@@ -572,7 +586,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 })
                                 start()
                             }
-                        } else if (commitPrev && targetSong != null) {
+                        } else if (isSwipePrev && prevSong != null) {
                             val targetX = cardWidth * 1.25f
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(1f).scaleY(1f).alpha(1f)
@@ -627,7 +641,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 start()
                             }
                         } else {
-                            // User dragged back or didn't cross threshold -> smoothly snap back!
+                            // User dragged back, no song in that direction, or didn't cross threshold -> smoothly snap back!
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(0.90f).scaleY(0.90f).alpha(0.6f)
                                 .setDuration(200L).start()
@@ -650,6 +664,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         v.translationX = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                                        binding.peekAlbumArtCard.scaleX = 0.90f
+                                        binding.peekAlbumArtCard.scaleY = 0.90f
+                                        binding.peekAlbumArtCard.alpha = 0.6f
                                         currentPeekSong = null
                                         activeAnimator = null
                                     }
@@ -658,8 +675,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             }
                         }
                         isDragging = false
-                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
-                        v.performClick()
+                    } else {
+                        if (v.translationX != 0f) {
+                            v.animate().translationX(0f).rotation(0f).setDuration(150L).start()
+                        }
+                        if (event.actionMasked == MotionEvent.ACTION_UP) {
+                            v.performClick()
+                        }
                     }
                     velocityTracker?.recycle()
                     velocityTracker = null
