@@ -549,7 +549,7 @@ class PlaybackService : Service() {
     }
 
     private fun updateAudioInfoForSong(song: Song) {
-        val qNorm = song.audioQuality.lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
+        val qNorm = (song.audioQuality + " " + song.filePath).lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
         val initialHiRes = song.isHiRes ||
                 song.format.startsWith("DSD", true) ||
                 song.format.equals("DSF", true) ||
@@ -571,6 +571,8 @@ class PlaybackService : Service() {
             qNorm.contains("24bit") || qNorm.contains("24/") || qNorm.contains("/24") -> 24
             qNorm.contains("16bit") || qNorm.contains("16/") || qNorm.contains("/16") -> 16
             song.format.startsWith("DSD", true) || song.format.equals("DSF", true) || song.format.equals("DFF", true) -> 1
+            initialHiRes -> 24
+            song.format in listOf("FLAC", "WAV", "ALAC", "AIFF") -> 16
             else -> 0
         }
 
@@ -750,32 +752,30 @@ class PlaybackService : Service() {
     }
 
     fun getNextSong(): Song? {
-        if (queue.isEmpty() || queue.size <= 1) return null
+        if (queue.isEmpty()) return null
+        if (queue.size == 1) return currentSong
         if (isShuffleEnabled) {
-            return queue.getOrNull(1)
+            return queue.getOrNull(1) ?: queue.firstOrNull()
         }
         val nextIdx = currentIndex + 1
         return if (nextIdx < queue.size) {
             queue[nextIdx]
-        } else if (repeatMode == REPEAT_ALL) {
-            queue.firstOrNull()
         } else {
-            null
+            queue.firstOrNull()
         }
     }
 
     fun getPreviousSong(): Song? {
-        if (queue.isEmpty() || queue.size <= 1) return null
+        if (queue.isEmpty()) return null
+        if (queue.size == 1) return currentSong
         if (isShuffleEnabled) {
             return queue.lastOrNull()
         }
         val prevIdx = currentIndex - 1
         return if (prevIdx >= 0) {
             queue[prevIdx]
-        } else if (repeatMode == REPEAT_ALL) {
-            queue.lastOrNull()
         } else {
-            null
+            queue.lastOrNull()
         }
     }
 

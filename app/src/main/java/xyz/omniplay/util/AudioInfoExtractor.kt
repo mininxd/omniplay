@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import java.io.BufferedInputStream
 import java.io.InputStream
 import java.io.Serializable
 import java.util.Locale
@@ -49,12 +50,23 @@ data class AudioTrackInfo(
             else -> String.format(Locale.US, "%.1fkhz", sampleRate / 1000.0)
         }
 
+        val isLossless = format in listOf("FLAC", "WAV", "ALAC", "AIFF", "APE", "WV") ||
+                isHiRes || checkHiRes()
+
+        val effectiveBitDepth = when {
+            bitDepth > 0 -> bitDepth
+            isHiRes || checkHiRes() || sampleRate > 48000 -> 24
+            isLossless -> 16
+            else -> 0
+        }
+
         return when {
-            bitDepth > 0 && srText.isNotEmpty() -> "${bitDepth}bit/$srText"
-            bitDepth > 0 -> "${bitDepth}bit"
-            bitrate > 0 && srText.isNotEmpty() -> "${bitrate / 1000}kbps/$srText"
-            bitrate > 0 -> "${bitrate / 1000}kbps"
+            effectiveBitDepth > 0 && srText.isNotEmpty() -> "${effectiveBitDepth}bit/$srText"
+            effectiveBitDepth > 0 -> "${effectiveBitDepth}bit"
+            isLossless && srText.isNotEmpty() -> "16bit/$srText"
+            srText.isNotEmpty() && bitrate > 0 && !isLossless -> "${bitrate / 1000}kbps/$srText"
             srText.isNotEmpty() -> srText
+            bitrate > 0 -> "${bitrate / 1000}kbps"
             else -> ""
         }
     }
@@ -95,16 +107,18 @@ object AudioInfoExtractor {
             uri.toString().endsWith(".dsf", ignoreCase = true) ||
             uri.toString().endsWith(".dff", ignoreCase = true)) {
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    xyz.omniplay.dsd.DsdHeaderParser.parse(stream)?.let { dsdHeader ->
-                        return AudioTrackInfo(
-                            format = dsdHeader.formatName,
-                            bitDepth = 1,
-                            sampleRate = dsdHeader.sampleRate,
-                            bitrate = dsdHeader.bitrateKbps * 1000,
-                            channels = dsdHeader.channelCount,
-                            isHiRes = true
-                        )
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        xyz.omniplay.dsd.DsdHeaderParser.parse(stream)?.let { dsdHeader ->
+                            return AudioTrackInfo(
+                                format = dsdHeader.formatName,
+                                bitDepth = 1,
+                                sampleRate = dsdHeader.sampleRate,
+                                bitrate = dsdHeader.bitrateKbps * 1000,
+                                channels = dsdHeader.channelCount,
+                                isHiRes = true
+                            )
+                        }
                     }
                 }
             } catch (ignored: Throwable) {}
@@ -113,8 +127,10 @@ object AudioInfoExtractor {
         // 2. FLAC: Read native 42-byte STREAMINFO block for exact bit depth (16/24/32-bit) & sample rate
         if (upperFormat == "FLAC" || uri.toString().endsWith(".flac", ignoreCase = true)) {
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    extractFlacHeader(stream)?.let { return it }
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        extractFlacHeader(stream)?.let { return it }
+                    }
                 }
             } catch (ignored: Throwable) {}
         }
@@ -122,22 +138,28 @@ object AudioInfoExtractor {
         // 3. WAV: Read RIFF fmt chunk for bit depth (16/24/32-bit) & sample rate
         if (upperFormat == "WAV" || uri.toString().endsWith(".wav", ignoreCase = true)) {
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    extractWavHeader(stream)?.let { return it }
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        extractWavHeader(stream)?.let { return it }
+                    }
                 }
             } catch (ignored: Throwable) {}
         }
 
         // 4. Fallback stream inspection if format was generic "AUDIO"
-        if (upperFormat == "AUDIO") {
+        if (upperFormat == "AUDIO" || upperFormat.isEmpty()) {
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    extractFlacHeader(stream)?.let { return it }
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        extractFlacHeader(stream)?.let { return it }
+                    }
                 }
             } catch (ignored: Throwable) {}
             try {
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    extractWavHeader(stream)?.let { return it }
+                context.contentResolver.openInputStream(uri)?.let { raw ->
+                    BufferedInputStream(raw).use { stream ->
+                        extractWavHeader(stream)?.let { return it }
+                    }
                 }
             } catch (ignored: Throwable) {}
         }
@@ -158,21 +180,46 @@ object AudioInfoExtractor {
                     ((id3Header[3].toInt() and 0x7F) shl 14) or
                     ((id3Header[4].toInt() and 0x7F) shl 7) or
                     (id3Header[5].toInt() and 0x7F)
-            skipFully(stream, tagSize.toLong())
+            val hasFooter = (id3Header[1].toInt() and 0x10) != 0
+            val toSkip = tagSize.toLong() + (if (hasFooter) 10L else 0L)
+            skipFully(stream, toSkip)
             if (!readFully(stream, magic)) return null
         }
 
         // Check magic "fLaC" -> 0x66, 0x4C, 0x61, 0x43
-        if (magic[0] != 0x66.toByte() || magic[1] != 0x4C.toByte() ||
-            magic[2] != 0x61.toByte() || magic[3] != 0x43.toByte()
-        ) {
-            return null
+        var foundFlac = magic[0] == 0x66.toByte() && magic[1] == 0x4C.toByte() &&
+                magic[2] == 0x61.toByte() && magic[3] == 0x43.toByte()
+
+        if (!foundFlac) {
+            val scanBuf = ByteArray(8192)
+            val bytesRead = stream.read(scanBuf)
+            if (bytesRead >= 4) {
+                for (i in 0 until bytesRead - 4) {
+                    if (scanBuf[i] == 0x66.toByte() && scanBuf[i + 1] == 0x4C.toByte() &&
+                        scanBuf[i + 2] == 0x61.toByte() && scanBuf[i + 3] == 0x43.toByte()
+                    ) {
+                        foundFlac = true
+                        val remainingInBuf = bytesRead - (i + 4)
+                        val streamInfo = ByteArray(38)
+                        val fromBuf = minOf(remainingInBuf, 38)
+                        System.arraycopy(scanBuf, i + 4, streamInfo, 0, fromBuf)
+                        if (fromBuf < 38) {
+                            if (!readFully(stream, streamInfo, fromBuf, 38 - fromBuf)) return null
+                        }
+                        return parseStreamInfo(streamInfo)
+                    }
+                }
+            }
+            if (!foundFlac) return null
         }
 
         // Read 38 bytes (4-byte metadata block header + 34-byte STREAMINFO block)
         val streamInfo = ByteArray(38)
         if (!readFully(stream, streamInfo)) return null
+        return parseStreamInfo(streamInfo)
+    }
 
+    private fun parseStreamInfo(streamInfo: ByteArray): AudioTrackInfo? {
         // StreamInfo block type is 0 (bits 0..6 of byte 0)
         if ((streamInfo[0].toInt() and 0x7F) != 0) return null
 
@@ -344,10 +391,10 @@ object AudioInfoExtractor {
             secondary.format
         }
 
-        val bitDepth = if (primary.bitDepth > 0) primary.bitDepth else secondary.bitDepth
-        val sampleRate = if (primary.sampleRate > 0) primary.sampleRate else secondary.sampleRate
+        val bitDepth = maxOf(primary.bitDepth, secondary.bitDepth)
+        val sampleRate = maxOf(primary.sampleRate, secondary.sampleRate)
         val bitrate = if (primary.bitrate > 0) primary.bitrate else secondary.bitrate
-        val channels = if (primary.channels > 0) primary.channels else secondary.channels
+        val channels = maxOf(primary.channels, secondary.channels)
         val isHiRes = primary.checkHiRes() || secondary.checkHiRes() || (sampleRate > 48000 || bitDepth > 16)
         val isBitPerfect = primary.isBitPerfect || secondary.isBitPerfect
 

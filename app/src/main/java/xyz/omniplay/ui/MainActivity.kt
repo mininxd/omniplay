@@ -463,6 +463,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     velocityTracker = VelocityTracker.obtain().apply {
                         addMovement(event)
                     }
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -471,10 +472,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val deltaY = event.rawY - startY
 
                     if (!isDragging) {
-                        val minSlop = (touchSlop * 0.35f).coerceAtLeast(8f)
-                        if (Math.abs(deltaX) > minSlop && Math.abs(deltaX) > Math.abs(deltaY) * 0.7f) {
+                        if (Math.abs(deltaX) > 8f && Math.abs(deltaX) > Math.abs(deltaY) * 0.5f) {
                             isDragging = true
                             v.parent?.requestDisallowInterceptTouchEvent(true)
+                        } else if (Math.abs(deltaY) > 35f && Math.abs(deltaY) > Math.abs(deltaX) * 2f) {
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
                         }
                     }
 
@@ -508,14 +510,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val xVel = velocityTracker?.xVelocity ?: 0f
                         val currentX = v.translationX
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
-                        val threshold = cardWidth * 0.18f
+                        val threshold = cardWidth * 0.12f
 
-                        val commitNext = currentPeekSong != null && peekDirection == -1 &&
-                                ((xVel < -300f) || (currentX < -threshold && xVel < 200f))
-                        val commitPrev = currentPeekSong != null && peekDirection == 1 &&
-                                ((xVel > 300f) || (currentX > threshold && xVel > -200f))
+                        val commitNext = peekDirection == -1 &&
+                                ((xVel < -180f) || (currentX < -threshold && xVel < 150f))
+                        val commitPrev = peekDirection == 1 &&
+                                ((xVel > 180f) || (currentX > threshold && xVel > -150f))
 
-                        val targetSong = currentPeekSong
+                        val targetSong = currentPeekSong ?: (if (peekDirection == -1) playbackService?.getNextSong() else playbackService?.getPreviousSong())
                         if (commitNext && targetSong != null) {
                             val targetX = -cardWidth * 1.25f
                             binding.peekAlbumArtCard.animate()
@@ -1009,6 +1011,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             "32-bit Floating Point PCM"
         }
 
+        val audioOutputResolution = if (isBitPerfect) {
+            when {
+                format.startsWith("DSD") -> "Direct DSD Bitstream (Bit-Exact)"
+                info != null && info.bitDepth > 0 && info.sampleRate > 0 -> {
+                    val khz = if (info.sampleRate % 1000 == 0) "${info.sampleRate / 1000}khz" else String.format(Locale.US, "%.1fkhz", info.sampleRate / 1000.0)
+                    "${info.bitDepth}bit/$khz (Bit-Exact)"
+                }
+                else -> "Bit-Exact Pass-Through"
+            }
+        } else {
+            "16bit/48khz"
+        }
+
         val outputMode = if (isBitPerfect) {
             "Direct HAL / USB Hardware Pass-Through"
         } else if (isHiRes) {
@@ -1032,6 +1047,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             AUDIO OUTPUT
             Active Device: $outputDevice
+            Output: $audioOutputResolution
             Output Mode: $outputMode
         """.trimIndent()
 
