@@ -274,6 +274,24 @@
                 android:textColor="#F6C445"
                 android:textSize="10sp"
                 android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/badge_bit_perfect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_badge_bit_perfect"
+                android:fontFamily="sans-serif-bold"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.06"
+                android:paddingStart="7dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="3dp"
+                android:text="BIT-PERFECT"
+                android:textColor="#00E5FF"
+                android:textSize="10sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Android 13/14 Squiggly Progress Line Seek Bar -->

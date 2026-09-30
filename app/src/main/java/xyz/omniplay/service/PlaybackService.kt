@@ -207,6 +207,49 @@ class PlaybackService : Service() {
         player = exo
     }
 
+    var isBitPerfectActive: Boolean = false
+        private set
+
+    fun getAudioOutputDeviceInfo(): String {
+        return try {
+            val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+            val usbDevice = devices.find {
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
+            }
+            if (usbDevice != null) {
+                val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    usbDevice.productName?.toString()?.takeIf { it.isNotBlank() }
+                } else null
+                prodName ?: "USB DAC / External Audio Device"
+            } else {
+                val btDevice = devices.find {
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                }
+                if (btDevice != null) {
+                    val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        btDevice.productName?.toString()?.takeIf { it.isNotBlank() }
+                    } else null
+                    prodName ?: "Bluetooth Audio (Wireless A2DP)"
+                } else {
+                    val wired = devices.find {
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                    }
+                    if (wired != null) {
+                        "Wired Headphones (3.5mm Analog Output)"
+                    } else {
+                        "Built-in Device Speaker"
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            "Default Audio Output"
+        }
+    }
+
     /**
      * Silent Bit-Perfect activation for USB DACs on Android 14+ (API 34).
      * Bypasses OS software resampling/mixing without displaying any UI or settings.
@@ -239,6 +282,7 @@ class PlaybackService : Service() {
                     .build()
 
                 val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                var bitPerfectApplied = false
                 for (device in devices) {
                     if (device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
                         device.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
@@ -250,6 +294,7 @@ class PlaybackService : Service() {
                         }
                         if (bitPerfectAttr != null) {
                             audioManager.setPreferredMixerAttributes(mediaAttributes, device, bitPerfectAttr)
+                            bitPerfectApplied = true
                         } else {
                             try {
                                 val customBitPerfect = AudioMixerAttributes.Builder(
@@ -262,9 +307,15 @@ class PlaybackService : Service() {
                                     .setMixerBehavior(AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT)
                                     .build()
                                 audioManager.setPreferredMixerAttributes(mediaAttributes, device, customBitPerfect)
+                                bitPerfectApplied = true
                             } catch (ignored: Throwable) {}
                         }
                     }
+                }
+                isBitPerfectActive = bitPerfectApplied
+                currentAudioInfo?.let {
+                    currentAudioInfo = it.copy(isBitPerfect = isBitPerfectActive)
+                    notifyAudioInfoChanged(currentAudioInfo)
                 }
             } catch (ignored: Throwable) {}
         }
@@ -488,13 +539,16 @@ class PlaybackService : Service() {
     private fun updateAudioInfoForSong(song: Song) {
         currentAudioInfo = AudioTrackInfo(
             format = song.format,
-            isHiRes = song.isHiRes
+            isHiRes = song.isHiRes,
+            isBitPerfect = isBitPerfectActive
         )
         notifyAudioInfoChanged(currentAudioInfo)
 
         serviceScope.launch(Dispatchers.IO) {
             val extracted = AudioInfoExtractor.extractFromUri(applicationContext, song.contentUri, song.format)
-            val merged = AudioInfoExtractor.merge(extracted, currentAudioInfo)
+            val merged = AudioInfoExtractor.merge(extracted, currentAudioInfo).copy(
+                isBitPerfect = isBitPerfectActive
+            )
             serviceScope.launch(Dispatchers.Main) {
                 if (currentSong?.id == song.id) {
                     currentAudioInfo = merged

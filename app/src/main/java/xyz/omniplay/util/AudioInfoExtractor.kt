@@ -15,7 +15,9 @@ data class AudioTrackInfo(
     val bitDepth: Int = 0,
     val sampleRate: Int = 0,
     val bitrate: Int = 0,
-    val isHiRes: Boolean = false
+    val channels: Int = 2,
+    val isHiRes: Boolean = false,
+    val isBitPerfect: Boolean = false
 ) : Serializable {
 
     fun formatQualityString(): String {
@@ -306,14 +308,18 @@ object AudioInfoExtractor {
         val bitDepth = if (primary.bitDepth > 0) primary.bitDepth else secondary.bitDepth
         val sampleRate = if (primary.sampleRate > 0) primary.sampleRate else secondary.sampleRate
         val bitrate = if (primary.bitrate > 0) primary.bitrate else secondary.bitrate
+        val channels = if (primary.channels > 0) primary.channels else secondary.channels
         val isHiRes = primary.isHiRes || secondary.isHiRes || (sampleRate >= 88200 || bitDepth >= 24)
+        val isBitPerfect = primary.isBitPerfect || secondary.isBitPerfect
 
         return AudioTrackInfo(
             format = format,
             bitDepth = bitDepth,
             sampleRate = sampleRate,
             bitrate = bitrate,
-            isHiRes = isHiRes
+            channels = channels,
+            isHiRes = isHiRes,
+            isBitPerfect = isBitPerfect
         )
     }
 }
