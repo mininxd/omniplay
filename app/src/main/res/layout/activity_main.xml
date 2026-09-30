@@ -122,9 +122,9 @@
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_marginStart="@dimen/album_art_margin_horizontal"
-            android:layout_marginTop="@dimen/album_art_margin_vertical"
+            android:layout_marginTop="@dimen/album_art_margin_top"
             android:layout_marginEnd="@dimen/album_art_margin_horizontal"
-            android:layout_marginBottom="@dimen/album_art_margin_vertical"
+            android:layout_marginBottom="@dimen/album_art_margin_bottom"
             app:cardCornerRadius="24dp"
             app:cardElevation="8dp"
             app:cardBackgroundColor="@color/surface_container"
@@ -271,7 +271,7 @@
             android:id="@+id/audio_badge_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:clickable="true"
@@ -359,7 +359,7 @@
             android:layout_width="0dp"
             android:layout_height="@dimen/playback_slider_height"
             android:layout_marginStart="24dp"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="@dimen/playback_slider_margin_top"
             android:layout_marginEnd="24dp"
             android:enabled="false"
             app:layout_constraintEnd_toEndOf="parent"
@@ -372,7 +372,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="28dp"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="@dimen/time_margin_top"
             android:singleLine="true"
             android:ellipsize="end"
             android:text="@string/default_time"
@@ -388,7 +388,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="28dp"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="@dimen/time_margin_top"
             android:text="@string/default_time"
             android:textColor="@color/text_tertiary"
             android:textSize="12sp"
@@ -408,7 +408,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/current_time_text"
-            app:layout_constraintVertical_bias="0.5">
+            app:layout_constraintVertical_bias="0.0">
 
             <!-- Shuffle -->
             <ImageButton

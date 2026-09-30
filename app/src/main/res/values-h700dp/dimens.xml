@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Responsive layout dimensions for taller displays (height >= 700dp) -->
-    <dimen name="album_art_max_size">260dp</dimen>
-    <dimen name="album_art_margin_horizontal">32dp</dimen>
-    <dimen name="album_art_margin_vertical">10dp</dimen>
-    <dimen name="song_title_margin_top">12dp</dimen>
+    <dimen name="album_art_max_size">285dp</dimen>
+    <dimen name="album_art_margin_horizontal">24dp</dimen>
+    <dimen name="album_art_margin_top">22dp</dimen>
+    <dimen name="album_art_margin_bottom">8dp</dimen>
+    <dimen name="song_title_margin_top">8dp</dimen>
     <dimen name="song_title_text_size">20sp</dimen>
     <dimen name="artist_name_text_size">15sp</dimen>
     <dimen name="album_name_text_size">13sp</dimen>
-    <dimen name="playback_slider_height">46dp</dimen>
-    <dimen name="controls_margin_top">10dp</dimen>
-    <dimen name="controls_margin_bottom">64dp</dimen>
+    <dimen name="playback_slider_height">38dp</dimen>
+    <dimen name="playback_slider_margin_top">3dp</dimen>
+    <dimen name="time_margin_top">1dp</dimen>
+    <dimen name="controls_margin_top">6dp</dimen>
+    <dimen name="controls_margin_bottom">16dp</dimen>
 </resources>

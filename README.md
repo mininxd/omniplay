@@ -1,6 +1,14 @@
-# Omniplay
+<p align="center">
+  <img src="icon.png" width="128" height="128" alt="Omniplay Icon"/>
+</p>
 
-**Omniplay** is a fast, lightweight, and open-source local music player for Android. Designed with Material 3 (Material You) styling, it offers smooth gesture navigation, a lively Android 13/14 native squiggly waveform scrubber, and great compatibility across all Android versions from Android 5.0 to Android 14.
+<h1 align="center">Omniplay</h1>
+
+<p align="center">
+  <strong>Fast, lightweight, and modern local music player for Android.</strong>
+</p>
+
+Omniplay is designed with Material 3 (Material You) styling, offering smooth gesture navigation, a lively Android 13/14 native squiggly waveform scrubber, and great compatibility across all Android versions from Android 5.0 to Android 14.
 
 ---
 
@@ -16,10 +24,10 @@
   - **Smart Title & Artist Preview**: Swiping left to see the **Next** track displays its title, artist, and artwork right along the revealed edge; swiping right shows the **Previous** track on the left.
   - **Accidental Skip Protection**: If you change your mind and drag the card back, it snaps back smoothly without changing songs. List boundaries also provide natural resistance.
   - **Reliable Song Skipping**: Flinging or dragging past 35% smoothly switches to that song with perfectly synced music and album cover art.
-  - **Tap to Open Playlist**: Simply tap the album cover to expand the playlist sheet.
+  - **Tap to Open Queue**: Simply tap the album cover to expand the queue sheet.
 
-- **📑 Slide-Up Playlist**:
-  - A persistent sliding playlist panel that slides up from below the controls whenever you want to pick a song.
+- **📑 Slide-Up Queue**:
+  - A persistent sliding queue panel that slides up from below the controls whenever you want to pick a song.
   - Drag up or down with your finger smoothly, or press the back button to collapse it.
   - Clean vinyl record jacket placeholders with a clear musical note icon centered on the disc label.
   - Easily toggle between custom file album art and uniform disc covers in the menu.
