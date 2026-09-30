@@ -425,7 +425,7 @@ class PlaybackService : Service() {
             currentIndex = 0
         } else {
             queue = songs.toMutableList()
-            currentIndex = startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+            currentIndex = if (startIndex in queue.indices) startIndex else 0
         }
 
         listeners.forEach { it.onQueueChanged(queue.toList()) }
@@ -436,11 +436,17 @@ class PlaybackService : Service() {
             if (queue.isNotEmpty() && currentIndex in queue.indices) {
                 val song = queue[currentIndex]
                 currentSong = song
-                playSong(song)
+                playSong(song, startPlaying = true)
             }
         } else {
             if (currentSong == null) {
-                currentIndex = -1
+                if (startIndex in queue.indices) {
+                    val song = queue[currentIndex]
+                    currentSong = song
+                    playSong(song, startPlaying = false)
+                } else {
+                    currentIndex = -1
+                }
             } else if (isExternalSongActive) {
                 currentIndex = startIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
             } else {
@@ -453,7 +459,7 @@ class PlaybackService : Service() {
         }
     }
 
-    fun playSongFromPlaylist(song: Song, index: Int = -1) {
+    fun playSongFromPlaylist(song: Song, index: Int = -1, startPlaying: Boolean = true) {
         isExternalSongActive = false
         externalSong = null
         if (isShuffleEnabled) {
@@ -461,7 +467,7 @@ class PlaybackService : Service() {
             val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
             queue = (listOf(matching) + remaining).toMutableList()
             currentIndex = 0
-            playSong(matching)
+            playSong(matching, startPlaying = startPlaying)
             listeners.forEach { it.onQueueChanged(queue.toList()) }
         } else {
             val targetIndex = if (index in queue.indices && queue[index].id == song.id) {
@@ -472,7 +478,7 @@ class PlaybackService : Service() {
             }
             if (queue.isNotEmpty() && targetIndex in queue.indices) {
                 currentIndex = targetIndex
-                playSong(queue[currentIndex])
+                playSong(queue[currentIndex], startPlaying = startPlaying)
             }
         }
     }
@@ -583,10 +589,10 @@ class PlaybackService : Service() {
     fun playExternalSong(song: Song) {
         isExternalSongActive = true
         externalSong = song
-        playSong(song)
+        playSong(song, startPlaying = true)
     }
 
-    fun playSong(song: Song) {
+    fun playSong(song: Song, startPlaying: Boolean = true) {
         if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
             return
         }
@@ -603,9 +609,7 @@ class PlaybackService : Service() {
             val art = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
             currentAlbumArt = art
             updateMediaMetadata(song, song.duration, art)
-            if (isPlaying()) {
-                updateNotification(isPlaying = true)
-            }
+            updateNotification(isPlaying = startPlaying && isPlaying())
         }
 
         try {
@@ -615,8 +619,15 @@ class PlaybackService : Service() {
                 val mediaItem = MediaItem.fromUri(song.contentUri)
                 p.setMediaItem(mediaItem)
                 p.prepare()
-                p.play()
-                xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(song, 0L)
+                if (startPlaying) {
+                    p.play()
+                    xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(song, 0L)
+                } else {
+                    stopProgressTracker()
+                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
+                    updateNotification(isPlaying = false)
+                    listeners.forEach { it.onPlaybackStateChanged(false) }
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -752,6 +763,8 @@ class PlaybackService : Service() {
     }
 
     fun skipNext(forceNext: Boolean = false) {
+        val wasPlaying = if (forceNext) isPlaying() else true
+
         if (isExternalSongActive) {
             isExternalSongActive = false
             externalSong = null
@@ -762,7 +775,7 @@ class PlaybackService : Service() {
                     0
                 }
                 currentIndex = targetIndex
-                playSong(queue[targetIndex])
+                playSong(queue[targetIndex], startPlaying = wasPlaying)
             } else {
                 currentSong = null
                 currentAlbumArt = null
@@ -784,7 +797,7 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
         if (!forceNext && repeatMode == REPEAT_ONE) {
-            currentSong?.let { playSong(it) }
+            currentSong?.let { playSong(it, startPlaying = wasPlaying) }
             return
         }
 
@@ -794,17 +807,17 @@ class PlaybackService : Service() {
                 queue.add(finished)
                 currentIndex = 0
                 val nextSong = queue[0]
-                playSong(nextSong)
+                playSong(nextSong, startPlaying = wasPlaying)
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
-                currentSong?.let { playSong(it) }
+                currentSong?.let { playSong(it, startPlaying = wasPlaying) }
             }
             return
         }
 
         if (queue.size <= 1) {
             if (repeatMode == REPEAT_ALL || forceNext) {
-                currentSong?.let { playSong(it) }
+                currentSong?.let { playSong(it, startPlaying = wasPlaying) }
             } else {
                 pause()
                 seekTo(0)
@@ -824,10 +837,12 @@ class PlaybackService : Service() {
             }
         }
 
-        playSong(queue[currentIndex])
+        playSong(queue[currentIndex], startPlaying = wasPlaying)
     }
 
     fun skipPrevious(forcePrevious: Boolean = false) {
+        val wasPlaying = isPlaying()
+
         if (isExternalSongActive) {
             if (!forcePrevious && getCurrentPosition() > 3000) {
                 seekTo(0)
@@ -846,7 +861,7 @@ class PlaybackService : Service() {
                     0
                 }
                 currentIndex = targetIndex
-                playSong(queue[targetIndex])
+                playSong(queue[targetIndex], startPlaying = wasPlaying)
             } else {
                 seekTo(0)
             }
@@ -865,7 +880,7 @@ class PlaybackService : Service() {
                 val prev = queue.removeAt(queue.size - 1)
                 queue.add(0, prev)
                 currentIndex = 0
-                playSong(prev)
+                playSong(prev, startPlaying = wasPlaying)
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
                 seekTo(0)
@@ -889,7 +904,7 @@ class PlaybackService : Service() {
             }
         }
 
-        playSong(queue[currentIndex])
+        playSong(queue[currentIndex], startPlaying = wasPlaying)
     }
 
     fun getNextSong(): Song? {

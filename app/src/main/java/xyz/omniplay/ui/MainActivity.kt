@@ -296,11 +296,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 Toast.makeText(this, "Mesh Mode active: Disconnect from Mesh to play local media", Toast.LENGTH_SHORT).show()
                 return@SongAdapter
             }
+            if (::bottomSheetBehavior.isInitialized) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            }
             playbackService?.let { service ->
+                val wasPlaying = service.isPlaying()
                 if (service.queue.isEmpty() && scannedSongs.isNotEmpty()) {
-                    service.setSongQueue(scannedSongs, startIndex = index, startPlaying = true)
+                    service.setSongQueue(scannedSongs, startIndex = index, startPlaying = wasPlaying)
                 } else {
-                    service.playSongFromPlaylist(song, index)
+                    service.playSongFromPlaylist(song, index, startPlaying = wasPlaying)
                 }
             }
         }
@@ -1231,7 +1235,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun showAboutDialog() {
         val message = """
-            Omniplay 0.2
+            Omniplay 0.3
             Open Source Material You Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
