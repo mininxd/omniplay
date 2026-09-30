@@ -27,4 +27,7 @@
     <!-- System & Window -->
     <color name="status_bar_color">#101116</color>
     <color name="navigation_bar_color">#101116</color>
+
+    <!-- Seek cancel indicator -->
+    <color name="slider_cancel_accent">#FF8A80</color>
 </resources>

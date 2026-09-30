@@ -8,6 +8,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.util.AttributeSet
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
@@ -16,6 +17,7 @@ import androidx.core.content.ContextCompat
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -34,8 +36,8 @@ class SquigglySeekBar @JvmOverloads constructor(
 
     interface OnSeekListener {
         fun onStartTracking()
-        fun onProgressChanged(progressMs: Long, fromUser: Boolean)
-        fun onStopTracking(progressMs: Long)
+        fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean = false)
+        fun onStopTracking(progressMs: Long, isCancelled: Boolean = false)
     }
 
     var seekListener: OnSeekListener? = null
@@ -45,6 +47,13 @@ class SquigglySeekBar @JvmOverloads constructor(
     private var displayedProgressMs: Float = 0f
     private var isUserDragging: Boolean = false
     private var isPlaying: Boolean = false
+
+    // Seek cancellation tracking
+    private var initialPlayingProgressMs: Long = 0L
+    private var hasSlidAway: Boolean = false
+    private var isSeekCancelled: Boolean = false
+    private val cancelMessage: String
+        get() = context.getString(R.string.release_to_cancel)
 
     private val density = context.resources.displayMetrics.density
     private val strokeWidthPx = 4f * density
@@ -93,6 +102,12 @@ class SquigglySeekBar @JvmOverloads constructor(
 
     private val bubbleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.primary_accent)
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f * density
+    }
+
+    private val bubbleCancelStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.slider_cancel_accent)
         style = Paint.Style.STROKE
         strokeWidth = 1.5f * density
     }
@@ -246,8 +261,8 @@ class SquigglySeekBar @JvmOverloads constructor(
 
         // 4. Draw Floating Time Bubble Tooltip above finger during scrubbing
         if (isUserDragging && isEnabled && maxDurationMs > 0) {
-            val formattedTime = Song.formatTime(currentProgressMs)
-            val textWidth = bubbleTextPaint.measureText(formattedTime)
+            val displayText = if (isSeekCancelled) cancelMessage else Song.formatTime(currentProgressMs)
+            val textWidth = bubbleTextPaint.measureText(displayText)
             val bubbleWidth = textWidth + 18f * density
             val bubbleHeight = 22f * density
             val bubbleRadius = 11f * density
@@ -268,10 +283,14 @@ class SquigglySeekBar @JvmOverloads constructor(
             )
 
             canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubblePaint)
-            canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubbleStrokePaint)
+            if (isSeekCancelled) {
+                canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubbleCancelStrokePaint)
+            } else {
+                canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubbleStrokePaint)
+            }
 
             val textY = bubbleRect.centerY() - (bubbleTextPaint.descent() + bubbleTextPaint.ascent()) / 2f
-            canvas.drawText(formattedTime, bubbleCenterX, textY, bubbleTextPaint)
+            canvas.drawText(displayText, bubbleCenterX, textY, bubbleTextPaint)
         }
     }
 
@@ -281,6 +300,9 @@ class SquigglySeekBar @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isUserDragging = true
+                initialPlayingProgressMs = currentProgressMs
+                hasSlidAway = false
+                isSeekCancelled = false
                 animateAmplitude(0f) // Smoothly flatten wave into straight line during scrubbing
                 parent?.requestDisallowInterceptTouchEvent(true)
                 seekListener?.onStartTracking()
@@ -296,10 +318,17 @@ class SquigglySeekBar @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (isUserDragging) {
+                    val wasCancelled = isSeekCancelled
                     isUserDragging = false
                     animateAmplitude(1f) // Smoothly bounce back to squiggly wave on release
-                    updateTouchPosition(event.x)
-                    seekListener?.onStopTracking(currentProgressMs)
+                    if (wasCancelled) {
+                        currentProgressMs = initialPlayingProgressMs
+                        displayedProgressMs = initialPlayingProgressMs.toFloat()
+                        invalidate()
+                    } else {
+                        updateTouchPosition(event.x)
+                    }
+                    seekListener?.onStopTracking(currentProgressMs, wasCancelled)
                 }
                 parent?.requestDisallowInterceptTouchEvent(false)
                 return true
@@ -319,9 +348,33 @@ class SquigglySeekBar @JvmOverloads constructor(
         val progress = (fraction * maxDurationMs).toLong()
         currentProgressMs = progress
         displayedProgressMs = progress.toFloat()
+
+        // Calculate initial playing position on screen
+        val initialRatio = (initialPlayingProgressMs.toFloat() / max(1L, maxDurationMs)).coerceIn(0f, 1f)
+        val initialX = startX + initialRatio * trackWidth
+        val distPx = abs(touchX - initialX)
+        val distMs = abs(progress - initialPlayingProgressMs)
+
+        val thresholdPx = 24f * density
+        val thresholdMs = max(2000L, (maxDurationMs * 0.025f).toLong())
+
+        // User must slide away before bringing it back can trigger cancel
+        if (distPx > thresholdPx * 1.25f || distMs > max(3000L, (maxDurationMs * 0.035f).toLong())) {
+            hasSlidAway = true
+        }
+
+        val newCancelled = hasSlidAway && (distPx <= thresholdPx || distMs <= thresholdMs)
+        if (newCancelled != isSeekCancelled) {
+            isSeekCancelled = newCancelled
+            try {
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (ignored: Exception) {}
+        }
+
         invalidate()
-        seekListener?.onProgressChanged(progress, true)
+        seekListener?.onProgressChanged(progress, true, isSeekCancelled)
     }
 
     fun isTracking(): Boolean = isUserDragging
+    fun isCancelled(): Boolean = isSeekCancelled
 }

@@ -18,4 +18,5 @@
     <string name="repeat">Repeat</string>
     <string name="expand_queue">Playlist</string>
     <string name="show_album_art_in_playlist">Show album art in playlist</string>
+    <string name="release_to_cancel">Release to cancel</string>
 </resources>

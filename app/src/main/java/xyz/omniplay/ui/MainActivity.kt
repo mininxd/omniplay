@@ -818,17 +818,31 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.playbackSlider.seekListener = object : SquigglySeekBar.OnSeekListener {
             override fun onStartTracking() {
                 isUserTrackingSlider = true
+                binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
             }
 
-            override fun onProgressChanged(progressMs: Long, fromUser: Boolean) {
+            override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
                 if (fromUser) {
-                    binding.currentTimeText.text = Song.formatTime(progressMs)
+                    if (isCancelled) {
+                        binding.currentTimeText.text = getString(R.string.release_to_cancel)
+                        binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.slider_cancel_accent))
+                    } else {
+                        binding.currentTimeText.text = Song.formatTime(progressMs)
+                        binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
+                    }
                 }
             }
 
-            override fun onStopTracking(progressMs: Long) {
+            override fun onStopTracking(progressMs: Long, isCancelled: Boolean) {
                 isUserTrackingSlider = false
-                playbackService?.seekTo(progressMs.toInt())
+                binding.currentTimeText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
+                if (isCancelled) {
+                    val currentPos = playbackService?.getCurrentPosition()?.toLong() ?: progressMs
+                    binding.playbackSlider.setProgress(currentPos)
+                    binding.currentTimeText.text = Song.formatTime(currentPos)
+                } else {
+                    playbackService?.seekTo(progressMs.toInt())
+                }
             }
         }
     }
