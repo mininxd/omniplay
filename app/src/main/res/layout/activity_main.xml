@@ -265,14 +265,14 @@
                 android:background="@drawable/bg_badge_hires"
                 android:fontFamily="sans-serif-bold"
                 android:includeFontPadding="false"
-                android:letterSpacing="0.06"
-                android:paddingStart="7dp"
+                android:letterSpacing="0.04"
+                android:paddingStart="8dp"
                 android:paddingTop="3dp"
-                android:paddingEnd="7dp"
+                android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="HI-RES"
                 android:textColor="#F6C445"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:visibility="gone" />
 
             <TextView
@@ -283,14 +283,14 @@
                 android:background="@drawable/bg_badge_bit_perfect"
                 android:fontFamily="sans-serif-bold"
                 android:includeFontPadding="false"
-                android:letterSpacing="0.06"
-                android:paddingStart="7dp"
+                android:letterSpacing="0.04"
+                android:paddingStart="8dp"
                 android:paddingTop="3dp"
-                android:paddingEnd="7dp"
+                android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="BIT-PERFECT"
                 android:textColor="#00E5FF"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:visibility="gone" />
         </LinearLayout>
 

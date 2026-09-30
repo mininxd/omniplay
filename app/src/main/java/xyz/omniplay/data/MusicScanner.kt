@@ -456,6 +456,7 @@ class MusicScanner(private val context: Context) {
             }
 
             val format = resolveAudioFormat(filePath, mimeType)
+            val isFormatHiRes = format.startsWith("DSD", true) || format == "DSF" || format == "DFF"
 
             songsList.add(
                 Song(
@@ -468,7 +469,8 @@ class MusicScanner(private val context: Context) {
                     albumArtUri = albumArtUri,
                     format = format,
                     filePath = filePath,
-                    fileSize = fileSize
+                    fileSize = fileSize,
+                    isHiRes = isFormatHiRes
                 )
             )
         }

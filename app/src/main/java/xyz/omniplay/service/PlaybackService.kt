@@ -500,8 +500,8 @@ class PlaybackService : Service() {
 
     private fun prepareWithoutPlaying(song: Song) {
         currentSong = song
-        listeners.forEach { it.onTrackChanged(song) }
         updateAudioInfoForSong(song)
+        listeners.forEach { it.onTrackChanged(song) }
         serviceScope.launch {
             currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
         }
@@ -520,8 +520,8 @@ class PlaybackService : Service() {
 
     fun playSong(song: Song) {
         currentSong = song
-        listeners.forEach { it.onTrackChanged(song) }
         updateAudioInfoForSong(song)
+        listeners.forEach { it.onTrackChanged(song) }
         updateMediaMetadata(song)
 
         serviceScope.launch {
@@ -548,9 +548,41 @@ class PlaybackService : Service() {
     }
 
     private fun updateAudioInfoForSong(song: Song) {
+        val q = song.audioQuality.lowercase(Locale.ROOT)
+        val initialHiRes = song.isHiRes ||
+                song.format.startsWith("DSD", true) ||
+                song.format.equals("DSF", true) ||
+                song.format.equals("DFF", true) ||
+                q.contains("24bit") || q.contains("32bit") ||
+                q.contains("96khz") || q.contains("88.2khz") ||
+                q.contains("176.4khz") || q.contains("192khz") ||
+                q.contains("352.8khz") || q.contains("384khz") || q.contains("mhz")
+
+        val initialBitDepth = when {
+            q.contains("32bit") -> 32
+            q.contains("24bit") -> 24
+            q.contains("16bit") -> 16
+            song.format.startsWith("DSD", true) || song.format.equals("DSF", true) || song.format.equals("DFF", true) -> 1
+            else -> 0
+        }
+
+        val initialSampleRate = when {
+            q.contains("384khz") -> 384000
+            q.contains("352.8khz") -> 352800
+            q.contains("192khz") -> 192000
+            q.contains("176.4khz") -> 176400
+            q.contains("96khz") -> 96000
+            q.contains("88.2khz") -> 88200
+            q.contains("48khz") -> 48000
+            q.contains("44.1khz") -> 44100
+            else -> 0
+        }
+
         currentAudioInfo = AudioTrackInfo(
             format = song.format,
-            isHiRes = song.isHiRes,
+            bitDepth = initialBitDepth,
+            sampleRate = initialSampleRate,
+            isHiRes = initialHiRes,
             isBitPerfect = isBitPerfectActive
         )
         notifyAudioInfoChanged(currentAudioInfo)

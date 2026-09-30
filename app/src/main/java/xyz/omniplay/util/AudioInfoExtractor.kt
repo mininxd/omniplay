@@ -20,6 +20,16 @@ data class AudioTrackInfo(
     val isBitPerfect: Boolean = false
 ) : Serializable {
 
+    fun checkHiRes(): Boolean {
+        return isHiRes ||
+                bitDepth > 16 ||
+                sampleRate > 48000 ||
+                bitDepth == 1 ||
+                format.startsWith("DSD", ignoreCase = true) ||
+                format.equals("DSF", ignoreCase = true) ||
+                format.equals("DFF", ignoreCase = true)
+    }
+
     fun formatQualityString(): String {
         if (bitDepth == 1 || format.startsWith("DSD")) {
             val mhz = when {
@@ -52,6 +62,26 @@ data class AudioTrackInfo(
 
 object AudioInfoExtractor {
 
+    private fun readFully(stream: InputStream, buffer: ByteArray, offset: Int = 0, length: Int = buffer.size - offset): Boolean {
+        var bytesRead = 0
+        while (bytesRead < length) {
+            val r = stream.read(buffer, offset + bytesRead, length - bytesRead)
+            if (r == -1) return false
+            bytesRead += r
+        }
+        return true
+    }
+
+    private fun skipFully(stream: InputStream, toSkip: Long) {
+        var remaining = toSkip
+        val temp = ByteArray(4096)
+        while (remaining > 0) {
+            val r = stream.read(temp, 0, minOf(remaining, temp.size.toLong()).toInt())
+            if (r <= 0) break
+            remaining -= r
+        }
+    }
+
     /**
      * Extracts audio resolution, bit depth, sample rate, and format from URI.
      * Uses direct stream header inspection for FLAC (STREAMINFO), WAV (fmt),
@@ -72,6 +102,7 @@ object AudioInfoExtractor {
                             bitDepth = 1,
                             sampleRate = dsdHeader.sampleRate,
                             bitrate = dsdHeader.bitrateKbps * 1000,
+                            channels = dsdHeader.channelCount,
                             isHiRes = true
                         )
                     }
@@ -97,71 +128,85 @@ object AudioInfoExtractor {
             } catch (ignored: Throwable) {}
         }
 
-        // 4. Fallback: MediaMetadataRetriever
+        // 4. Fallback stream inspection if format was generic "AUDIO"
+        if (upperFormat == "AUDIO") {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    extractFlacHeader(stream)?.let { return it }
+                }
+            } catch (ignored: Throwable) {}
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    extractWavHeader(stream)?.let { return it }
+                }
+            } catch (ignored: Throwable) {}
+        }
+
+        // 5. Fallback: MediaMetadataRetriever
         return extractFromRetriever(context, uri, fallbackFormat)
     }
 
     private fun extractFlacHeader(stream: InputStream): AudioTrackInfo? {
-        val buffer = ByteArray(42)
-        var bytesRead = 0
-        while (bytesRead < 42) {
-            val r = stream.read(buffer, bytesRead, 42 - bytesRead)
-            if (r == -1) break
-            bytesRead += r
+        val magic = ByteArray(4)
+        if (!readFully(stream, magic)) return null
+
+        if (magic[0] == 0x49.toByte() && magic[1] == 0x44.toByte() && magic[2] == 0x33.toByte()) {
+            // ID3v2 tag present at start of FLAC file
+            val id3Header = ByteArray(6)
+            if (!readFully(stream, id3Header)) return null
+            val tagSize = ((id3Header[2].toInt() and 0x7F) shl 21) or
+                    ((id3Header[3].toInt() and 0x7F) shl 14) or
+                    ((id3Header[4].toInt() and 0x7F) shl 7) or
+                    (id3Header[5].toInt() and 0x7F)
+            skipFully(stream, tagSize.toLong())
+            if (!readFully(stream, magic)) return null
         }
-        if (bytesRead < 42) return null
 
         // Check magic "fLaC" -> 0x66, 0x4C, 0x61, 0x43
-        if (buffer[0] != 0x66.toByte() || buffer[1] != 0x4C.toByte() ||
-            buffer[2] != 0x61.toByte() || buffer[3] != 0x43.toByte()
+        if (magic[0] != 0x66.toByte() || magic[1] != 0x4C.toByte() ||
+            magic[2] != 0x61.toByte() || magic[3] != 0x43.toByte()
         ) {
             return null
         }
 
-        // StreamInfo block type is 0 (bits 0..6 of byte 4)
-        if ((buffer[4].toInt() and 0x7F) != 0) return null
+        // Read 38 bytes (4-byte metadata block header + 34-byte STREAMINFO block)
+        val streamInfo = ByteArray(38)
+        if (!readFully(stream, streamInfo)) return null
 
-        val b18 = buffer[18].toInt() and 0xFF
-        val b19 = buffer[19].toInt() and 0xFF
-        val b20 = buffer[20].toInt() and 0xFF
-        val b21 = buffer[21].toInt() and 0xFF
+        // StreamInfo block type is 0 (bits 0..6 of byte 0)
+        if ((streamInfo[0].toInt() and 0x7F) != 0) return null
 
-        val sampleRate = (b18 shl 12) or (b19 shl 4) or (b20 ushr 4)
-        val bitDepth = (((b20 and 0x01) shl 4) or (b21 ushr 4)) + 1
-        val isHiRes = sampleRate >= 88200 || bitDepth >= 24
+        val b14 = streamInfo[14].toInt() and 0xFF
+        val b15 = streamInfo[15].toInt() and 0xFF
+        val b16 = streamInfo[16].toInt() and 0xFF
+        val b17 = streamInfo[17].toInt() and 0xFF
+
+        val sampleRate = (b14 shl 12) or (b15 shl 4) or (b16 ushr 4)
+        val channels = ((b16 and 0x0E) ushr 1) + 1
+        val bitDepth = (((b16 and 0x01) shl 4) or (b17 ushr 4)) + 1
+        val isHiRes = sampleRate > 48000 || bitDepth > 16
 
         return AudioTrackInfo(
             format = "FLAC",
             bitDepth = bitDepth,
             sampleRate = sampleRate,
+            channels = channels,
             isHiRes = isHiRes
         )
     }
 
     private fun extractWavHeader(stream: InputStream): AudioTrackInfo? {
-        val header = ByteArray(12)
-        var r = 0
-        while (r < 12) {
-            val count = stream.read(header, r, 12 - r)
-            if (count == -1) break
-            r += count
-        }
-        if (r < 12) return null
+        val riffHeader = ByteArray(12)
+        if (!readFully(stream, riffHeader)) return null
 
-        val riff = String(header, 0, 4, Charsets.US_ASCII)
-        val wave = String(header, 8, 4, Charsets.US_ASCII)
+        val riff = String(riffHeader, 0, 4, Charsets.US_ASCII)
+        val wave = String(riffHeader, 8, 4, Charsets.US_ASCII)
         if (riff != "RIFF" || wave != "WAVE") return null
 
         var bytesScanned = 12
         val chunkHeader = ByteArray(8)
-        while (bytesScanned < 2048) {
-            var chRead = 0
-            while (chRead < 8) {
-                val c = stream.read(chunkHeader, chRead, 8 - chRead)
-                if (c == -1) break
-                chRead += c
-            }
-            if (chRead < 8) break
+        while (bytesScanned < 65536) {
+            if (!readFully(stream, chunkHeader)) break
             bytesScanned += 8
 
             val chunkId = String(chunkHeader, 0, 4, Charsets.US_ASCII)
@@ -171,38 +216,29 @@ object AudioInfoExtractor {
                     ((chunkHeader[7].toInt() and 0xFF) shl 24)
 
             if (chunkId == "fmt ") {
-                if (chunkSize < 16) break
-                val fmtData = ByteArray(chunkSize.coerceAtMost(40))
-                var fmtRead = 0
-                while (fmtRead < fmtData.size) {
-                    val c = stream.read(fmtData, fmtRead, fmtData.size - fmtRead)
-                    if (c == -1) break
-                    fmtRead += c
-                }
-                if (fmtRead >= 16) {
-                    val sampleRate = (fmtData[4].toInt() and 0xFF) or
-                            ((fmtData[5].toInt() and 0xFF) shl 8) or
-                            ((fmtData[6].toInt() and 0xFF) shl 16) or
-                            ((fmtData[7].toInt() and 0xFF) shl 24)
-                    val bitsPerSample = (fmtData[14].toInt() and 0xFF) or
-                            ((fmtData[15].toInt() and 0xFF) shl 8)
-                    val isHiRes = sampleRate >= 88200 || bitsPerSample >= 24
-                    return AudioTrackInfo(
-                        format = "WAV",
-                        bitDepth = bitsPerSample,
-                        sampleRate = sampleRate,
-                        isHiRes = isHiRes
-                    )
-                }
-                break
+                val toRead = chunkSize.coerceAtLeast(16).coerceAtMost(40)
+                val fmtData = ByteArray(toRead)
+                if (!readFully(stream, fmtData)) break
+                val channels = (fmtData[2].toInt() and 0xFF) or ((fmtData[3].toInt() and 0xFF) shl 8)
+                val sampleRate = (fmtData[4].toInt() and 0xFF) or
+                        ((fmtData[5].toInt() and 0xFF) shl 8) or
+                        ((fmtData[6].toInt() and 0xFF) shl 16) or
+                        ((fmtData[7].toInt() and 0xFF) shl 24)
+                val bitsPerSample = (fmtData[14].toInt() and 0xFF) or
+                        ((fmtData[15].toInt() and 0xFF) shl 8)
+                val isHiRes = sampleRate > 48000 || bitsPerSample > 16
+                return AudioTrackInfo(
+                    format = "WAV",
+                    bitDepth = bitsPerSample,
+                    sampleRate = sampleRate,
+                    channels = channels.coerceAtLeast(2),
+                    isHiRes = isHiRes
+                )
             } else {
-                var toSkip = chunkSize.toLong()
-                while (toSkip > 0) {
-                    val skipped = stream.skip(toSkip)
-                    if (skipped <= 0) break
-                    toSkip -= skipped
-                }
-                bytesScanned += chunkSize
+                if (chunkSize < 0) break
+                val paddedSize = if (chunkSize % 2 != 0) chunkSize + 1 else chunkSize
+                skipFully(stream, paddedSize.toLong())
+                bytesScanned += paddedSize
             }
         }
         return null
@@ -227,7 +263,7 @@ object AudioInfoExtractor {
                 0
             }
 
-            val isHiRes = sampleRate >= 88200 || bitDepth >= 24
+            val isHiRes = sampleRate > 48000 || bitDepth > 16 || fallbackFormat.startsWith("DSD", true) || fallbackFormat.equals("DSF", true) || fallbackFormat.equals("DFF", true)
             AudioTrackInfo(
                 format = fallbackFormat.uppercase(Locale.ROOT),
                 bitDepth = bitDepth,
@@ -255,6 +291,7 @@ object AudioInfoExtractor {
                 format = dsdName,
                 bitDepth = 1,
                 sampleRate = dsdRate,
+                channels = format.channelCount.coerceAtLeast(2),
                 isHiRes = true
             )
         }
@@ -267,11 +304,12 @@ object AudioInfoExtractor {
             else -> 0
         }
         val bitrate = if (format.bitrate > 0) format.bitrate else 0
-        val isHiRes = sampleRate >= 88200 || bitDepth >= 24
+        val isHiRes = sampleRate > 48000 || bitDepth > 16 || fallbackFormat.startsWith("DSD", true) || fallbackFormat.equals("DSF", true) || fallbackFormat.equals("DFF", true)
 
         val resolvedFormat = when {
             format.sampleMimeType?.contains("flac", ignoreCase = true) == true -> "FLAC"
             format.sampleMimeType?.contains("wav", ignoreCase = true) == true -> "WAV"
+            format.sampleMimeType?.contains("alac", ignoreCase = true) == true -> "ALAC"
             format.sampleMimeType?.contains("mpeg", ignoreCase = true) == true ||
             format.sampleMimeType?.contains("mp3", ignoreCase = true) == true -> "MP3"
             format.sampleMimeType?.contains("aac", ignoreCase = true) == true ||
@@ -288,6 +326,7 @@ object AudioInfoExtractor {
             bitDepth = bitDepth,
             sampleRate = sampleRate,
             bitrate = bitrate,
+            channels = format.channelCount.coerceAtLeast(2),
             isHiRes = isHiRes
         )
     }
@@ -309,7 +348,7 @@ object AudioInfoExtractor {
         val sampleRate = if (primary.sampleRate > 0) primary.sampleRate else secondary.sampleRate
         val bitrate = if (primary.bitrate > 0) primary.bitrate else secondary.bitrate
         val channels = if (primary.channels > 0) primary.channels else secondary.channels
-        val isHiRes = primary.isHiRes || secondary.isHiRes || (sampleRate >= 88200 || bitDepth >= 24)
+        val isHiRes = primary.checkHiRes() || secondary.checkHiRes() || (sampleRate > 48000 || bitDepth > 16)
         val isBitPerfect = primary.isBitPerfect || secondary.isBitPerfect
 
         return AudioTrackInfo(

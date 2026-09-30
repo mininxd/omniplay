@@ -1114,7 +1114,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val format = audioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song.format
         val quality = audioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
-        val isHiRes = audioInfo?.isHiRes ?: song.isHiRes
+        val isHiRes = (audioInfo?.checkHiRes() == true) ||
+                song.isHiRes ||
+                (audioInfo?.sampleRate ?: 0) > 48000 ||
+                (audioInfo?.bitDepth ?: 0) > 16 ||
+                (audioInfo?.bitDepth ?: 0) == 1 ||
+                format.startsWith("DSD", ignoreCase = true) ||
+                format.equals("DSF", ignoreCase = true) ||
+                format.equals("DFF", ignoreCase = true) ||
+                quality.contains("24bit", ignoreCase = true) ||
+                quality.contains("32bit", ignoreCase = true) ||
+                quality.contains("88.2khz", ignoreCase = true) ||
+                quality.contains("96khz", ignoreCase = true) ||
+                quality.contains("176.4khz", ignoreCase = true) ||
+                quality.contains("192khz", ignoreCase = true) ||
+                quality.contains("352.8khz", ignoreCase = true) ||
+                quality.contains("384khz", ignoreCase = true) ||
+                quality.contains("mhz", ignoreCase = true)
 
         if (format.isNotEmpty()) {
             binding.audioBadgeContainer.visibility = View.VISIBLE
