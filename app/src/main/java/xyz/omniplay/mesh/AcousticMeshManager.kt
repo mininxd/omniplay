@@ -453,7 +453,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     fun startScanningRooms() {
         if (discoveryListener != null) return
-        acquireMulticastLock()
+        acquireMeshLocks()
         discoveredRooms.clear()
         notifyRoomsDiscovered()
 
@@ -509,6 +509,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
         discoveryListener?.let {
             try { nsdManager.stopServiceDiscovery(it) } catch (ignored: Exception) {}
             discoveryListener = null
+        }
+        if (currentRole == MeshRole.STANDALONE) {
+            releaseMeshLocks()
         }
     }
 
