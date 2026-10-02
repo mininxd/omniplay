@@ -16,6 +16,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -620,14 +622,14 @@ class OmniSyncManager private constructor(private val context: Context) {
                 } catch (ignored: Exception) {}
 
                 if (title.isNotEmpty()) {
-                    val streamUrl = "$baseUrl/stream?id=$songId&t=${System.currentTimeMillis()}"
+                    val streamUrl = "$baseUrl/stream?id=$songId"
                     playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
                     val msg = if (e.message?.contains("EHOSTUNREACH", ignoreCase = true) == true ||
                         e.message?.contains("No route to host", ignoreCase = true) == true) {
-                        "Cannot reach host at ${host.address}:$targetPort. Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot (check AP Isolation in router)."
+                        "Cannot reach host at ${host.address}:$targetPort. Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot."
                     } else {
                         "Failed to connect to host: ${e.localizedMessage}"
                     }
@@ -636,83 +638,76 @@ class OmniSyncManager private constructor(private val context: Context) {
                 }
             }
 
-            // 2. Real-time SSE stream loop
-            var sseSuccess = false
-            try {
-                val eventsUrl = URL("$baseUrl/events")
-                val sseConn = (eventsUrl.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5000
-                    readTimeout = 10000 // Inactivity timeout: if host is silent for 10s (3 missed heartbeats), drop connection
-                    requestMethod = "GET"
-                    setRequestProperty("Accept", "text/event-stream")
-                }
-                if (sseConn.responseCode == 200) {
-                    sseSuccess = true
-                    val reader = BufferedReader(InputStreamReader(sseConn.inputStream))
-                    while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                        val line = try {
-                            reader.readLine()
-                        } catch (e: Exception) {
-                            null
-                        }
-                        if (line == null) {
-                            // Host closed connection or read timed out
-                            break
-                        }
-                        if (line.startsWith("data:")) {
-                            val dataJson = line.substring(5).trim()
-                            if (dataJson.isNotEmpty()) {
-                                val json = try { JSONObject(dataJson) } catch (e: Exception) { null }
-                                if (json != null) {
-                                    handleListenerCommand(json, host)
+            // 2. Persistent Event Channel with Auto-Reconnect (Discord-like Room Connection)
+            var consecutiveErrors = 0
+            while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                var sseConn: HttpURLConnection? = null
+                try {
+                    val eventsUrl = URL("$baseUrl/events")
+                    sseConn = (eventsUrl.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 5000
+                        readTimeout = 0 // Keep connection open indefinitely; do NOT timeout!
+                        requestMethod = "GET"
+                        setRequestProperty("Accept", "text/event-stream")
+                    }
+                    if (sseConn.responseCode == 200) {
+                        consecutiveErrors = 0
+                        val reader = BufferedReader(InputStreamReader(sseConn.inputStream))
+                        while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                            val line = try {
+                                reader.readLine()
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (line == null) {
+                                // Socket closed or EOF
+                                break
+                            }
+                            if (line.startsWith("data:")) {
+                                val dataJson = line.substring(5).trim()
+                                if (dataJson.isNotEmpty()) {
+                                    val json = try { JSONObject(dataJson) } catch (e: Exception) { null }
+                                    if (json != null) {
+                                        handleListenerCommand(json, host)
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        consecutiveErrors++
                     }
+                } catch (e: Exception) {
+                    consecutiveErrors++
+                } finally {
+                    try { sseConn?.disconnect() } catch (ignored: Exception) {}
                 }
-                try { sseConn.disconnect() } catch (ignored: Exception) {}
-            } catch (ignored: Exception) {}
 
-            // 3. Fallback Polling Loop if SSE disconnected or not supported
-            if (isActive && currentRole == OmniSyncRole.LISTENER && !sseSuccess) {
-                var consecutiveFailures = 0
-                while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                    delay(1200L)
+                if (!isActive || currentRole != OmniSyncRole.LISTENER) break
+
+                // If multiple consecutive connection failures occur, verify if host is still running
+                if (consecutiveErrors >= 4) {
+                    var hostAlive = false
                     try {
-                        val statusUrl = URL("$baseUrl/status")
-                        val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
-                            connectTimeout = 2500
-                            readTimeout = 2500
-                            requestMethod = "GET"
+                        val testUrl = URL("$baseUrl/status")
+                        val testConn = (testUrl.openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 2000
+                            readTimeout = 2000
                         }
-                        if (conn.responseCode == 200) {
-                            consecutiveFailures = 0
-                            val body = conn.inputStream.bufferedReader().readText()
-                            conn.disconnect()
-                            val status = JSONObject(body)
-                            val title = status.optString("title", "")
-                            val artist = status.optString("artist", "")
-                            val songId = status.optLong("songId", 0L)
-                            val pos = status.optLong("position", 0L)
-                            val isHostPlaying = status.optBoolean("isPlaying", false)
+                        if (testConn.responseCode == 200) {
+                            hostAlive = true
+                            consecutiveErrors = 0
+                        }
+                        testConn.disconnect()
+                    } catch (ignored: Exception) {}
 
-                            if (title.isNotEmpty()) {
-                                val streamUrl = "$baseUrl/stream?id=$songId&t=${System.currentTimeMillis()}"
-                                playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
-                            }
-                        } else {
-                            consecutiveFailures++
-                            if (consecutiveFailures >= 2) break
-                        }
-                    } catch (e: Exception) {
-                        consecutiveFailures++
-                        if (consecutiveFailures >= 2) break
+                    if (!hostAlive) {
+                        disconnectListener("Host disconnected")
+                        break
                     }
                 }
-            }
 
-            if (isActive && currentRole == OmniSyncRole.LISTENER) {
-                disconnectListener("Host disconnected")
+                // Brief backoff before reconnecting to event stream (stay in room)
+                delay(1000L)
             }
         }
     }
@@ -731,7 +726,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val pos = json.optLong("positionMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
                 if (title.isNotEmpty()) {
-                    val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId&t=${System.currentTimeMillis()}"
+                    val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
                     playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
                 }
             }
@@ -746,7 +741,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val isHostPlaying = json.optBoolean("isPlaying", true)
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
-                val streamUrl = "http://$formattedHost:$port/stream?id=$songId&t=${System.currentTimeMillis()}"
+                val streamUrl = "http://$formattedHost:$port/stream?id=$songId"
 
                 playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying)
             }
@@ -784,16 +779,27 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
             if (isHostPlaying && hostPos > 0) {
                 val current = player.currentPosition
-                if (abs(current - hostPos) > 3000) {
+                // If drift is more than 2.5 seconds, gently seek to stay synced with host
+                if (abs(current - hostPos) > 2500) {
                     player.seekTo(hostPos)
                 }
             }
         }
     }
 
+    private var pendingSeekPositionMs: Long = 0L
+
     private fun getOrCreateListenerPlayer(): ExoPlayer {
         listenerPlayer?.let { return it }
+
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+            .setConstantBitrateSeekingAlwaysEnabled(true)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
+
         val player = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -802,11 +808,19 @@ class OmniSyncManager private constructor(private val context: Context) {
                 true
             )
             .build()
+
         player.volume = listenerVolume
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_READY -> {
+                        val target = pendingSeekPositionMs
+                        if (target > 500L && abs(player.currentPosition - target) > 1500L) {
+                            pendingSeekPositionMs = 0L
+                            player.seekTo(target)
+                        } else {
+                            pendingSeekPositionMs = 0L
+                        }
                         isStreamPlaying = player.isPlaying
                         notifyPlaybackState(isStreamPlaying)
                     }
@@ -824,14 +838,21 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                notifyError("Stream error: ${error.localizedMessage ?: "Playback failed"}")
+                // Ignore transient errors, retry prepare if actively listening
+                try {
+                    if (currentRole == OmniSyncRole.LISTENER) {
+                        player.prepare()
+                        if (isStreamPlaying) {
+                            player.play()
+                        }
+                    }
+                } catch (ignored: Exception) {}
             }
         })
         listenerPlayer = player
         return player
     }
 
-    @Synchronized
     private fun playListenerStream(
         url: String,
         songId: Long,
@@ -840,20 +861,21 @@ class OmniSyncManager private constructor(private val context: Context) {
         artist: String,
         startPlaying: Boolean = true
     ) {
-        val isNewSong = (currentTrackTitle != title || currentStreamSongId != songId || currentStreamUrl == null)
-
-        currentTrackTitle = title
-        currentTrackArtist = artist
-        currentStreamSongId = songId
-        notifyTrackInfo(title, artist)
-
         mainHandler.post {
             try {
                 if (currentRole != OmniSyncRole.LISTENER) return@post
+                val isNewSong = (currentStreamSongId != songId || currentStreamUrl != url || currentTrackTitle != title)
+
+                currentTrackTitle = title
+                currentTrackArtist = artist
+                currentStreamSongId = songId
+                notifyTrackInfo(title, artist)
+
                 val player = getOrCreateListenerPlayer()
 
-                if (isNewSong || currentStreamUrl != url) {
+                if (isNewSong) {
                     currentStreamUrl = url
+                    pendingSeekPositionMs = positionMs
                     val mediaItem = MediaItem.fromUri(url)
                     player.setMediaItem(mediaItem)
                     player.prepare()
@@ -868,21 +890,20 @@ class OmniSyncManager private constructor(private val context: Context) {
                         isStreamPlaying = false
                     }
                 } else {
-                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 2500) {
+                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 2000) {
                         player.seekTo(positionMs)
                     }
                     if (startPlaying) {
-                        player.play()
+                        if (!player.isPlaying) player.play()
                         isStreamPlaying = true
                     } else {
-                        player.pause()
+                        if (player.isPlaying) player.pause()
                         isStreamPlaying = false
                     }
                 }
                 notifyPlaybackState(isStreamPlaying)
             } catch (e: Exception) {
                 e.printStackTrace()
-                notifyError("Stream playback error: ${e.localizedMessage}")
             }
         }
     }
