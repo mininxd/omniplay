@@ -9,8 +9,8 @@ enum class OmniSyncRole {
 data class OmniSyncHost(
     val name: String,
     val address: String,
-    val port: Int = OmniSyncManager.CONTROL_PORT,
-    val streamPort: Int = OmniSyncManager.STREAM_PORT
+    val port: Int = OmniSyncManager.PORT,
+    val streamPort: Int = OmniSyncManager.PORT
 )
 
 data class OmniSyncPeer(

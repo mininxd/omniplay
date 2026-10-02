@@ -20,16 +20,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import xyz.omniplay.model.Song
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.io.PrintWriter
+import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.InetSocketAddress
-import java.net.ServerSocket
 import java.net.Socket
+import java.net.URL
+import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.abs
@@ -37,15 +37,16 @@ import kotlin.math.abs
 /**
  * OmniSync Manager:
  * Handles local network music streaming orchestration for Host and Listener modes.
- * - Host: Streams playing audio over HTTP and broadcasts sync controls (Play, Pause, Seek).
- * - Listener: Discovers hosts via mDNS/NSD (and fallback IP probing), connects to stream, and plays synchronously.
+ * - Host: Embedded HTTP server (port 8998) streaming audio with Range support and broadcasting SSE events.
+ * - Listener: Discovers hosts via mDNS/HTTP probe, connects via HTTP (port 8998), and streams synchronously.
  */
 class OmniSyncManager private constructor(private val context: Context) {
 
     companion object {
-        const val SERVICE_TYPE = "_omnisync._tcp"
-        const val CONTROL_PORT = 8999
+        const val PORT = 8998
+        const val CONTROL_PORT = 8998
         const val STREAM_PORT = 8998
+        const val SERVICE_TYPE = "_omnisync._tcp"
 
         @Volatile
         private var instance: OmniSyncManager? = null
@@ -79,7 +80,7 @@ class OmniSyncManager private constructor(private val context: Context) {
     private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    val streamServer = OmniSyncStreamServer(context, STREAM_PORT)
+    val streamServer = OmniSyncStreamServer(context, PORT)
 
     var hostSongProvider: (() -> Song?)? = null
     var hostPlaybackPositionProvider: (() -> Long)? = null
@@ -109,13 +110,7 @@ class OmniSyncManager private constructor(private val context: Context) {
     val connectedPeers = CopyOnWriteArrayList<OmniSyncPeer>()
     val discoveredHosts = CopyOnWriteArrayList<OmniSyncHost>()
 
-    // Host networking
-    private var hostControlServerJob: Job? = null
-    private var hostControlServerSocket: ServerSocket? = null
-    private val peerWriters = CopyOnWriteArrayList<PrintWriter>()
-
-    // Listener networking
-    private var clientSocket: Socket? = null
+    // Listener state
     private var clientJob: Job? = null
     private var listenerPlayer: MediaPlayer? = null
     private var currentStreamUrl: String? = null
@@ -275,9 +270,18 @@ class OmniSyncManager private constructor(private val context: Context) {
         currentRole = OmniSyncRole.HOST
         currentHostRoomName = roomName
         connectedPeers.clear()
-        peerWriters.clear()
 
         acquireLocks()
+
+        streamServer.onPeerJoined = { peer ->
+            connectedPeers.removeAll { it.id == peer.id || it.ip == peer.ip }
+            connectedPeers.add(peer)
+            notifyPeersChanged()
+        }
+        streamServer.onPeerLeft = { id ->
+            connectedPeers.removeAll { it.id == id }
+            notifyPeersChanged()
+        }
 
         streamServer.hostName = roomName
         val song = hostSongProvider?.invoke()
@@ -288,7 +292,6 @@ class OmniSyncManager private constructor(private val context: Context) {
         streamServer.currentDurationMs = song?.duration ?: 0L
         streamServer.start()
 
-        startHostControlServer(roomName)
         registerNsdService(roomName)
 
         notifyRoleChanged(OmniSyncRole.HOST)
@@ -299,113 +302,12 @@ class OmniSyncManager private constructor(private val context: Context) {
         }
     }
 
-    private fun startHostControlServer(roomName: String) {
-        hostControlServerJob?.cancel()
-        try {
-            hostControlServerSocket?.close()
-        } catch (ignored: Exception) {}
-
-        hostControlServerJob = scope.launch {
-            try {
-                val server = ServerSocket().apply {
-                    reuseAddress = true
-                    bind(InetSocketAddress(CONTROL_PORT))
-                }
-                hostControlServerSocket = server
-
-                while (isActive && !server.isClosed) {
-                    try {
-                        val client = server.accept()
-                        client.tcpNoDelay = true
-                        launch(Dispatchers.IO) {
-                            handleHostPeerConnection(client, roomName)
-                        }
-                    } catch (e: Exception) {
-                        if (!isActive || server.isClosed) break
-                    }
-                }
-            } catch (e: Exception) {
-                if (e !is CancellationException) {
-                    notifyError("Host control server error: ${e.localizedMessage}")
-                }
-            }
-        }
-    }
-
-    private suspend fun handleHostPeerConnection(socket: Socket, roomName: String) {
-        var currentPeer: OmniSyncPeer? = null
-        var currentWriter: PrintWriter? = null
-
-        try {
-            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-            val writer = PrintWriter(socket.getOutputStream(), true)
-            currentWriter = writer
-            peerWriters.add(writer)
-
-            val clientIp = socket.inetAddress.hostAddress ?: "Unknown"
-
-            while (scope.isActive && !socket.isClosed) {
-                val line = withContext(Dispatchers.IO) { reader.readLine() } ?: break
-                val json = try { JSONObject(line) } catch (e: Exception) { null } ?: continue
-                val action = json.optString("action")
-
-                if (action == "HELLO") {
-                    val pId = json.optString("id", UUID.randomUUID().toString())
-                    val pName = json.optString("name", "Listener ($clientIp)")
-                    val peer = OmniSyncPeer(id = pId, name = pName, ip = clientIp)
-                    currentPeer = peer
-
-                    connectedPeers.removeAll { it.id == pId || it.ip == clientIp }
-                    connectedPeers.add(peer)
-                    notifyPeersChanged()
-
-                    val hostIp = (socket.localAddress as? Inet4Address)?.hostAddress
-                        ?: getLocalIPv4Address()
-                        ?: socket.localAddress.hostAddress
-
-                    val welcome = JSONObject().apply {
-                        put("action", "WELCOME")
-                        put("hostName", roomName)
-                        put("hostIp", hostIp)
-                        put("streamPort", STREAM_PORT)
-                    }
-                    writer.println(welcome.toString())
-
-                    // If host is currently playing, send PLAY event immediately
-                    val playingSong = hostSongProvider?.invoke()
-                    val isPlaying = hostIsPlayingProvider?.invoke() == true
-                    val pos = hostPlaybackPositionProvider?.invoke() ?: 0L
-                    if (playingSong != null && isPlaying) {
-                        val playCmd = JSONObject().apply {
-                            put("action", "PLAY")
-                            put("hostIp", hostIp)
-                            put("streamPort", STREAM_PORT)
-                            put("songTitle", playingSong.title)
-                            put("songArtist", playingSong.artist)
-                            put("songDuration", playingSong.duration)
-                            put("positionMs", pos)
-                        }
-                        writer.println(playCmd.toString())
-                    }
-                }
-            }
-        } catch (ignored: Exception) {
-        } finally {
-            currentWriter?.let { peerWriters.remove(it) }
-            currentPeer?.let {
-                connectedPeers.remove(it)
-                notifyPeersChanged()
-            }
-            try { socket.close() } catch (ignored: Exception) {}
-        }
-    }
-
     private fun registerNsdService(roomName: String) {
         try {
             val serviceInfo = NsdServiceInfo().apply {
                 serviceName = roomName
                 serviceType = SERVICE_TYPE
-                port = CONTROL_PORT
+                port = PORT
             }
 
             registrationListener = object : NsdManager.RegistrationListener {
@@ -422,23 +324,10 @@ class OmniSyncManager private constructor(private val context: Context) {
     fun stopHost() {
         if (currentRole != OmniSyncRole.HOST) return
 
-        scope.launch {
-            val stopCmd = JSONObject().apply { put("action", "STOP") }.toString()
-            peerWriters.forEach { try { it.println(stopCmd) } catch (ignored: Exception) {} }
-            peerWriters.clear()
-        }
-
         try {
             registrationListener?.let { nsdManager.unregisterService(it) }
         } catch (ignored: Exception) {}
         registrationListener = null
-
-        hostControlServerJob?.cancel()
-        hostControlServerJob = null
-        try {
-            hostControlServerSocket?.close()
-        } catch (ignored: Exception) {}
-        hostControlServerSocket = null
 
         streamServer.stop()
         connectedPeers.clear()
@@ -464,18 +353,14 @@ class OmniSyncManager private constructor(private val context: Context) {
         val json = JSONObject().apply {
             put("action", "PLAY")
             hostIp?.let { put("hostIp", it) }
-            put("streamPort", STREAM_PORT)
+            put("streamPort", PORT)
             put("songTitle", song.title)
             put("songArtist", song.artist)
             put("songDuration", song.duration)
             put("positionMs", positionMs)
         }.toString()
 
-        scope.launch {
-            peerWriters.forEach { writer ->
-                try { writer.println(json) } catch (ignored: Exception) {}
-            }
-        }
+        streamServer.broadcastEvent(json)
     }
 
     fun broadcastPause() {
@@ -486,11 +371,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             put("action", "PAUSE")
         }.toString()
 
-        scope.launch {
-            peerWriters.forEach { writer ->
-                try { writer.println(json) } catch (ignored: Exception) {}
-            }
-        }
+        streamServer.broadcastEvent(json)
     }
 
     fun broadcastSeek(positionMs: Long) {
@@ -502,11 +383,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             put("positionMs", positionMs)
         }.toString()
 
-        scope.launch {
-            peerWriters.forEach { writer ->
-                try { writer.println(json) } catch (ignored: Exception) {}
-            }
-        }
+        streamServer.broadcastEvent(json)
     }
 
     // =========================================================================
@@ -544,7 +421,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
         } catch (ignored: Exception) {}
 
-        // Fallback probe for Wi-Fi Gateway & Hotspot IPs (when mDNS is filtered by routers)
+        // Fallback HTTP probe for Wi-Fi Gateway & Hotspot IPs
         scope.launch {
             try {
                 val candidates = mutableListOf<String>()
@@ -568,12 +445,12 @@ class OmniSyncManager private constructor(private val context: Context) {
                     if (discoveredHosts.any { it.address == ip }) continue
                     try {
                         Socket().use { s ->
-                            s.connect(InetSocketAddress(ip, CONTROL_PORT), 500)
+                            s.connect(InetSocketAddress(ip, PORT), 400)
                             val host = OmniSyncHost(
                                 name = "OmniSync Host ($ip)",
                                 address = ip,
-                                port = CONTROL_PORT,
-                                streamPort = STREAM_PORT
+                                port = PORT,
+                                streamPort = PORT
                             )
                             if (!discoveredHosts.any { it.address == ip }) {
                                 discoveredHosts.add(host)
@@ -629,7 +506,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                                 name = resolved.serviceName,
                                 address = host,
                                 port = resolved.port,
-                                streamPort = STREAM_PORT
+                                streamPort = resolved.port
                             )
                             discoveredHosts.removeAll { it.address == host || it.name == room.name }
                             discoveredHosts.add(room)
@@ -687,53 +564,141 @@ class OmniSyncManager private constructor(private val context: Context) {
         acquireLocks()
 
         clientJob?.cancel()
-        try { clientSocket?.close() } catch (ignored: Exception) {}
 
-        clientJob = scope.launch {
+        clientJob = scope.launch(Dispatchers.IO) {
+            val targetPort = if (host.port > 0) host.port else PORT
+            val baseUrl = "http://${host.address}:$targetPort"
+
+            // 1. Initial HTTP probe & registration
             try {
-                val socket = Socket()
+                val statusUrl = URL("$baseUrl/status")
+                val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    requestMethod = "GET"
+                }
+
+                val code = conn.responseCode
+                if (code != 200) {
+                    throw Exception("Host returned HTTP status $code")
+                }
+                val body = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+
+                val initialStatus = JSONObject(body)
+                val title = initialStatus.optString("title", "")
+                val artist = initialStatus.optString("artist", "")
+                val pos = initialStatus.optLong("position", 0L)
+                val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
+                val rName = initialStatus.optString("hostName", host.name)
+                currentHostRoomName = rName
+
+                // Register listener with host
                 try {
-                    val cm = connectivityManager
-                    val wifiNetwork = cm?.allNetworks?.firstOrNull { network ->
-                        val caps = cm.getNetworkCapabilities(network)
-                        caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    val regUrl = URL("$baseUrl/register?id=$deviceId&name=${URLEncoder.encode(deviceName, "UTF-8")}")
+                    val regConn = (regUrl.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 3000
+                        readTimeout = 3000
+                        requestMethod = "POST"
                     }
-                    wifiNetwork?.bindSocket(socket)
+                    regConn.responseCode
+                    regConn.disconnect()
                 } catch (ignored: Exception) {}
 
-                socket.connect(InetSocketAddress(host.address, host.port), 5000)
-                clientSocket = socket
-
-                val writer = PrintWriter(socket.getOutputStream(), true)
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-
-                // Handshake
-                val hello = JSONObject().apply {
-                    put("action", "HELLO")
-                    put("id", deviceId)
-                    put("name", deviceName)
-                }
-                writer.println(hello.toString())
-
-                while (isActive && !socket.isClosed) {
-                    val line = withContext(Dispatchers.IO) { reader.readLine() } ?: break
-                    val json = try { JSONObject(line) } catch (e: Exception) { null } ?: continue
-                    handleListenerCommand(json, host)
+                if (title.isNotEmpty()) {
+                    playListenerStream("$baseUrl/stream", pos, title, artist)
+                    if (!isHostPlaying) {
+                        pauseListenerStream()
+                    }
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
                     val msg = if (e.message?.contains("EHOSTUNREACH", ignoreCase = true) == true ||
                         e.message?.contains("No route to host", ignoreCase = true) == true) {
-                        "Cannot reach host (${host.address}). Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot (check AP Isolation in router)."
+                        "Cannot reach host at ${host.address}:$targetPort. Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot (check AP Isolation in router)."
                     } else {
-                        "Disconnected from host: ${e.localizedMessage}"
+                        "Failed to connect to host: ${e.localizedMessage}"
                     }
                     notifyError(msg)
-                }
-            } finally {
-                if (currentRole == OmniSyncRole.LISTENER) {
                     disconnectListener()
+                    return@launch
                 }
+            }
+
+            // 2. Real-time SSE stream loop
+            var sseSuccess = false
+            try {
+                val eventsUrl = URL("$baseUrl/events")
+                val sseConn = (eventsUrl.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 0 // Stream indefinitely
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "text/event-stream")
+                }
+                if (sseConn.responseCode == 200) {
+                    sseSuccess = true
+                    val reader = BufferedReader(InputStreamReader(sseConn.inputStream))
+                    while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                        val line = reader.readLine() ?: break
+                        if (line.startsWith("data:")) {
+                            val dataJson = line.substring(5).trim()
+                            if (dataJson.isNotEmpty()) {
+                                val json = try { JSONObject(dataJson) } catch (e: Exception) { null }
+                                if (json != null) {
+                                    handleListenerCommand(json, host)
+                                }
+                            }
+                        }
+                    }
+                }
+                sseConn.disconnect()
+            } catch (ignored: Exception) {}
+
+            // 3. Polling Fallback if SSE disconnected or not supported
+            while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                delay(1200L)
+                try {
+                    val statusUrl = URL("$baseUrl/status")
+                    val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 2500
+                        readTimeout = 2500
+                        requestMethod = "GET"
+                    }
+                    if (conn.responseCode == 200) {
+                        val body = conn.inputStream.bufferedReader().readText()
+                        conn.disconnect()
+                        val status = JSONObject(body)
+                        val title = status.optString("title", "")
+                        val artist = status.optString("artist", "")
+                        val pos = status.optLong("position", 0L)
+                        val isHostPlaying = status.optBoolean("isPlaying", false)
+
+                        if (title != currentTrackTitle) {
+                            if (title.isNotEmpty()) {
+                                playListenerStream("$baseUrl/stream", pos, title, artist)
+                                if (!isHostPlaying) pauseListenerStream()
+                            }
+                        } else {
+                            if (isHostPlaying != isStreamPlaying) {
+                                if (isHostPlaying) {
+                                    listenerPlayer?.start()
+                                    isStreamPlaying = true
+                                    notifyPlaybackState(true)
+                                } else {
+                                    pauseListenerStream()
+                                }
+                            }
+                        }
+                    } else {
+                        break
+                    }
+                } catch (e: Exception) {
+                    break
+                }
+            }
+
+            if (currentRole == OmniSyncRole.LISTENER) {
+                disconnectListener()
             }
         }
     }
@@ -749,7 +714,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             "PLAY" -> {
                 val ipFromCmd = json.optString("hostIp")
                 val streamIp = if (ipFromCmd.isNotEmpty()) ipFromCmd else host.address
-                val port = json.optInt("streamPort", host.streamPort)
+                val port = json.optInt("streamPort", PORT)
                 val positionMs = json.optLong("positionMs", 0L)
                 val songTitle = json.optString("songTitle", "OmniSync Track")
                 val songArtist = json.optString("songArtist", "Host Broadcast")
@@ -872,10 +837,25 @@ class OmniSyncManager private constructor(private val context: Context) {
     fun disconnectListener() {
         if (currentRole != OmniSyncRole.LISTENER) return
 
+        val hostToUnregister = currentHost
+        scope.launch(Dispatchers.IO) {
+            try {
+                hostToUnregister?.let {
+                    val port = if (it.port > 0) it.port else PORT
+                    val unregUrl = URL("http://${it.address}:$port/unregister?id=$deviceId")
+                    val conn = (unregUrl.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 2000
+                        readTimeout = 2000
+                        requestMethod = "POST"
+                    }
+                    conn.responseCode
+                    conn.disconnect()
+                }
+            } catch (ignored: Exception) {}
+        }
+
         clientJob?.cancel()
         clientJob = null
-        try { clientSocket?.close() } catch (ignored: Exception) {}
-        clientSocket = null
 
         scope.launch(Dispatchers.Main) {
             try {

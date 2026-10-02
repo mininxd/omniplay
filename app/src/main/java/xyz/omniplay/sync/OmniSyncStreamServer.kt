@@ -15,23 +15,31 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.PrintWriter
 import java.io.RandomAccessFile
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.URLDecoder
+import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.min
 
 /**
- * Embedded HTTP audio streaming and status server for OmniSync.
- * Streams the host's current local audio track to listener peers over local Wi-Fi / hotspot.
+ * Unified HTTP audio streaming, status, and event server for OmniSync.
+ * Operates entirely over standard HTTP (port 8998) with Range requests, SSE, and CORS.
  */
 class OmniSyncStreamServer(
     private val context: Context,
-    val port: Int = OmniSyncManager.STREAM_PORT
+    val port: Int = OmniSyncManager.PORT
 ) {
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val sseWriters = CopyOnWriteArrayList<PrintWriter>()
+
+    var onPeerJoined: ((OmniSyncPeer) -> Unit)? = null
+    var onPeerLeft: ((String) -> Unit)? = null
 
     @Volatile
     var currentSong: Song? = null
@@ -83,46 +91,179 @@ class OmniSyncStreamServer(
         }
     }
 
-    private fun handleClient(client: Socket) {
-        try {
-            client.use { socket ->
-                socket.soTimeout = 15000
-                val input = socket.getInputStream().bufferedReader()
-                val output = socket.getOutputStream()
-
-                val requestLine = input.readLine() ?: return
-                val parts = requestLine.split(" ")
-                if (parts.size < 2) return
-                val method = parts[0]
-                val path = parts[1]
-
-                val isHeadRequest = method.equals("HEAD", ignoreCase = true)
-                var line = input.readLine()
-                var rangeHeader: String? = null
-                while (!line.isNullOrEmpty()) {
-                    if (line.startsWith("Range:", ignoreCase = true)) {
-                        rangeHeader = line.substringAfter(":").trim()
-                    }
-                    line = input.readLine()
-                }
-
-                if (path.startsWith("/status")) {
-                    serveStatus(output, isHeadRequest)
-                    return
-                }
-
-                val song = currentSong
-                val uri = currentSongUri ?: song?.contentUri
-                if (uri == null && song == null) {
-                    send404(output)
-                    return
-                }
-
-                serveAudioStream(song, uri, output, rangeHeader, isHeadRequest)
+    fun broadcastEvent(jsonString: String) {
+        val sseData = "data: $jsonString\n\n"
+        for (writer in sseWriters) {
+            try {
+                writer.print(sseData)
+                writer.flush()
+            } catch (e: Exception) {
+                sseWriters.remove(writer)
             }
+        }
+    }
+
+    private fun handleClient(socket: Socket) {
+        try {
+            socket.soTimeout = 15000
+            val input = socket.getInputStream().bufferedReader()
+            val output = socket.getOutputStream()
+
+            val requestLine = input.readLine() ?: return
+            val parts = requestLine.split(" ")
+            if (parts.size < 2) return
+            val method = parts[0]
+            val path = parts[1]
+
+            val isHeadRequest = method.equals("HEAD", ignoreCase = true)
+            var line = input.readLine()
+            var rangeHeader: String? = null
+            while (!line.isNullOrEmpty()) {
+                if (line.startsWith("Range:", ignoreCase = true)) {
+                    rangeHeader = line.substringAfter(":").trim()
+                }
+                line = input.readLine()
+            }
+
+            // CORS preflight
+            if (method.equals("OPTIONS", ignoreCase = true)) {
+                val cors = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Range, Content-Type\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                output.write(cors.toByteArray(Charsets.UTF_8))
+                output.flush()
+                socket.close()
+                return
+            }
+
+            // Real-time Server-Sent Events (SSE)
+            if (path.startsWith("/events")) {
+                handleSseStream(socket, output, input)
+                return
+            }
+
+            // Peer Registration
+            if (path.startsWith("/register")) {
+                handleRegister(path, socket, output)
+                socket.close()
+                return
+            }
+
+            // Peer Unregistration
+            if (path.startsWith("/unregister")) {
+                handleUnregister(path, output)
+                socket.close()
+                return
+            }
+
+            // Status Polling / Inspection
+            if (path.startsWith("/status")) {
+                serveStatus(output, isHeadRequest)
+                socket.close()
+                return
+            }
+
+            // Audio Stream
+            val song = currentSong
+            val uri = currentSongUri ?: song?.contentUri
+            if (uri == null && song == null) {
+                send404(output)
+                socket.close()
+                return
+            }
+
+            serveAudioStream(song, uri, output, rangeHeader, isHeadRequest)
+            socket.close()
         } catch (ignored: Exception) {
             // Client disconnected or aborted
+            try { socket.close() } catch (e: Exception) {}
         }
+    }
+
+    private fun handleSseStream(socket: Socket, output: OutputStream, input: java.io.BufferedReader) {
+        socket.soTimeout = 0 // Keep-alive indefinitely for event stream
+        val header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
+        output.write(header.toByteArray(Charsets.UTF_8))
+        output.flush()
+
+        val writer = PrintWriter(output, true)
+        sseWriters.add(writer)
+
+        // Send initial state event immediately
+        val initEvent = JSONObject().apply {
+            put("action", "WELCOME")
+            put("hostName", hostName)
+            put("title", currentSong?.title ?: "")
+            put("artist", currentSong?.artist ?: "")
+            put("positionMs", currentPositionMs)
+            put("durationMs", currentDurationMs)
+            put("isPlaying", isPlaying)
+        }.toString()
+        writer.print("data: $initEvent\n\n")
+        writer.flush()
+
+        try {
+            // Keep reading or blocking until client closes connection
+            while (!socket.isClosed) {
+                val nextLine = input.readLine()
+                if (nextLine == null) break
+            }
+        } catch (ignored: Exception) {
+        } finally {
+            sseWriters.remove(writer)
+            try { socket.close() } catch (ignored: Exception) {}
+        }
+    }
+
+    private fun handleRegister(path: String, socket: Socket, output: OutputStream) {
+        try {
+            val query = if (path.contains("?")) path.substringAfter("?") else ""
+            val params = query.split("&").associate {
+                val p = it.split("=")
+                if (p.size == 2) {
+                    p[0] to try { URLDecoder.decode(p[1], "UTF-8") } catch (e: Exception) { p[1] }
+                } else "" to ""
+            }
+            val clientIp = socket.inetAddress.hostAddress ?: "127.0.0.1"
+            val pId = params["id"]?.takeIf { it.isNotEmpty() } ?: clientIp
+            val pName = params["name"]?.takeIf { it.isNotEmpty() } ?: "Listener ($clientIp)"
+
+            val peer = OmniSyncPeer(pId, pName, clientIp)
+            onPeerJoined?.invoke(peer)
+
+            val statusJson = JSONObject().apply {
+                put("status", "ok")
+                put("hostName", hostName)
+                put("title", currentSong?.title ?: "")
+                put("artist", currentSong?.artist ?: "")
+                put("duration", currentDurationMs)
+                put("position", currentPositionMs)
+                put("isPlaying", isPlaying)
+            }.toString()
+
+            val bytes = statusJson.toByteArray(Charsets.UTF_8)
+            val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+            output.write(headers.toByteArray(Charsets.UTF_8))
+            output.write(bytes)
+            output.flush()
+        } catch (ignored: Exception) {}
+    }
+
+    private fun handleUnregister(path: String, output: OutputStream) {
+        try {
+            val query = if (path.contains("?")) path.substringAfter("?") else ""
+            val params = query.split("&").associate {
+                val p = it.split("=")
+                if (p.size == 2) {
+                    p[0] to try { URLDecoder.decode(p[1], "UTF-8") } catch (e: Exception) { p[1] }
+                } else "" to ""
+            }
+            params["id"]?.let { onPeerLeft?.invoke(it) }
+
+            val res = "{\"status\":\"ok\"}".toByteArray(Charsets.UTF_8)
+            val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: ${res.size}\r\nConnection: close\r\n\r\n"
+            output.write(headers.toByteArray(Charsets.UTF_8))
+            output.write(res)
+            output.flush()
+        } catch (ignored: Exception) {}
     }
 
     private fun serveStatus(output: OutputStream, isHeadRequest: Boolean) {
@@ -138,7 +279,7 @@ class OmniSyncStreamServer(
             }.toString()
 
             val bytes = statusJson.toByteArray(Charsets.UTF_8)
-            val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
+            val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n"
             output.write(headers.toByteArray(Charsets.UTF_8))
             if (!isHeadRequest) {
                 output.write(bytes)
@@ -210,6 +351,7 @@ class OmniSyncStreamServer(
             append(statusLine)
             append("Content-Type: $effectiveMime\r\n")
             append("Accept-Ranges: bytes\r\n")
+            append("Access-Control-Allow-Origin: *\r\n")
             if (contentLength > 0L) {
                 append("Content-Length: $contentLength\r\n")
             }
@@ -344,6 +486,13 @@ class OmniSyncStreamServer(
     }
 
     fun stop() {
+        for (writer in sseWriters) {
+            try {
+                writer.print("data: {\"action\":\"STOP\"}\n\n")
+                writer.flush()
+            } catch (ignored: Exception) {}
+        }
+        sseWriters.clear()
         try {
             serverSocket?.close()
             serverSocket = null

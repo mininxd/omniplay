@@ -96,12 +96,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 return@setOnClickListener
             }
             val hostIp = if (raw.contains(":")) raw.substringBefore(":") else raw
-            val port = if (raw.contains(":")) raw.substringAfter(":").toIntOrNull() ?: OmniSyncManager.CONTROL_PORT else OmniSyncManager.CONTROL_PORT
+            val port = if (raw.contains(":")) raw.substringAfter(":").toIntOrNull() ?: OmniSyncManager.PORT else OmniSyncManager.PORT
             val host = OmniSyncHost(
                 name = "OmniSync Host ($hostIp)",
                 address = hostIp,
                 port = port,
-                streamPort = OmniSyncManager.STREAM_PORT
+                streamPort = port
             )
             binding.btnManualConnect.isEnabled = false
             syncManager.connectToHost(host)
