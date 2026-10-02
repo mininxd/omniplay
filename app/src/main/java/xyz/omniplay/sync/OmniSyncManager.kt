@@ -17,6 +17,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -76,6 +77,7 @@ class OmniSyncManager private constructor(private val context: Context) {
         fun onError(message: String)
         fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
         fun onLatencyUpdate(latencyMs: Long) {}
+        fun onStreamQualityChanged(quality: OmniSyncQuality) {}
     }
 
     init {
@@ -154,6 +156,50 @@ class OmniSyncManager private constructor(private val context: Context) {
     @Volatile
     var currentTrackIsHiRes: Boolean = false
         private set
+
+    private val prefs = context.getSharedPreferences("omnisync_prefs", Context.MODE_PRIVATE)
+
+    var streamQuality: OmniSyncQuality = try {
+        OmniSyncQuality.valueOf(prefs.getString("stream_quality", OmniSyncQuality.HIGH.name) ?: OmniSyncQuality.HIGH.name)
+    } catch (e: Exception) {
+        OmniSyncQuality.HIGH
+    }
+        private set
+
+    fun setStreamQuality(quality: OmniSyncQuality) {
+        if (streamQuality == quality) return
+        streamQuality = quality
+        prefs.edit().putString("stream_quality", quality.name).apply()
+        mainHandler.post { listeners.forEach { it.onStreamQualityChanged(quality) } }
+        if (currentRole == OmniSyncRole.LISTENER) {
+            recreateListenerPlayerForQuality()
+        }
+    }
+
+    private fun recreateListenerPlayerForQuality() {
+        mainHandler.post {
+            val oldPlayer = listenerPlayer ?: return@post
+            val currentPos = oldPlayer.currentPosition
+            val isPlaying = isStreamPlaying
+            val url = currentStreamUrl
+
+            try {
+                oldPlayer.stop()
+                oldPlayer.release()
+            } catch (ignored: Exception) {}
+            listenerPlayer = null
+
+            if (!url.isNullOrEmpty() && currentRole == OmniSyncRole.LISTENER) {
+                val newPlayer = getOrCreateListenerPlayer()
+                val mediaItem = MediaItem.fromUri(url)
+                newPlayer.setMediaItem(mediaItem, currentPos)
+                newPlayer.prepare()
+                if (isPlaying) {
+                    newPlayer.play()
+                }
+            }
+        }
+    }
 
     private var listenerProgressJob: Job? = null
     private var latencyPingJob: Job? = null
@@ -921,25 +967,16 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val expectedHostPos = hostPos + transitTime
                 val drift = current - expectedHostPos
 
-                if (abs(drift) > 250L) {
-                    // Hard seek if drift is noticeably large (> 250ms)
+                // User requirement: Do not force time matching under normal drift (avoids audio stuttering/pitch warping).
+                // Only refresh to synced when the song is late/drifted by more than 3 seconds (> 3000ms).
+                if (abs(drift) > 3000L) {
                     player.seekTo(expectedHostPos)
-                    try { player.playbackParameters = PlaybackParameters(1.0f) } catch (ignored: Exception) {}
-                } else if (abs(drift) > 30L) {
-                    // Micro-speed adjustment for smooth, pop-free acoustic alignment
-                    val speed = if (drift < 0) 1.04f else 0.96f
-                    try {
-                        if (player.playbackParameters.speed != speed) {
-                            player.playbackParameters = PlaybackParameters(speed)
-                        }
-                    } catch (ignored: Exception) {}
-                } else {
-                    try {
-                        if (player.playbackParameters.speed != 1.0f) {
-                            player.playbackParameters = PlaybackParameters(1.0f)
-                        }
-                    } catch (ignored: Exception) {}
                 }
+                try {
+                    if (player.playbackParameters.speed != 1.0f) {
+                        player.playbackParameters = PlaybackParameters(1.0f)
+                    }
+                } catch (ignored: Exception) {}
             }
         }
     }
@@ -965,7 +1002,11 @@ class OmniSyncManager private constructor(private val context: Context) {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val player = ExoPlayer.Builder(context)
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableAudioFloatOutput(streamQuality == OmniSyncQuality.LOW)
+            .setEnableAudioTrackPlaybackParams(true)
+
+        val player = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .setAudioAttributes(

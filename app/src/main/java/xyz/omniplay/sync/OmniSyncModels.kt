@@ -6,6 +6,11 @@ enum class OmniSyncRole {
     LISTENER
 }
 
+enum class OmniSyncQuality {
+    HIGH,
+    LOW
+}
+
 data class OmniSyncHost(
     val name: String,
     val address: String,

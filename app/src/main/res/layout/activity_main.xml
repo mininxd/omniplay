@@ -365,7 +365,7 @@
                 android:paddingTop="3dp"
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
-                android:text="(10ms)"
+                android:text="10ms"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp"
                 android:visibility="gone" />

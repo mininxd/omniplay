@@ -40,9 +40,40 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         syncManager.addListener(this)
 
         setupTabs()
+        setupStreamQuality()
         setupHostView()
         setupListenerView()
         updateUIForCurrentRole(syncManager.currentRole)
+    }
+
+    private fun setupStreamQuality() {
+        val currentQuality = syncManager.streamQuality
+        val initialBtnId = if (currentQuality == OmniSyncQuality.LOW) R.id.btn_quality_low else R.id.btn_quality_high
+        binding.streamQualityToggleGroup.check(initialBtnId)
+        updateStreamQualityUI(currentQuality)
+
+        binding.streamQualityToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            val newQuality = if (checkedId == R.id.btn_quality_low) OmniSyncQuality.LOW else OmniSyncQuality.HIGH
+            syncManager.setStreamQuality(newQuality)
+            updateStreamQualityUI(newQuality)
+        }
+    }
+
+    private fun updateStreamQualityUI(quality: OmniSyncQuality) {
+        if (_binding == null) return
+        when (quality) {
+            OmniSyncQuality.HIGH -> {
+                binding.streamQualityBadge.text = "Native (High)"
+                binding.streamQualityBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.primary_accent))
+                binding.streamQualityDescText.text = "High: Natively from host source audio"
+            }
+            OmniSyncQuality.LOW -> {
+                binding.streamQualityBadge.text = "32float (Low)"
+                binding.streamQualityBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
+                binding.streamQualityDescText.text = "Low: 32-bit float direct audio pipeline"
+            }
+        }
     }
 
     private fun setupTabs() {
@@ -178,7 +209,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 }
 
                 if (syncManager.currentLatencyMs > 0L) {
-                    binding.listenerLatencyBadge.text = "(${syncManager.currentLatencyMs}ms)"
+                    binding.listenerLatencyBadge.text = "${syncManager.currentLatencyMs}ms"
                     binding.listenerLatencyBadge.visibility = View.VISIBLE
                 } else {
                     binding.listenerLatencyBadge.visibility = View.GONE
@@ -286,11 +317,21 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
     override fun onLatencyUpdate(latencyMs: Long) {
         if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
             if (latencyMs > 0L) {
-                binding.listenerLatencyBadge.text = "(${latencyMs}ms)"
+                binding.listenerLatencyBadge.text = "${latencyMs}ms"
                 binding.listenerLatencyBadge.visibility = View.VISIBLE
             } else {
                 binding.listenerLatencyBadge.visibility = View.GONE
             }
+        }
+    }
+
+    override fun onStreamQualityChanged(quality: OmniSyncQuality) {
+        if (_binding != null) {
+            val targetBtnId = if (quality == OmniSyncQuality.LOW) R.id.btn_quality_low else R.id.btn_quality_high
+            if (binding.streamQualityToggleGroup.checkedButtonId != targetBtnId) {
+                binding.streamQualityToggleGroup.check(targetBtnId)
+            }
+            updateStreamQualityUI(quality)
         }
     }
 
