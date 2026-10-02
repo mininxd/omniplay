@@ -1355,9 +1355,57 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun updateAudioBadges(song: Song?, audioInfo: AudioTrackInfo?) {
-        if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+        val syncManager = xyz.omniplay.sync.OmniSyncManager.getInstance(this)
+        val isListener = syncManager.currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER
+
+        if (isListener) {
+            val format = syncManager.currentTrackFormat.ifEmpty {
+                audioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song?.format ?: ""
+            }
+            val quality = syncManager.currentTrackQuality.ifEmpty {
+                audioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song?.audioQuality ?: ""
+            }
+            val isHiRes = syncManager.currentTrackIsHiRes || (song != null && isHiResAudio(song, audioInfo, format, quality))
+
+            var hasAnyBadge = false
+            if (format.isNotEmpty()) {
+                binding.badgeFormat.text = format
+                binding.badgeFormat.visibility = View.VISIBLE
+                hasAnyBadge = true
+            } else {
+                binding.badgeFormat.visibility = View.GONE
+            }
+
+            if (quality.isNotEmpty()) {
+                binding.badgeQuality.text = quality
+                binding.badgeQuality.visibility = View.VISIBLE
+                hasAnyBadge = true
+            } else {
+                binding.badgeQuality.visibility = View.GONE
+            }
+
+            if (isHiRes) {
+                binding.badgeHires.visibility = View.VISIBLE
+                hasAnyBadge = true
+            } else {
+                binding.badgeHires.visibility = View.GONE
+            }
+
+            binding.badgeBitPerfect.visibility = View.GONE
+
+            val latency = syncManager.currentLatencyMs
+            if (latency > 0L) {
+                binding.badgeLatency.text = "(${latency}ms)"
+                binding.badgeLatency.visibility = View.VISIBLE
+                hasAnyBadge = true
+            } else {
+                binding.badgeLatency.visibility = View.GONE
+            }
+
+            binding.audioBadgeContainer.visibility = if (hasAnyBadge) View.VISIBLE else View.GONE
             return
         }
+
         binding.badgeLatency.visibility = View.GONE
         if (song == null) {
             binding.audioBadgeContainer.visibility = View.GONE
@@ -1490,19 +1538,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isEnabled = true
                     binding.playbackSlider.isSeekable = false
                     binding.playbackSlider.setNeutralMode(true)
-                    binding.audioBadgeContainer.visibility = View.VISIBLE
-                    binding.badgeFormat.visibility = View.VISIBLE
-                    binding.badgeFormat.text = "OMNISYNC"
-                    binding.badgeQuality.visibility = View.GONE
-                    binding.badgeHires.visibility = View.GONE
-                    binding.badgeBitPerfect.visibility = View.GONE
-                    val latency = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentLatencyMs
-                    if (latency > 0L) {
-                        binding.badgeLatency.visibility = View.VISIBLE
-                        binding.badgeLatency.text = "(${latency}ms)"
-                    } else {
-                        binding.badgeLatency.visibility = View.GONE
-                    }
+                    updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
                     val dur = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
                     if (dur > 0L) {
                         binding.playbackSlider.updateDuration(dur)
@@ -1544,7 +1580,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             binding.totalTimeText.text = Song.formatTime(dur)
                         }
                         updatePlayPauseButton(isPlaying = true)
+                        updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
                     }
+                }
+            }
+        }
+
+        override fun onTrackAudioInfoChanged(format: String, quality: String, isHiRes: Boolean) {
+            runOnUiThread {
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
                 }
             }
         }

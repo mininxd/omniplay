@@ -176,6 +176,13 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                     binding.connectedSongTitleText.text = "Waiting for stream…"
                     binding.connectedSongArtistText.text = "Host Broadcast"
                 }
+
+                if (syncManager.currentLatencyMs > 0L) {
+                    binding.listenerLatencyBadge.text = "(${syncManager.currentLatencyMs}ms)"
+                    binding.listenerLatencyBadge.visibility = View.VISIBLE
+                } else {
+                    binding.listenerLatencyBadge.visibility = View.GONE
+                }
             }
             OmniSyncRole.IDLE -> {
                 val isHostTab = binding.syncModeToggleGroup.checkedButtonId == R.id.btn_tab_host
@@ -189,6 +196,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.listenerConnectedContainer.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
+                binding.listenerLatencyBadge.visibility = View.GONE
                 if (!isHostTab) {
                     syncManager.startScanningHosts()
                 }
@@ -275,7 +283,16 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     override fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
 
-    override fun onLatencyUpdate(latencyMs: Long) {}
+    override fun onLatencyUpdate(latencyMs: Long) {
+        if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
+            if (latencyMs > 0L) {
+                binding.listenerLatencyBadge.text = "(${latencyMs}ms)"
+                binding.listenerLatencyBadge.visibility = View.VISIBLE
+            } else {
+                binding.listenerLatencyBadge.visibility = View.GONE
+            }
+        }
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()

@@ -71,6 +71,7 @@ class OmniSyncManager private constructor(private val context: Context) {
         fun onHostsDiscovered(hosts: List<OmniSyncHost>)
         fun onPeersChanged(peers: List<OmniSyncPeer>)
         fun onTrackInfoChanged(title: String, artist: String)
+        fun onTrackAudioInfoChanged(format: String, quality: String, isHiRes: Boolean) {}
         fun onPlaybackStateChanged(isPlaying: Boolean)
         fun onError(message: String)
         fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
@@ -142,6 +143,18 @@ class OmniSyncManager private constructor(private val context: Context) {
     var currentStreamDurationMs: Long = 0L
         private set
 
+    @Volatile
+    var currentTrackFormat: String = ""
+        private set
+
+    @Volatile
+    var currentTrackQuality: String = ""
+        private set
+
+    @Volatile
+    var currentTrackIsHiRes: Boolean = false
+        private set
+
     private var listenerProgressJob: Job? = null
     private var latencyPingJob: Job? = null
 
@@ -189,6 +202,13 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     private fun notifyTrackInfo(title: String, artist: String) {
         mainHandler.post { listeners.forEach { it.onTrackInfoChanged(title, artist) } }
+    }
+
+    private fun notifyTrackAudioInfo(format: String, quality: String, isHiRes: Boolean) {
+        currentTrackFormat = format
+        currentTrackQuality = quality
+        currentTrackIsHiRes = isHiRes
+        mainHandler.post { listeners.forEach { it.onTrackAudioInfoChanged(format, quality, isHiRes) } }
     }
 
     private fun notifyPlaybackState(isPlaying: Boolean) {
@@ -437,6 +457,9 @@ class OmniSyncManager private constructor(private val context: Context) {
             put("songId", song.id)
             put("songTitle", song.title)
             put("songArtist", song.artist)
+            put("songFormat", song.format)
+            put("songQuality", song.audioQuality)
+            put("isHiRes", song.isHiRes)
             put("songDuration", song.duration)
             put("positionMs", positionMs)
             put("isPlaying", isPlaying)
@@ -808,12 +831,18 @@ class OmniSyncManager private constructor(private val context: Context) {
                 }
                 val title = json.optString("title")
                 val artist = json.optString("artist")
+                val format = json.optString("format")
+                val quality = json.optString("quality")
+                val isHiRes = json.optBoolean("isHiRes", false)
                 val songId = json.optLong("songId", 0L)
                 val pos = json.optLong("positionMs", 0L)
                 val dur = json.optLong("durationMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
                 val hostTimestamp = json.optLong("timestamp", 0L)
                 if (dur > 0L) currentStreamDurationMs = dur
+                if (format.isNotEmpty() || quality.isNotEmpty()) {
+                    notifyTrackAudioInfo(format, quality, isHiRes)
+                }
                 if (title.isNotEmpty()) {
                     val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
                     playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur, hostTimestamp = hostTimestamp)
@@ -827,10 +856,16 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val positionMs = json.optLong("positionMs", 0L)
                 val songTitle = json.optString("songTitle", "OmniSync Track")
                 val songArtist = json.optString("songArtist", "Host Broadcast")
+                val songFormat = json.optString("songFormat")
+                val songQuality = json.optString("songQuality")
+                val isHiRes = json.optBoolean("isHiRes", false)
                 val songDuration = json.optLong("songDuration", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", true)
                 val hostTimestamp = json.optLong("timestamp", 0L)
                 if (songDuration > 0L) currentStreamDurationMs = songDuration
+                if (songFormat.isNotEmpty() || songQuality.isNotEmpty()) {
+                    notifyTrackAudioInfo(songFormat, songQuality, isHiRes)
+                }
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
                 val streamUrl = "http://$formattedHost:$port/stream?id=$songId"
@@ -1142,6 +1177,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             notifyRoleChanged(OmniSyncRole.IDLE)
             notifyPlaybackState(false)
             notifyTrackInfo("", "")
+            notifyTrackAudioInfo("", "", false)
             if (!reason.isNullOrEmpty()) {
                 notifyError(reason)
             }
