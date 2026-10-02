@@ -229,7 +229,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 itemBinding.btnJoinHost.text = "Host Active"
             } else {
                 itemBinding.btnJoinHost.isEnabled = true
-                itemBinding.btnJoinHost.text = getString(R.string.omnisync_join)
+                itemBinding.btnJoinHost.text = getString(R.string.omnisync_connect)
                 itemBinding.btnJoinHost.setOnClickListener { v ->
                     if (syncManager.currentRole == OmniSyncRole.HOST) {
                         Toast.makeText(requireContext(), "Stop hosting before joining another room", Toast.LENGTH_SHORT).show()
