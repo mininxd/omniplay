@@ -130,13 +130,6 @@ class VideoPlayerActivity : AppCompatActivity() {
         touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // Block local video playback if connected to a Mesh room as satellite (mirroring mode)
-        if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
-            Toast.makeText(this, "Mesh Mode active: Disconnect from Mesh to play videos", Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-
         // Pause any background audio playback currently running in Omniplay
         pauseBackgroundMusic()
 

@@ -19,18 +19,4 @@
     <string name="expand_queue">Queue</string>
     <string name="show_album_art_in_playlist">Show album art in queue</string>
     <string name="release_to_cancel">Release to cancel</string>
-    <string name="mesh_mode">Acoustic Mesh</string>
-    <string name="mesh_subtitle">Synchronized Multi-Speaker Array</string>
-    <string name="mesh_host_tab">Host Room</string>
-    <string name="mesh_join_tab">Join Room</string>
-    <string name="mesh_start_broadcast">Start Broadcasting</string>
-    <string name="mesh_stop_broadcast">Stop Room</string>
-    <string name="mesh_connected_speakers">Connected Speakers</string>
-    <string name="mesh_no_speakers">No speakers connected yet. Friends on the same Wi-Fi can join from their menu.</string>
-    <string name="mesh_searching_rooms">Searching for nearby rooms…</string>
-    <string name="mesh_no_rooms">No mesh rooms found nearby. Ensure Host has started broadcasting on the same Wi-Fi or Hotspot.</string>
-    <string name="mesh_channel_mode">Acoustic Channel</string>
-    <string name="mesh_volume_trim">Speaker Volume Balance</string>
-    <string name="mesh_connected_to">Connected to</string>
-    <string name="mesh_disconnect">Disconnect</string>
 </resources>

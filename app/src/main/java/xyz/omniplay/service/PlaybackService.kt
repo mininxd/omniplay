@@ -126,27 +126,6 @@ class PlaybackService : Service() {
         initPlayer()
         setupBitPerfectAudio()
         registerBecomingNoisyReceiver()
-
-        val mesh = xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext)
-        mesh.hostSongProvider = { currentSong }
-        mesh.hostPlaybackPositionProvider = { getCurrentPosition().toLong() }
-        mesh.hostIsPlayingProvider = { isPlaying() }
-        mesh.addListener(meshListener)
-    }
-
-    private val meshListener = object : xyz.omniplay.mesh.AcousticMeshManager.MeshListener {
-        override fun onRoleChanged(role: xyz.omniplay.mesh.MeshRole) {
-            if (role == xyz.omniplay.mesh.MeshRole.SATELLITE) {
-                if (isPlaying()) {
-                    pause()
-                }
-            }
-        }
-        override fun onRoomsDiscovered(rooms: List<xyz.omniplay.mesh.MeshRoom>) {}
-        override fun onPeersChanged(peers: List<xyz.omniplay.mesh.MeshPeer>) {}
-        override fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long) {}
-        override fun onChannelChanged(channel: xyz.omniplay.mesh.AudioChannel) {}
-        override fun onError(message: String) {}
     }
 
     /**
@@ -593,9 +572,6 @@ class PlaybackService : Service() {
     }
 
     fun playSong(song: Song, startPlaying: Boolean = true) {
-        if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
-            return
-        }
         if (isExternalSongActive && song != externalSong) {
             isExternalSongActive = false
             externalSong = null
@@ -621,7 +597,6 @@ class PlaybackService : Service() {
                 p.prepare()
                 if (startPlaying) {
                     p.play()
-                    xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(song, 0L)
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
@@ -708,9 +683,6 @@ class PlaybackService : Service() {
     }
 
     fun play() {
-        if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
-            return
-        }
         if (currentSong == null) {
             if (queue.isNotEmpty()) {
                 currentIndex = 0
@@ -730,9 +702,6 @@ class PlaybackService : Service() {
                     e.printStackTrace()
                 }
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
-                currentSong?.let { s ->
-                    xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPlay(s, getCurrentPosition().toLong())
-                }
             }
         }
     }
@@ -745,7 +714,6 @@ class PlaybackService : Service() {
                 updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, getCurrentPosition().toLong())
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
-                xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostPause()
             }
         }
     }
@@ -945,7 +913,6 @@ class PlaybackService : Service() {
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
-            xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext).broadcastHostSeek(positionMs.toLong())
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1176,12 +1143,6 @@ class PlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
-        val mesh = xyz.omniplay.mesh.AcousticMeshManager.getInstance(applicationContext)
-        mesh.removeListener(meshListener)
-        mesh.hostSongProvider = null
-        mesh.hostPlaybackPositionProvider = null
-        mesh.hostIsPlayingProvider = null
-
         teardownBitPerfectAudio()
         stopProgressTracker()
         try {
