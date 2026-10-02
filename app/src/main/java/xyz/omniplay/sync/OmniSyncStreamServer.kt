@@ -106,7 +106,7 @@ class OmniSyncStreamServer(
         // Periodic heartbeat ping: keeps connection alive & synchronizes clock/drift
         heartbeatJob = scope.launch {
             while (isActive) {
-                delay(2000L)
+                delay(1000L)
                 if (webSocketSessions.isNotEmpty() || sseWriters.isNotEmpty()) {
                     try {
                         val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })

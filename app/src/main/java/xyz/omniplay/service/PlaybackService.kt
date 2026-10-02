@@ -761,11 +761,13 @@ class PlaybackService : Service() {
         player?.let {
             if (it.isPlaying) {
                 it.pause()
+                val pos = getCurrentPosition().toLong()
                 stopProgressTracker()
-                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, getCurrentPosition().toLong())
+                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, pos)
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
-                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPause()
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(currentSong, pos, isPlaying = false)
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPause(pos)
             }
         }
     }
@@ -965,6 +967,7 @@ class PlaybackService : Service() {
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
+            xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(currentSong, positionMs.toLong(), isPlaying = isPlaying())
             xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastSeek(positionMs.toLong())
         } catch (e: Exception) {
             e.printStackTrace()

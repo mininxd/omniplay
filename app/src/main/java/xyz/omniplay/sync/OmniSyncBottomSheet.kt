@@ -83,6 +83,8 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         binding.btnHostAction.setOnClickListener {
             if (syncManager.currentRole == OmniSyncRole.HOST) {
                 syncManager.stopHost()
+            } else if (syncManager.currentRole == OmniSyncRole.LISTENER) {
+                Toast.makeText(requireContext(), "Disconnect listener before starting host", Toast.LENGTH_SHORT).show()
             } else {
                 syncManager.startHost(syncManager.deviceName)
             }
@@ -91,6 +93,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     private fun setupListenerView() {
         binding.btnManualConnect.setOnClickListener {
+            if (syncManager.currentRole == OmniSyncRole.HOST) {
+                Toast.makeText(requireContext(), "Stop hosting before joining another room", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val raw = binding.editManualIp.text?.toString()?.trim() ?: ""
             if (raw.isEmpty()) {
                 Toast.makeText(requireContext(), "Please enter host IP address", Toast.LENGTH_SHORT).show()
@@ -134,10 +140,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.hostLayoutContainer.visibility = View.VISIBLE
                 binding.listenerLayoutContainer.visibility = View.GONE
                 binding.syncModeToggleGroup.check(R.id.btn_tab_host)
+                binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_stop_host)
                 binding.hostStatusBadge.text = "STREAMING"
                 binding.hostStatusBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.primary_accent))
                 binding.syncBadge.text = "Host Active"
+                binding.btnManualConnect.isEnabled = false
                 onPeersChanged(syncManager.connectedPeers)
 
                 val song = syncManager.hostSongProvider?.invoke()
@@ -153,6 +161,8 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.listenerDiscoveryContainer.visibility = View.GONE
                 binding.listenerConnectedContainer.visibility = View.VISIBLE
                 binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
+                binding.btnHostAction.isEnabled = false
+                binding.btnHostAction.text = "Cannot Host While Listening"
 
                 val host = syncManager.currentHost
                 binding.connectedHostNameText.text = syncManager.currentHostRoomName ?: host?.name ?: "Connected Host"
@@ -166,18 +176,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                     binding.connectedSongTitleText.text = "Waiting for stream…"
                     binding.connectedSongArtistText.text = "Host Broadcast"
                 }
-
-                if (syncManager.currentLatencyMs > 0L) {
-                    binding.listenerLatencyBadge.text = "(${syncManager.currentLatencyMs}ms)"
-                    binding.listenerLatencyBadge.visibility = View.VISIBLE
-                } else {
-                    binding.listenerLatencyBadge.visibility = View.GONE
-                }
             }
             OmniSyncRole.IDLE -> {
                 val isHostTab = binding.syncModeToggleGroup.checkedButtonId == R.id.btn_tab_host
                 binding.hostLayoutContainer.visibility = if (isHostTab) View.VISIBLE else View.GONE
                 binding.listenerLayoutContainer.visibility = if (isHostTab) View.GONE else View.VISIBLE
+                binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_start_host)
                 binding.hostStatusBadge.text = "IDLE"
                 binding.hostStatusBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
@@ -185,10 +189,6 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.listenerConnectedContainer.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
-                binding.listenerLatencyBadge.visibility = View.GONE
-                binding.listenerProgressBar.progress = 0
-                binding.listenerProgressTimeText.text = "0:00"
-                binding.listenerDurationTimeText.text = "0:00"
                 if (!isHostTab) {
                     syncManager.startScanningHosts()
                 }
@@ -219,14 +219,26 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
         binding.listenerEmptyHostsText.visibility = View.GONE
         val inflater = LayoutInflater.from(requireContext())
+        val isHosting = syncManager.currentRole == OmniSyncRole.HOST
         for (host in hosts) {
             val itemBinding = ItemOmnisyncHostBinding.inflate(inflater, container, false)
             itemBinding.hostNameText.text = host.name
             itemBinding.hostAddressText.text = "${host.address} • Ready"
-            itemBinding.btnJoinHost.setOnClickListener { v ->
-                v.isEnabled = false
-                (v as? com.google.android.material.button.MaterialButton)?.text = "Connecting…"
-                syncManager.connectToHost(host)
+            if (isHosting) {
+                itemBinding.btnJoinHost.isEnabled = false
+                itemBinding.btnJoinHost.text = "Host Active"
+            } else {
+                itemBinding.btnJoinHost.isEnabled = true
+                itemBinding.btnJoinHost.text = getString(R.string.omnisync_join)
+                itemBinding.btnJoinHost.setOnClickListener { v ->
+                    if (syncManager.currentRole == OmniSyncRole.HOST) {
+                        Toast.makeText(requireContext(), "Stop hosting before joining another room", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    v.isEnabled = false
+                    (v as? com.google.android.material.button.MaterialButton)?.text = "Connecting…"
+                    syncManager.connectToHost(host)
+                }
             }
             container.addView(itemBinding.root)
         }
@@ -261,31 +273,9 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         }
     }
 
-    override fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {
-        if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
-            if (durationMs > 0L) {
-                val progress = ((currentPositionMs.toDouble() / durationMs) * 1000).toInt().coerceIn(0, 1000)
-                binding.listenerProgressBar.progress = progress
-                binding.listenerProgressTimeText.text = Song.formatTime(currentPositionMs)
-                binding.listenerDurationTimeText.text = Song.formatTime(durationMs)
-            } else {
-                binding.listenerProgressBar.progress = 0
-                binding.listenerProgressTimeText.text = Song.formatTime(currentPositionMs)
-                binding.listenerDurationTimeText.text = "0:00"
-            }
-        }
-    }
+    override fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
 
-    override fun onLatencyUpdate(latencyMs: Long) {
-        if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
-            if (latencyMs > 0L) {
-                binding.listenerLatencyBadge.text = "(${latencyMs}ms)"
-                binding.listenerLatencyBadge.visibility = View.VISIBLE
-            } else {
-                binding.listenerLatencyBadge.visibility = View.GONE
-            }
-        }
-    }
+    override fun onLatencyUpdate(latencyMs: Long) {}
 
     override fun onDestroyView() {
         super.onDestroyView()

@@ -14,7 +14,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -338,7 +340,8 @@ class OmniSyncManager private constructor(private val context: Context) {
     fun startHost(roomName: String = deviceName) {
         if (currentRole == OmniSyncRole.HOST) return
         if (currentRole == OmniSyncRole.LISTENER) {
-            disconnectListener()
+            notifyError("Cannot start hosting while connected as a listener. Disconnect first.")
+            return
         }
 
         currentRole = OmniSyncRole.HOST
@@ -443,11 +446,12 @@ class OmniSyncManager private constructor(private val context: Context) {
         streamServer.broadcastEvent(json)
     }
 
-    fun broadcastPause() {
+    fun broadcastPause(positionMs: Long = -1L) {
         if (currentRole != OmniSyncRole.HOST) return
         isHostLivePlaying = false
+        val pos = if (positionMs >= 0L) positionMs else (hostPlaybackPositionProvider?.invoke() ?: streamServer.currentPositionMs)
+        currentLivePositionMs = pos
         streamServer.isPlaying = false
-        val pos = hostPlaybackPositionProvider?.invoke() ?: streamServer.currentPositionMs
         streamServer.currentPositionMs = pos
 
         val json = JSONObject().apply {
@@ -461,11 +465,13 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     fun broadcastSeek(positionMs: Long) {
         if (currentRole != OmniSyncRole.HOST) return
+        currentLivePositionMs = positionMs
         streamServer.currentPositionMs = positionMs
 
         val json = JSONObject().apply {
             put("action", "SEEK")
             put("positionMs", positionMs)
+            put("timestamp", System.currentTimeMillis())
         }.toString()
 
         streamServer.broadcastEvent(json)
@@ -637,7 +643,8 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     fun connectToHost(host: OmniSyncHost) {
         if (currentRole == OmniSyncRole.HOST) {
-            stopHost()
+            notifyError("Cannot join as listener while active as host. Stop hosting first.")
+            return
         }
         stopScanningHosts()
 
@@ -742,7 +749,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                                     put("clientTime", System.currentTimeMillis())
                                 }.toString()
                                 try { wsClient.send(pingJson) } catch (ignored: Exception) {}
-                                delay(2500L)
+                                delay(1200L)
                             }
                         }
                     }
@@ -805,10 +812,11 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val pos = json.optLong("positionMs", 0L)
                 val dur = json.optLong("durationMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
+                val hostTimestamp = json.optLong("timestamp", 0L)
                 if (dur > 0L) currentStreamDurationMs = dur
                 if (title.isNotEmpty()) {
                     val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
-                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur)
+                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur, hostTimestamp = hostTimestamp)
                 }
             }
             "PLAY" -> {
@@ -821,12 +829,13 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val songArtist = json.optString("songArtist", "Host Broadcast")
                 val songDuration = json.optLong("songDuration", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", true)
+                val hostTimestamp = json.optLong("timestamp", 0L)
                 if (songDuration > 0L) currentStreamDurationMs = songDuration
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
                 val streamUrl = "http://$formattedHost:$port/stream?id=$songId"
 
-                playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying, durationMs = songDuration)
+                playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying, durationMs = songDuration, hostTimestamp = hostTimestamp)
             }
             "PAUSE" -> {
                 val pos = json.optLong("positionMs", -1L)
@@ -871,11 +880,30 @@ class OmniSyncManager private constructor(private val context: Context) {
                     notifyPlaybackState(false)
                 }
             }
-            if (isHostPlaying && hostPos > 0) {
+            if (isHostPlaying && hostPos > 0L) {
                 val current = player.currentPosition
-                // If drift is more than 1.5 seconds, align position with host
-                if (abs(current - hostPos) > 1500) {
-                    player.seekTo(hostPos)
+                val transitTime = currentLatencyMs.coerceAtLeast(0L)
+                val expectedHostPos = hostPos + transitTime
+                val drift = current - expectedHostPos
+
+                if (abs(drift) > 250L) {
+                    // Hard seek if drift is noticeably large (> 250ms)
+                    player.seekTo(expectedHostPos)
+                    try { player.playbackParameters = PlaybackParameters(1.0f) } catch (ignored: Exception) {}
+                } else if (abs(drift) > 30L) {
+                    // Micro-speed adjustment for smooth, pop-free acoustic alignment
+                    val speed = if (drift < 0) 1.04f else 0.96f
+                    try {
+                        if (player.playbackParameters.speed != speed) {
+                            player.playbackParameters = PlaybackParameters(speed)
+                        }
+                    } catch (ignored: Exception) {}
+                } else {
+                    try {
+                        if (player.playbackParameters.speed != 1.0f) {
+                            player.playbackParameters = PlaybackParameters(1.0f)
+                        }
+                    } catch (ignored: Exception) {}
                 }
             }
         }
@@ -892,8 +920,19 @@ class OmniSyncManager private constructor(private val context: Context) {
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1000,
+                /* maxBufferMs = */ 3000,
+                /* bufferForPlaybackMs = */ 100,
+                /* bufferForPlaybackAfterRebufferMs = */ 250
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val player = ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -909,7 +948,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 when (playbackState) {
                     Player.STATE_READY -> {
                         val target = pendingSeekPositionMs
-                        if (target > 500L && abs(player.currentPosition - target) > 1500L) {
+                        if (target > 50L) {
                             pendingSeekPositionMs = 0L
                             player.seekTo(target)
                         } else {
@@ -954,7 +993,8 @@ class OmniSyncManager private constructor(private val context: Context) {
         title: String,
         artist: String,
         startPlaying: Boolean = true,
-        durationMs: Long = 0L
+        durationMs: Long = 0L,
+        hostTimestamp: Long = 0L
     ) {
         mainHandler.post {
             try {
@@ -970,11 +1010,18 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val player = getOrCreateListenerPlayer()
                 startListenerProgressTracker()
 
+                val transitLag = if (hostTimestamp > 0L) {
+                    (System.currentTimeMillis() - hostTimestamp).coerceIn(0L, 5000L)
+                } else {
+                    currentLatencyMs.coerceAtLeast(0L)
+                }
+                val targetPos = if (positionMs > 0L) positionMs + transitLag else 0L
+
                 if (isNewSong) {
                     currentStreamUrl = url
-                    pendingSeekPositionMs = positionMs
+                    pendingSeekPositionMs = targetPos
                     val mediaItem = MediaItem.fromUri(url)
-                    player.setMediaItem(mediaItem, if (positionMs > 0) positionMs else 0L)
+                    player.setMediaItem(mediaItem, targetPos)
                     player.prepare()
                     if (startPlaying) {
                         player.play()
@@ -984,8 +1031,9 @@ class OmniSyncManager private constructor(private val context: Context) {
                         isStreamPlaying = false
                     }
                 } else {
-                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 1500) {
-                        player.seekTo(positionMs)
+                    val expectedPos = if (positionMs > 0L) targetPos else player.currentPosition
+                    if (positionMs > 0L && abs(player.currentPosition - expectedPos) > 100L) {
+                        player.seekTo(expectedPos)
                     }
                     if (startPlaying) {
                         if (!player.isPlaying) player.play()
@@ -994,6 +1042,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                         if (player.isPlaying) player.pause()
                         isStreamPlaying = false
                     }
+                    notifyProgress(expectedPos, currentStreamDurationMs)
                 }
                 notifyPlaybackState(isStreamPlaying)
             } catch (e: Exception) {
@@ -1008,11 +1057,13 @@ class OmniSyncManager private constructor(private val context: Context) {
                 if (currentRole != OmniSyncRole.LISTENER) return@post
                 val player = listenerPlayer ?: return@post
                 player.pause()
-                if (pos >= 0L && abs(player.currentPosition - pos) > 1000L) {
+                val targetPos = if (pos >= 0L) pos else player.currentPosition
+                if (pos >= 0L && abs(player.currentPosition - pos) > 50L) {
                     player.seekTo(pos)
                 }
                 isStreamPlaying = false
                 notifyPlaybackState(false)
+                notifyProgress(targetPos, currentStreamDurationMs)
             } catch (ignored: Exception) {}
         }
     }
@@ -1020,7 +1071,10 @@ class OmniSyncManager private constructor(private val context: Context) {
     private fun seekListenerStream(positionMs: Long) {
         mainHandler.post {
             try {
-                listenerPlayer?.seekTo(positionMs)
+                if (currentRole != OmniSyncRole.LISTENER) return@post
+                val player = listenerPlayer ?: return@post
+                player.seekTo(positionMs)
+                notifyProgress(positionMs, currentStreamDurationMs)
             } catch (ignored: Exception) {}
         }
     }

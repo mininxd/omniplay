@@ -351,6 +351,24 @@
                 android:textColor="#00E5FF"
                 android:textSize="11sp"
                 android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/badge_latency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_badge_material_you"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.02"
+                android:paddingStart="8dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="3dp"
+                android:text="(10ms)"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Android 13/14 Squiggly Progress Line Seek Bar -->

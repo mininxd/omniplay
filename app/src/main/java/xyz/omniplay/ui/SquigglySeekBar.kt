@@ -41,8 +41,38 @@ class SquigglySeekBar @JvmOverloads constructor(
     }
 
     var seekListener: OnSeekListener? = null
+    var isSeekable: Boolean = true
+    private var isNeutralMode: Boolean = false
 
     private var maxDurationMs: Long = 1000L
+
+    val maxDuration: Long
+        get() = maxDurationMs
+
+    fun updateDuration(durationMs: Long) {
+        if (durationMs > 0L && durationMs != maxDurationMs) {
+            maxDurationMs = durationMs
+            invalidate()
+        }
+    }
+
+    fun setNeutralMode(neutral: Boolean) {
+        if (isNeutralMode == neutral) return
+        isNeutralMode = neutral
+        val activeColor = if (neutral) {
+            ContextCompat.getColor(context, R.color.text_secondary)
+        } else {
+            ContextCompat.getColor(context, R.color.primary_accent)
+        }
+        val thumbColor = if (neutral) {
+            ContextCompat.getColor(context, R.color.text_secondary)
+        } else {
+            ContextCompat.getColor(context, R.color.slider_thumb)
+        }
+        activeTrackPaint.color = activeColor
+        thumbPaint.color = thumbColor
+        invalidate()
+    }
     private var currentProgressMs: Long = 0L
     private var displayedProgressMs: Float = 0f
     private var isUserDragging: Boolean = false
@@ -295,7 +325,7 @@ class SquigglySeekBar @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!isEnabled) return false
+        if (!isEnabled || !isSeekable) return false
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
