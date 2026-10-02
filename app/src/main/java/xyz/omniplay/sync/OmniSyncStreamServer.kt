@@ -82,6 +82,7 @@ class OmniSyncStreamServer(
                     try {
                         val client = server.accept()
                         client.tcpNoDelay = true
+                        try { client.setSoLinger(true, 2) } catch (ignored: Exception) {}
                         activeSockets.add(client)
                         launch(Dispatchers.IO) {
                             try {
@@ -89,7 +90,7 @@ class OmniSyncStreamServer(
                             } catch (ignored: Exception) {
                             } finally {
                                 activeSockets.remove(client)
-                                try { client.close() } catch (ignored: Exception) {}
+                                try { socketSafeClose(client) } catch (ignored: Exception) {}
                             }
                         }
                     } catch (e: Exception) {
@@ -122,6 +123,11 @@ class OmniSyncStreamServer(
                 }
             }
         }
+    }
+
+    private fun socketSafeClose(socket: Socket) {
+        try { socket.shutdownOutput() } catch (ignored: Exception) {}
+        try { socket.close() } catch (ignored: Exception) {}
     }
 
     fun broadcastEvent(jsonString: String) {
@@ -163,7 +169,7 @@ class OmniSyncStreamServer(
                 val cors = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Range, Content-Type\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                 output.write(cors.toByteArray(Charsets.UTF_8))
                 output.flush()
-                socket.close()
+                socketSafeClose(socket)
                 return
             }
 
@@ -176,21 +182,21 @@ class OmniSyncStreamServer(
             // Peer Registration
             if (path.startsWith("/register")) {
                 handleRegister(path, socket, output)
-                socket.close()
+                socketSafeClose(socket)
                 return
             }
 
             // Peer Unregistration
             if (path.startsWith("/unregister")) {
                 handleUnregister(path, output)
-                socket.close()
+                socketSafeClose(socket)
                 return
             }
 
             // Status Polling / Inspection
             if (path.startsWith("/status")) {
                 serveStatus(output, isHeadRequest)
-                socket.close()
+                socketSafeClose(socket)
                 return
             }
 
@@ -199,15 +205,15 @@ class OmniSyncStreamServer(
             val uri = currentSongUri ?: song?.contentUri
             if (uri == null && song == null) {
                 send404(output)
-                socket.close()
+                socketSafeClose(socket)
                 return
             }
 
             serveAudioStream(song, uri, output, rangeHeader, isHeadRequest)
-            socket.close()
+            socketSafeClose(socket)
         } catch (ignored: Exception) {
             // Client disconnected or aborted
-            try { socket.close() } catch (e: Exception) {}
+            try { socketSafeClose(socket) } catch (e: Exception) {}
         }
     }
 

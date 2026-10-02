@@ -73,6 +73,12 @@ class OmniSyncManager private constructor(private val context: Context) {
         fun onError(message: String)
     }
 
+    init {
+        try {
+            System.setProperty("http.keepAlive", "false")
+        } catch (ignored: Exception) {}
+    }
+
     private val listeners = CopyOnWriteArrayList<OmniSyncListener>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -584,58 +590,74 @@ class OmniSyncManager private constructor(private val context: Context) {
             val targetPort = if (host.port > 0) host.port else PORT
             val baseUrl = "http://${host.address}:$targetPort"
 
-            // 1. Initial HTTP probe & registration
-            try {
-                val statusUrl = URL("$baseUrl/status")
-                val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 4000
-                    readTimeout = 4000
-                    requestMethod = "GET"
-                }
-
-                val code = conn.responseCode
-                if (code != 200) {
-                    throw Exception("Host returned HTTP status $code")
-                }
-                val body = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-
-                val initialStatus = JSONObject(body)
-                val title = initialStatus.optString("title", "")
-                val artist = initialStatus.optString("artist", "")
-                val songId = initialStatus.optLong("songId", 0L)
-                val pos = initialStatus.optLong("position", 0L)
-                val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
-                val rName = initialStatus.optString("hostName", host.name)
-                currentHostRoomName = rName
-
-                // Register listener with host
+            // 1. Initial HTTP probe & registration with retry
+            var initialStatus: JSONObject? = null
+            var lastError: Exception? = null
+            for (attempt in 1..3) {
                 try {
-                    val regUrl = URL("$baseUrl/register?id=$deviceId&name=${URLEncoder.encode(deviceName, "UTF-8")}")
-                    val regConn = (regUrl.openConnection() as HttpURLConnection).apply {
+                    val statusUrl = URL("$baseUrl/status")
+                    val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
                         connectTimeout = 3000
                         readTimeout = 3000
-                        requestMethod = "POST"
+                        requestMethod = "GET"
+                        setRequestProperty("Connection", "close")
+                        setRequestProperty("Accept", "application/json")
+                        useCaches = false
                     }
-                    regConn.responseCode
-                    regConn.disconnect()
-                } catch (ignored: Exception) {}
-
-                if (title.isNotEmpty()) {
-                    val streamUrl = "$baseUrl/stream?id=$songId"
-                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
-                }
-            } catch (e: Exception) {
-                if (e !is CancellationException) {
-                    val msg = if (e.message?.contains("EHOSTUNREACH", ignoreCase = true) == true ||
-                        e.message?.contains("No route to host", ignoreCase = true) == true) {
-                        "Cannot reach host at ${host.address}:$targetPort. Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot."
+                    val code = conn.responseCode
+                    if (code == 200) {
+                        val body = conn.inputStream.bufferedReader().readText()
+                        conn.disconnect()
+                        initialStatus = JSONObject(body)
+                        break
                     } else {
-                        "Failed to connect to host: ${e.localizedMessage}"
+                        conn.disconnect()
+                        throw Exception("Host returned HTTP status $code")
                     }
-                    disconnectListener(msg)
-                    return@launch
+                } catch (e: Exception) {
+                    if (e is CancellationException) return@launch
+                    lastError = e
+                    delay(300L)
                 }
+            }
+
+            if (initialStatus == null) {
+                val e = lastError
+                val msg = if (e?.message?.contains("EHOSTUNREACH", ignoreCase = true) == true ||
+                    e?.message?.contains("No route to host", ignoreCase = true) == true) {
+                    "Cannot reach host at ${host.address}:$targetPort. Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot."
+                } else {
+                    "Failed to connect to host: ${e?.localizedMessage ?: "Host unavailable"}"
+                }
+                disconnectListener(msg)
+                return@launch
+            }
+
+            val title = initialStatus.optString("title", "")
+            val artist = initialStatus.optString("artist", "")
+            val songId = initialStatus.optLong("songId", 0L)
+            val pos = initialStatus.optLong("position", 0L)
+            val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
+            val rName = initialStatus.optString("hostName", host.name)
+            currentHostRoomName = rName
+
+            // Register listener with host
+            try {
+                val regUrl = URL("$baseUrl/register?id=$deviceId&name=${URLEncoder.encode(deviceName, "UTF-8")}")
+                val regConn = (regUrl.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 3000
+                    readTimeout = 3000
+                    requestMethod = "GET"
+                    setRequestProperty("Connection", "close")
+                    useCaches = false
+                }
+                regConn.responseCode
+                regConn.disconnect()
+            } catch (ignored: Exception) {}
+
+            if (title.isNotEmpty()) {
+                val streamUrl = "$baseUrl/stream?id=$songId"
+                playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
             }
 
             // 2. Persistent Event Channel with Auto-Reconnect (Discord-like Room Connection)
@@ -649,6 +671,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                         readTimeout = 0 // Keep connection open indefinitely; do NOT timeout!
                         requestMethod = "GET"
                         setRequestProperty("Accept", "text/event-stream")
+                        useCaches = false
                     }
                     if (sseConn.responseCode == 200) {
                         consecutiveErrors = 0
@@ -692,6 +715,9 @@ class OmniSyncManager private constructor(private val context: Context) {
                         val testConn = (testUrl.openConnection() as HttpURLConnection).apply {
                             connectTimeout = 2000
                             readTimeout = 2000
+                            requestMethod = "GET"
+                            setRequestProperty("Connection", "close")
+                            useCaches = false
                         }
                         if (testConn.responseCode == 200) {
                             hostAlive = true
@@ -988,7 +1014,9 @@ class OmniSyncManager private constructor(private val context: Context) {
                         val conn = (unregUrl.openConnection() as HttpURLConnection).apply {
                             connectTimeout = 2000
                             readTimeout = 2000
-                            requestMethod = "POST"
+                            requestMethod = "GET"
+                            setRequestProperty("Connection", "close")
+                            useCaches = false
                         }
                         conn.responseCode
                         conn.disconnect()
