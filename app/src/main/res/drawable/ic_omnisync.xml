@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Center Audio Wave / Signal Node -->
+    <path
+        android:fillColor="@color/primary_accent"
+        android:pathData="M12,12m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <!-- Outer Broadcast / Sync Ring Segments -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@color/primary_accent"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M4.93,4.93 C8.84,1.02 15.16,1.02 19.07,4.93 M19.07,19.07 C15.16,22.98 8.84,22.98 4.93,19.07" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="@color/primary_accent"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M7.76,7.76 C10.1,5.41 13.9,5.41 16.24,7.76 M16.24,16.24 C13.9,18.59 10.1,18.59 7.76,16.24" />
+</vector>

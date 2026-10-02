@@ -130,6 +130,13 @@ class VideoPlayerActivity : AppCompatActivity() {
         touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        // Block local video playback if connected to OmniSync as listener
+        if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            Toast.makeText(this, "OmniSync active: Disconnect from OmniSync to play videos", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
         // Pause any background audio playback currently running in Omniplay
         pauseBackgroundMusic()
 

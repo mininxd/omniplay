@@ -126,6 +126,27 @@ class PlaybackService : Service() {
         initPlayer()
         setupBitPerfectAudio()
         registerBecomingNoisyReceiver()
+
+        val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
+        sync.hostSongProvider = { currentSong }
+        sync.hostPlaybackPositionProvider = { getCurrentPosition().toLong() }
+        sync.hostIsPlayingProvider = { isPlaying() }
+        sync.addListener(omniSyncListener)
+    }
+
+    private val omniSyncListener = object : xyz.omniplay.sync.OmniSyncManager.OmniSyncListener {
+        override fun onRoleChanged(role: xyz.omniplay.sync.OmniSyncRole) {
+            if (role == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                if (isPlaying()) {
+                    pause()
+                }
+            }
+        }
+        override fun onHostsDiscovered(hosts: List<xyz.omniplay.sync.OmniSyncHost>) {}
+        override fun onPeersChanged(peers: List<xyz.omniplay.sync.OmniSyncPeer>) {}
+        override fun onTrackInfoChanged(title: String, artist: String) {}
+        override fun onPlaybackStateChanged(isPlaying: Boolean) {}
+        override fun onError(message: String) {}
     }
 
     /**
@@ -572,6 +593,9 @@ class PlaybackService : Service() {
     }
 
     fun playSong(song: Song, startPlaying: Boolean = true) {
+        if (xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            return
+        }
         if (isExternalSongActive && song != externalSong) {
             isExternalSongActive = false
             externalSong = null
@@ -597,6 +621,7 @@ class PlaybackService : Service() {
                 p.prepare()
                 if (startPlaying) {
                     p.play()
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L)
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
@@ -683,6 +708,9 @@ class PlaybackService : Service() {
     }
 
     fun play() {
+        if (xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            return
+        }
         if (currentSong == null) {
             if (queue.isNotEmpty()) {
                 currentIndex = 0
@@ -702,6 +730,9 @@ class PlaybackService : Service() {
                     e.printStackTrace()
                 }
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
+                currentSong?.let { s ->
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(s, getCurrentPosition().toLong())
+                }
             }
         }
     }
@@ -714,6 +745,7 @@ class PlaybackService : Service() {
                 updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, getCurrentPosition().toLong())
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPause()
             }
         }
     }
@@ -913,6 +945,7 @@ class PlaybackService : Service() {
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
             listeners.forEach { it.onProgressUpdate(positionMs, getDuration()) }
+            xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastSeek(positionMs.toLong())
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1143,6 +1176,12 @@ class PlaybackService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
+        val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
+        sync.removeListener(omniSyncListener)
+        sync.hostSongProvider = null
+        sync.hostPlaybackPositionProvider = null
+        sync.hostIsPlayingProvider = null
+
         teardownBitPerfectAudio()
         stopProgressTracker()
         try {

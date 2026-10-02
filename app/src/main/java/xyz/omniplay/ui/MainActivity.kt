@@ -159,6 +159,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupListeners()
         bindPlaybackService()
         checkAndRequestPermissions()
+        xyz.omniplay.sync.OmniSyncManager.getInstance(this).addListener(omniSyncListener)
         handleIncomingIntent(intent)
     }
 
@@ -291,6 +292,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
         songAdapter = SongAdapter(showAlbumArt = isShowArt) { song, index ->
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
+                return@SongAdapter
+            }
             if (::bottomSheetBehavior.isInitialized) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             }
@@ -893,6 +898,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Play / Pause Circular Card
         binding.btnPlayPauseCard.setOnClickListener {
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                xyz.omniplay.sync.OmniSyncManager.getInstance(this).toggleListenerPlayback()
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.let {
                     if (it.currentSong == null && scannedSongs.isNotEmpty()) {
@@ -906,6 +915,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Next
         binding.btnNext.setOnClickListener {
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.skipNext(forceNext = true)
             }
@@ -913,6 +925,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         // Previous
         binding.btnPrevious.setOnClickListener {
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                return@setOnClickListener
+            }
             if (isBound) {
                 playbackService?.skipPrevious(forcePrevious = false)
             }
@@ -1089,6 +1104,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_omnisync -> {
+                    xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
+                        .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
+                    true
+                }
                 R.id.action_show_album_art -> {
                     val newState = !item.isChecked
                     item.isChecked = newState
@@ -1456,7 +1476,56 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
     }
+    private val omniSyncListener = object : xyz.omniplay.sync.OmniSyncManager.OmniSyncListener {
+        override fun onRoleChanged(role: xyz.omniplay.sync.OmniSyncRole) {
+            runOnUiThread {
+                if (role == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    val hostName = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentHostRoomName
+                    binding.albumNameText.text = "OmniSync • ${hostName ?: "Listening"}"
+                    binding.playbackSlider.isEnabled = false
+                    updatePlayPauseButton(isPlaying = true)
+                } else if (role == xyz.omniplay.sync.OmniSyncRole.IDLE) {
+                    binding.playbackSlider.isEnabled = true
+                    playbackService?.currentSong?.let {
+                        onTrackChanged(it)
+                        updatePlayPauseButton(playbackService?.isPlaying() == true)
+                    } ?: run {
+                        binding.songTitleText.text = getString(R.string.no_track_selected)
+                        binding.artistNameText.text = ""
+                        binding.albumNameText.text = ""
+                        updatePlayPauseButton(false)
+                    }
+                }
+            }
+        }
+
+        override fun onTrackInfoChanged(title: String, artist: String) {
+            runOnUiThread {
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    if (title.isNotEmpty()) {
+                        binding.songTitleText.text = title
+                        binding.artistNameText.text = if (artist.isNotEmpty()) "$artist (OmniSync)" else "OmniSync Stream"
+                        updatePlayPauseButton(isPlaying = true)
+                    }
+                }
+            }
+        }
+
+        override fun onPlaybackStateChanged(isPlaying: Boolean) {
+            runOnUiThread {
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    updatePlayPauseButton(isPlaying)
+                }
+            }
+        }
+
+        override fun onHostsDiscovered(hosts: List<xyz.omniplay.sync.OmniSyncHost>) {}
+        override fun onPeersChanged(peers: List<xyz.omniplay.sync.OmniSyncPeer>) {}
+        override fun onError(message: String) {}
+    }
+
     override fun onDestroy() {
+        xyz.omniplay.sync.OmniSyncManager.getInstance(this).removeListener(omniSyncListener)
         if (isBound) {
             playbackService?.removeListener(this)
             unbindService(serviceConnection)

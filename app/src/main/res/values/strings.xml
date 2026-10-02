@@ -19,4 +19,19 @@
     <string name="expand_queue">Queue</string>
     <string name="show_album_art_in_playlist">Show album art in queue</string>
     <string name="release_to_cancel">Release to cancel</string>
+
+    <!-- OmniSync -->
+    <string name="omnisync_title">OmniSync</string>
+    <string name="omnisync_subtitle">Local Music Streaming</string>
+    <string name="omnisync_host_tab">Host</string>
+    <string name="omnisync_listen_tab">Listener</string>
+    <string name="omnisync_start_host">Start Hosting</string>
+    <string name="omnisync_stop_host">Stop Hosting</string>
+    <string name="omnisync_host_active">Broadcasting audio on local network</string>
+    <string name="omnisync_host_idle">Ready to stream music from Omniplay</string>
+    <string name="omnisync_searching_hosts">Scanning for nearby hosts…</string>
+    <string name="omnisync_no_hosts">No OmniSync hosts found nearby. Ensure Host has started broadcasting on the same Wi-Fi or Hotspot.</string>
+    <string name="omnisync_connect">Listen</string>
+    <string name="omnisync_disconnect">Disconnect</string>
 </resources>
+
