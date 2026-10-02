@@ -211,10 +211,14 @@ class PlaybackService : Service() {
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
+                    currentSong?.let {
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(it, exo.currentPosition.coerceAtLeast(0L), isPlaying = true)
+                    }
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, exo.currentPosition.coerceAtLeast(0L))
                     updateNotification(isPlaying = false)
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPause()
                 }
                 listeners.forEach { it.onPlaybackStateChanged(isPlaying) }
             }
@@ -580,6 +584,7 @@ class PlaybackService : Service() {
                 val mediaItem = MediaItem.fromUri(song.contentUri)
                 p.setMediaItem(mediaItem)
                 p.prepare()
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = false)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -621,12 +626,13 @@ class PlaybackService : Service() {
                 p.prepare()
                 if (startPlaying) {
                     p.play()
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L)
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = true)
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
                     updateNotification(isPlaying = false)
                     listeners.forEach { it.onPlaybackStateChanged(false) }
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = false)
                 }
             }
         } catch (e: Exception) {

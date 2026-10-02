@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -35,11 +36,17 @@ class OmniSyncStreamServer(
 ) {
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
+    private var heartbeatJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val sseWriters = CopyOnWriteArrayList<PrintWriter>()
+    private val activeSockets = CopyOnWriteArrayList<Socket>()
 
     var onPeerJoined: ((OmniSyncPeer) -> Unit)? = null
     var onPeerLeft: ((String) -> Unit)? = null
+
+    var songProvider: (() -> Song?)? = null
+    var isPlayingProvider: (() -> Boolean)? = null
+    var positionProvider: (() -> Long)? = null
 
     @Volatile
     var currentSong: Song? = null
@@ -75,10 +82,14 @@ class OmniSyncStreamServer(
                     try {
                         val client = server.accept()
                         client.tcpNoDelay = true
+                        activeSockets.add(client)
                         launch(Dispatchers.IO) {
                             try {
                                 handleClient(client)
                             } catch (ignored: Exception) {
+                            } finally {
+                                activeSockets.remove(client)
+                                try { client.close() } catch (ignored: Exception) {}
                             }
                         }
                     } catch (e: Exception) {
@@ -87,6 +98,28 @@ class OmniSyncStreamServer(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+
+        // Periodic heartbeat ping: keeps SSE connection alive & synchronizes clock/drift
+        heartbeatJob = scope.launch {
+            while (isActive) {
+                delay(3000L)
+                if (sseWriters.isNotEmpty()) {
+                    try {
+                        val song = currentSong ?: songProvider?.invoke()
+                        val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
+                        val pos = positionProvider?.invoke() ?: currentPositionMs
+                        val ping = JSONObject().apply {
+                            put("action", "PING")
+                            put("positionMs", pos)
+                            put("isPlaying", isLive)
+                            put("songId", song?.id ?: 0L)
+                            put("timestamp", System.currentTimeMillis())
+                        }.toString()
+                        broadcastEvent(ping)
+                    } catch (ignored: Exception) {}
+                }
             }
         }
     }
@@ -162,7 +195,7 @@ class OmniSyncStreamServer(
             }
 
             // Audio Stream
-            val song = currentSong
+            val song = currentSong ?: songProvider?.invoke()
             val uri = currentSongUri ?: song?.contentUri
             if (uri == null && song == null) {
                 send404(output)
@@ -187,15 +220,21 @@ class OmniSyncStreamServer(
         val writer = PrintWriter(output, true)
         sseWriters.add(writer)
 
+        val song = currentSong ?: songProvider?.invoke()
+        val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
+        val pos = positionProvider?.invoke() ?: currentPositionMs
+        val dur = song?.duration ?: currentDurationMs
+
         // Send initial state event immediately
         val initEvent = JSONObject().apply {
             put("action", "WELCOME")
             put("hostName", hostName)
-            put("title", currentSong?.title ?: "")
-            put("artist", currentSong?.artist ?: "")
-            put("positionMs", currentPositionMs)
-            put("durationMs", currentDurationMs)
-            put("isPlaying", isPlaying)
+            put("songId", song?.id ?: 0L)
+            put("title", song?.title ?: "")
+            put("artist", song?.artist ?: "")
+            put("positionMs", pos)
+            put("durationMs", dur)
+            put("isPlaying", isLive)
         }.toString()
         writer.print("data: $initEvent\n\n")
         writer.flush()
@@ -229,14 +268,20 @@ class OmniSyncStreamServer(
             val peer = OmniSyncPeer(pId, pName, clientIp)
             onPeerJoined?.invoke(peer)
 
+            val song = currentSong ?: songProvider?.invoke()
+            val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
+            val pos = positionProvider?.invoke() ?: currentPositionMs
+            val dur = song?.duration ?: currentDurationMs
+
             val statusJson = JSONObject().apply {
                 put("status", "ok")
                 put("hostName", hostName)
-                put("title", currentSong?.title ?: "")
-                put("artist", currentSong?.artist ?: "")
-                put("duration", currentDurationMs)
-                put("position", currentPositionMs)
-                put("isPlaying", isPlaying)
+                put("songId", song?.id ?: 0L)
+                put("title", song?.title ?: "")
+                put("artist", song?.artist ?: "")
+                put("duration", dur)
+                put("position", pos)
+                put("isPlaying", isLive)
             }.toString()
 
             val bytes = statusJson.toByteArray(Charsets.UTF_8)
@@ -268,14 +313,20 @@ class OmniSyncStreamServer(
 
     private fun serveStatus(output: OutputStream, isHeadRequest: Boolean) {
         try {
+            val song = currentSong ?: songProvider?.invoke()
+            val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
+            val pos = positionProvider?.invoke() ?: currentPositionMs
+            val dur = song?.duration ?: currentDurationMs
+
             val statusJson = JSONObject().apply {
                 put("status", "ok")
                 put("hostName", hostName)
-                put("title", currentSong?.title ?: "")
-                put("artist", currentSong?.artist ?: "")
-                put("duration", currentDurationMs)
-                put("position", currentPositionMs)
-                put("isPlaying", isPlaying)
+                put("songId", song?.id ?: 0L)
+                put("title", song?.title ?: "")
+                put("artist", song?.artist ?: "")
+                put("duration", dur)
+                put("position", pos)
+                put("isPlaying", isLive)
             }.toString()
 
             val bytes = statusJson.toByteArray(Charsets.UTF_8)
@@ -367,7 +418,45 @@ class OmniSyncStreamServer(
 
         if (isHeadRequest) return
 
-        // 1. Direct RandomAccessFile if direct file is accessible
+        var streamHandled = false
+
+        // 1. Primary: ParcelFileDescriptor via ContentResolver (Scoped Storage safe, seekable channel)
+        if (uri != null && uri != Uri.EMPTY) {
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    FileInputStream(pfd.fileDescriptor).use { fis ->
+                        if (startByte > 0L) {
+                            try {
+                                fis.channel.position(startByte)
+                            } catch (e: Exception) {
+                                skipBytes(fis, startByte)
+                            }
+                        }
+                        writeStreamToOutput(fis, output, contentLength)
+                        streamHandled = true
+                    }
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        if (streamHandled) return
+
+        // 2. Secondary: openInputStream via ContentResolver
+        if (uri != null && uri != Uri.EMPTY) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    if (startByte > 0L) {
+                        skipBytes(inputStream, startByte)
+                    }
+                    writeStreamToOutput(inputStream, output, contentLength)
+                    streamHandled = true
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        if (streamHandled) return
+
+        // 3. Fallback: Direct RandomAccessFile if direct file is accessible
         if (canReadFile) {
             try {
                 RandomAccessFile(file, "r").use { raf ->
@@ -384,41 +473,6 @@ class OmniSyncStreamServer(
                         remaining -= read
                     }
                     output.flush()
-                }
-                return
-            } catch (ignored: Exception) {
-                return
-            }
-        }
-
-        // 2. ParcelFileDescriptor via ContentResolver
-        if (uri != null) {
-            var streamHandled = false
-            try {
-                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                    FileInputStream(pfd.fileDescriptor).use { fis ->
-                        if (startByte > 0L) {
-                            try {
-                                fis.channel.position(startByte)
-                            } catch (e: Exception) {
-                                skipBytes(fis, startByte)
-                            }
-                        }
-                        writeStreamToOutput(fis, output, contentLength)
-                        streamHandled = true
-                    }
-                }
-            } catch (ignored: Exception) {}
-
-            if (streamHandled) return
-
-            // 3. Fallback to openInputStream
-            try {
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    if (startByte > 0L) {
-                        skipBytes(inputStream, startByte)
-                    }
-                    writeStreamToOutput(inputStream, output, contentLength)
                 }
             } catch (ignored: Exception) {}
         }
@@ -486,6 +540,9 @@ class OmniSyncStreamServer(
     }
 
     fun stop() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+
         for (writer in sseWriters) {
             try {
                 writer.print("data: {\"action\":\"STOP\"}\n\n")
@@ -493,6 +550,14 @@ class OmniSyncStreamServer(
             } catch (ignored: Exception) {}
         }
         sseWriters.clear()
+
+        for (s in activeSockets) {
+            try {
+                s.close()
+            } catch (ignored: Exception) {}
+        }
+        activeSockets.clear()
+
         try {
             serverSocket?.close()
             serverSocket = null

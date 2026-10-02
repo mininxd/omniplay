@@ -177,6 +177,9 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.listenerConnectedContainer.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
+                if (!isHostTab) {
+                    syncManager.startScanningHosts()
+                }
                 onHostsDiscovered(syncManager.discoveredHosts)
             }
         }
@@ -225,7 +228,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     override fun onTrackInfoChanged(title: String, artist: String) {
         if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
-            binding.connectedSongTitleText.text = title.ifEmpty { "OmniSync Track" }
+            binding.connectedSongTitleText.text = title.ifEmpty { "Waiting for stream…" }
             binding.connectedSongArtistText.text = artist.ifEmpty { "Host Broadcast" }
         }
     }

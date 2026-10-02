@@ -1,8 +1,6 @@
 package xyz.omniplay.sync
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.MediaPlayer
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
@@ -12,6 +10,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -112,8 +116,9 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     // Listener state
     private var clientJob: Job? = null
-    private var listenerPlayer: MediaPlayer? = null
+    private var listenerPlayer: ExoPlayer? = null
     private var currentStreamUrl: String? = null
+    private var currentStreamSongId: Long? = null
 
     // NSD discovery
     private var registrationListener: NsdManager.RegistrationListener? = null
@@ -283,6 +288,9 @@ class OmniSyncManager private constructor(private val context: Context) {
             notifyPeersChanged()
         }
 
+        streamServer.songProvider = hostSongProvider
+        streamServer.isPlayingProvider = hostIsPlayingProvider
+        streamServer.positionProvider = hostPlaybackPositionProvider
         streamServer.hostName = roomName
         val song = hostSongProvider?.invoke()
         streamServer.currentSong = song
@@ -297,8 +305,8 @@ class OmniSyncManager private constructor(private val context: Context) {
         notifyRoleChanged(OmniSyncRole.HOST)
         notifyPeersChanged()
 
-        if (song != null && streamServer.isPlaying) {
-            broadcastPlay(song, streamServer.currentPositionMs)
+        if (song != null) {
+            broadcastPlay(song, streamServer.currentPositionMs, isPlaying = streamServer.isPlaying)
         }
     }
 
@@ -339,13 +347,13 @@ class OmniSyncManager private constructor(private val context: Context) {
         notifyPeersChanged()
     }
 
-    fun broadcastPlay(song: Song?, positionMs: Long) {
+    fun broadcastPlay(song: Song?, positionMs: Long, isPlaying: Boolean = true) {
         if (currentRole != OmniSyncRole.HOST) return
         if (song == null) return
 
         streamServer.currentSong = song
         streamServer.currentSongUri = song.contentUri
-        streamServer.isPlaying = true
+        streamServer.isPlaying = isPlaying
         streamServer.currentPositionMs = positionMs
         streamServer.currentDurationMs = song.duration
 
@@ -354,10 +362,13 @@ class OmniSyncManager private constructor(private val context: Context) {
             put("action", "PLAY")
             hostIp?.let { put("hostIp", it) }
             put("streamPort", PORT)
+            put("songId", song.id)
             put("songTitle", song.title)
             put("songArtist", song.artist)
             put("songDuration", song.duration)
             put("positionMs", positionMs)
+            put("isPlaying", isPlaying)
+            put("timestamp", System.currentTimeMillis())
         }.toString()
 
         streamServer.broadcastEvent(json)
@@ -366,9 +377,11 @@ class OmniSyncManager private constructor(private val context: Context) {
     fun broadcastPause() {
         if (currentRole != OmniSyncRole.HOST) return
         streamServer.isPlaying = false
+        val pos = hostPlaybackPositionProvider?.invoke() ?: streamServer.currentPositionMs
 
         val json = JSONObject().apply {
             put("action", "PAUSE")
+            put("positionMs", pos)
         }.toString()
 
         streamServer.broadcastEvent(json)
@@ -588,6 +601,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val initialStatus = JSONObject(body)
                 val title = initialStatus.optString("title", "")
                 val artist = initialStatus.optString("artist", "")
+                val songId = initialStatus.optLong("songId", 0L)
                 val pos = initialStatus.optLong("position", 0L)
                 val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
                 val rName = initialStatus.optString("hostName", host.name)
@@ -606,10 +620,8 @@ class OmniSyncManager private constructor(private val context: Context) {
                 } catch (ignored: Exception) {}
 
                 if (title.isNotEmpty()) {
-                    playListenerStream("$baseUrl/stream", pos, title, artist)
-                    if (!isHostPlaying) {
-                        pauseListenerStream()
-                    }
+                    val streamUrl = "$baseUrl/stream?id=$songId&t=${System.currentTimeMillis()}"
+                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
@@ -619,8 +631,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                     } else {
                         "Failed to connect to host: ${e.localizedMessage}"
                     }
-                    notifyError(msg)
-                    disconnectListener()
+                    disconnectListener(msg)
                     return@launch
                 }
             }
@@ -631,7 +642,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val eventsUrl = URL("$baseUrl/events")
                 val sseConn = (eventsUrl.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 5000
-                    readTimeout = 0 // Stream indefinitely
+                    readTimeout = 10000 // Inactivity timeout: if host is silent for 10s (3 missed heartbeats), drop connection
                     requestMethod = "GET"
                     setRequestProperty("Accept", "text/event-stream")
                 }
@@ -639,7 +650,15 @@ class OmniSyncManager private constructor(private val context: Context) {
                     sseSuccess = true
                     val reader = BufferedReader(InputStreamReader(sseConn.inputStream))
                     while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                        val line = reader.readLine() ?: break
+                        val line = try {
+                            reader.readLine()
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (line == null) {
+                            // Host closed connection or read timed out
+                            break
+                        }
                         if (line.startsWith("data:")) {
                             val dataJson = line.substring(5).trim()
                             if (dataJson.isNotEmpty()) {
@@ -651,78 +670,85 @@ class OmniSyncManager private constructor(private val context: Context) {
                         }
                     }
                 }
-                sseConn.disconnect()
+                try { sseConn.disconnect() } catch (ignored: Exception) {}
             } catch (ignored: Exception) {}
 
-            // 3. Polling Fallback if SSE disconnected or not supported
-            while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                delay(1200L)
-                try {
-                    val statusUrl = URL("$baseUrl/status")
-                    val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 2500
-                        readTimeout = 2500
-                        requestMethod = "GET"
-                    }
-                    if (conn.responseCode == 200) {
-                        val body = conn.inputStream.bufferedReader().readText()
-                        conn.disconnect()
-                        val status = JSONObject(body)
-                        val title = status.optString("title", "")
-                        val artist = status.optString("artist", "")
-                        val pos = status.optLong("position", 0L)
-                        val isHostPlaying = status.optBoolean("isPlaying", false)
+            // 3. Fallback Polling Loop if SSE disconnected or not supported
+            if (isActive && currentRole == OmniSyncRole.LISTENER && !sseSuccess) {
+                var consecutiveFailures = 0
+                while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                    delay(1200L)
+                    try {
+                        val statusUrl = URL("$baseUrl/status")
+                        val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 2500
+                            readTimeout = 2500
+                            requestMethod = "GET"
+                        }
+                        if (conn.responseCode == 200) {
+                            consecutiveFailures = 0
+                            val body = conn.inputStream.bufferedReader().readText()
+                            conn.disconnect()
+                            val status = JSONObject(body)
+                            val title = status.optString("title", "")
+                            val artist = status.optString("artist", "")
+                            val songId = status.optLong("songId", 0L)
+                            val pos = status.optLong("position", 0L)
+                            val isHostPlaying = status.optBoolean("isPlaying", false)
 
-                        if (title != currentTrackTitle) {
                             if (title.isNotEmpty()) {
-                                playListenerStream("$baseUrl/stream", pos, title, artist)
-                                if (!isHostPlaying) pauseListenerStream()
+                                val streamUrl = "$baseUrl/stream?id=$songId&t=${System.currentTimeMillis()}"
+                                playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
                             }
                         } else {
-                            if (isHostPlaying != isStreamPlaying) {
-                                if (isHostPlaying) {
-                                    listenerPlayer?.start()
-                                    isStreamPlaying = true
-                                    notifyPlaybackState(true)
-                                } else {
-                                    pauseListenerStream()
-                                }
-                            }
+                            consecutiveFailures++
+                            if (consecutiveFailures >= 2) break
                         }
-                    } else {
-                        break
+                    } catch (e: Exception) {
+                        consecutiveFailures++
+                        if (consecutiveFailures >= 2) break
                     }
-                } catch (e: Exception) {
-                    break
                 }
             }
 
-            if (currentRole == OmniSyncRole.LISTENER) {
-                disconnectListener()
+            if (isActive && currentRole == OmniSyncRole.LISTENER) {
+                disconnectListener("Host disconnected")
             }
         }
     }
 
     private fun handleListenerCommand(json: JSONObject, host: OmniSyncHost) {
+        val targetPort = if (host.port > 0) host.port else PORT
         when (json.optString("action")) {
             "WELCOME" -> {
                 val rName = json.optString("hostName")
                 if (rName.isNotEmpty()) {
                     currentHostRoomName = rName
                 }
+                val title = json.optString("title")
+                val artist = json.optString("artist")
+                val songId = json.optLong("songId", 0L)
+                val pos = json.optLong("positionMs", 0L)
+                val isHostPlaying = json.optBoolean("isPlaying", false)
+                if (title.isNotEmpty()) {
+                    val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId&t=${System.currentTimeMillis()}"
+                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
+                }
             }
             "PLAY" -> {
                 val ipFromCmd = json.optString("hostIp")
                 val streamIp = if (ipFromCmd.isNotEmpty()) ipFromCmd else host.address
-                val port = json.optInt("streamPort", PORT)
+                val port = json.optInt("streamPort", targetPort)
+                val songId = json.optLong("songId", 0L)
                 val positionMs = json.optLong("positionMs", 0L)
                 val songTitle = json.optString("songTitle", "OmniSync Track")
                 val songArtist = json.optString("songArtist", "Host Broadcast")
+                val isHostPlaying = json.optBoolean("isPlaying", true)
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
-                val streamUrl = "http://$formattedHost:$port/stream"
+                val streamUrl = "http://$formattedHost:$port/stream?id=$songId&t=${System.currentTimeMillis()}"
 
-                playListenerStream(streamUrl, positionMs, songTitle, songArtist)
+                playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying)
             }
             "PAUSE" -> {
                 pauseListenerStream()
@@ -731,61 +757,129 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val pos = json.optLong("positionMs", 0L)
                 seekListenerStream(pos)
             }
+            "PING" -> {
+                val isHostPlaying = json.optBoolean("isPlaying", false)
+                val hostPos = json.optLong("positionMs", 0L)
+                syncDrift(hostPos, isHostPlaying)
+            }
             "STOP" -> {
-                disconnectListener()
+                disconnectListener("Host stopped broadcasting")
             }
         }
     }
 
-    @Synchronized
-    private fun playListenerStream(url: String, positionMs: Long, title: String, artist: String) {
-        currentTrackTitle = title
-        currentTrackArtist = artist
-        notifyTrackInfo(title, artist)
-
-        scope.launch(Dispatchers.Main) {
-            try {
-                var player = listenerPlayer
-                if (player == null) {
-                    player = MediaPlayer().apply {
-                        setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .build()
-                        )
-                        setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
-                        setOnErrorListener { _, what, extra ->
-                            notifyError("Stream error ($what, $extra)")
-                            true
-                        }
-                    }
-                    listenerPlayer = player
-                }
-
-                if (currentStreamUrl != url) {
-                    currentStreamUrl = url
-                    player.reset()
-                    player.setDataSource(url)
-                    player.setOnPreparedListener { mp ->
-                        if (positionMs > 1000) {
-                            try { mp.seekTo(positionMs.toInt()) } catch (ignored: Exception) {}
-                        }
-                        mp.setVolume(listenerVolume, listenerVolume)
-                        mp.start()
-                        isStreamPlaying = true
-                        notifyPlaybackState(true)
-                    }
-                    player.prepareAsync()
-                } else {
-                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 3000) {
-                        try { player.seekTo(positionMs.toInt()) } catch (ignored: Exception) {}
-                    }
-                    player.setVolume(listenerVolume, listenerVolume)
-                    player.start()
+    private fun syncDrift(hostPos: Long, isHostPlaying: Boolean) {
+        mainHandler.post {
+            val player = listenerPlayer ?: return@post
+            if (isHostPlaying != isStreamPlaying) {
+                if (isHostPlaying) {
+                    player.play()
                     isStreamPlaying = true
                     notifyPlaybackState(true)
+                } else {
+                    player.pause()
+                    isStreamPlaying = false
+                    notifyPlaybackState(false)
                 }
+            }
+            if (isHostPlaying && hostPos > 0) {
+                val current = player.currentPosition
+                if (abs(current - hostPos) > 3000) {
+                    player.seekTo(hostPos)
+                }
+            }
+        }
+    }
+
+    private fun getOrCreateListenerPlayer(): ExoPlayer {
+        listenerPlayer?.let { return it }
+        val player = ExoPlayer.Builder(context)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true
+            )
+            .build()
+        player.volume = listenerVolume
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        isStreamPlaying = player.isPlaying
+                        notifyPlaybackState(isStreamPlaying)
+                    }
+                    Player.STATE_ENDED -> {
+                        isStreamPlaying = false
+                        notifyPlaybackState(false)
+                    }
+                    else -> {}
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                isStreamPlaying = isPlaying
+                notifyPlaybackState(isPlaying)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                notifyError("Stream error: ${error.localizedMessage ?: "Playback failed"}")
+            }
+        })
+        listenerPlayer = player
+        return player
+    }
+
+    @Synchronized
+    private fun playListenerStream(
+        url: String,
+        songId: Long,
+        positionMs: Long,
+        title: String,
+        artist: String,
+        startPlaying: Boolean = true
+    ) {
+        val isNewSong = (currentTrackTitle != title || currentStreamSongId != songId || currentStreamUrl == null)
+
+        currentTrackTitle = title
+        currentTrackArtist = artist
+        currentStreamSongId = songId
+        notifyTrackInfo(title, artist)
+
+        mainHandler.post {
+            try {
+                if (currentRole != OmniSyncRole.LISTENER) return@post
+                val player = getOrCreateListenerPlayer()
+
+                if (isNewSong || currentStreamUrl != url) {
+                    currentStreamUrl = url
+                    val mediaItem = MediaItem.fromUri(url)
+                    player.setMediaItem(mediaItem)
+                    player.prepare()
+                    if (positionMs > 0) {
+                        player.seekTo(positionMs)
+                    }
+                    if (startPlaying) {
+                        player.play()
+                        isStreamPlaying = true
+                    } else {
+                        player.pause()
+                        isStreamPlaying = false
+                    }
+                } else {
+                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 2500) {
+                        player.seekTo(positionMs)
+                    }
+                    if (startPlaying) {
+                        player.play()
+                        isStreamPlaying = true
+                    } else {
+                        player.pause()
+                        isStreamPlaying = false
+                    }
+                }
+                notifyPlaybackState(isStreamPlaying)
             } catch (e: Exception) {
                 e.printStackTrace()
                 notifyError("Stream playback error: ${e.localizedMessage}")
@@ -794,7 +888,7 @@ class OmniSyncManager private constructor(private val context: Context) {
     }
 
     private fun pauseListenerStream() {
-        scope.launch(Dispatchers.Main) {
+        mainHandler.post {
             try {
                 listenerPlayer?.pause()
                 isStreamPlaying = false
@@ -804,80 +898,85 @@ class OmniSyncManager private constructor(private val context: Context) {
     }
 
     private fun seekListenerStream(positionMs: Long) {
-        scope.launch(Dispatchers.Main) {
+        mainHandler.post {
             try {
-                listenerPlayer?.seekTo(positionMs.toInt())
+                listenerPlayer?.seekTo(positionMs)
             } catch (ignored: Exception) {}
         }
     }
 
     fun setListenerVolume(volume: Float) {
         listenerVolume = volume.coerceIn(0f, 1f)
-        scope.launch(Dispatchers.Main) {
+        mainHandler.post {
             try {
-                listenerPlayer?.setVolume(listenerVolume, listenerVolume)
+                listenerPlayer?.volume = listenerVolume
             } catch (ignored: Exception) {}
         }
     }
 
     fun toggleListenerPlayback() {
-        if (isStreamPlaying) {
-            pauseListenerStream()
-        } else {
-            scope.launch(Dispatchers.Main) {
-                try {
-                    listenerPlayer?.start()
-                    isStreamPlaying = true
-                    notifyPlaybackState(true)
-                } catch (ignored: Exception) {}
+        mainHandler.post {
+            val player = listenerPlayer ?: return@post
+            if (player.isPlaying) {
+                player.pause()
+                isStreamPlaying = false
+                notifyPlaybackState(false)
+            } else {
+                player.play()
+                isStreamPlaying = true
+                notifyPlaybackState(true)
             }
         }
     }
 
-    fun disconnectListener() {
-        if (currentRole != OmniSyncRole.LISTENER) return
+    fun disconnectListener(reason: String? = null) {
+        mainHandler.post {
+            if (currentRole != OmniSyncRole.LISTENER) return@post
 
-        val hostToUnregister = currentHost
-        scope.launch(Dispatchers.IO) {
+            val hostToUnregister = currentHost
+            currentRole = OmniSyncRole.IDLE
+            currentHost = null
+            currentHostRoomName = null
+            currentTrackTitle = ""
+            currentTrackArtist = ""
+            currentStreamSongId = null
+            currentStreamUrl = null
+            isStreamPlaying = false
+
             try {
-                hostToUnregister?.let {
-                    val port = if (it.port > 0) it.port else PORT
-                    val unregUrl = URL("http://${it.address}:$port/unregister?id=$deviceId")
-                    val conn = (unregUrl.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 2000
-                        readTimeout = 2000
-                        requestMethod = "POST"
-                    }
-                    conn.responseCode
-                    conn.disconnect()
-                }
+                listenerPlayer?.stop()
+                listenerPlayer?.clearMediaItems()
+                listenerPlayer?.release()
             } catch (ignored: Exception) {}
+            listenerPlayer = null
+
+            releaseLocks()
+
+            notifyRoleChanged(OmniSyncRole.IDLE)
+            notifyPlaybackState(false)
+            notifyTrackInfo("", "")
+            if (!reason.isNullOrEmpty()) {
+                notifyError(reason)
+            }
+
+            scope.launch(Dispatchers.IO) {
+                try {
+                    hostToUnregister?.let {
+                        val port = if (it.port > 0) it.port else PORT
+                        val unregUrl = URL("http://${it.address}:$port/unregister?id=$deviceId")
+                        val conn = (unregUrl.openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 2000
+                            readTimeout = 2000
+                            requestMethod = "POST"
+                        }
+                        conn.responseCode
+                        conn.disconnect()
+                    }
+                } catch (ignored: Exception) {}
+            }
         }
 
         clientJob?.cancel()
         clientJob = null
-
-        scope.launch(Dispatchers.Main) {
-            try {
-                listenerPlayer?.stop()
-                listenerPlayer?.reset()
-                listenerPlayer?.release()
-            } catch (ignored: Exception) {}
-            listenerPlayer = null
-            currentStreamUrl = null
-        }
-
-        releaseLocks()
-
-        currentRole = OmniSyncRole.IDLE
-        currentHost = null
-        currentHostRoomName = null
-        currentTrackTitle = ""
-        currentTrackArtist = ""
-        isStreamPlaying = false
-
-        notifyRoleChanged(OmniSyncRole.IDLE)
-        notifyPlaybackState(false)
-        notifyTrackInfo("", "")
     }
 }
