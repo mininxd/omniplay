@@ -110,7 +110,7 @@ class OmniSyncStreamServer(
                 if (webSocketSessions.isNotEmpty() || sseWriters.isNotEmpty()) {
                     try {
                         val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
-                        val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+                        val isLive = (try { isPlayingProvider?.invoke() } catch (e: Exception) { null }) ?: isPlaying
                         val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
                         val ping = JSONObject().apply {
                             put("action", "PING")
@@ -322,7 +322,14 @@ class OmniSyncStreamServer(
                                     onPeerJoined?.invoke(OmniSyncPeer(rId, rName, clientIp))
                                 }
                                 "PING" -> {
-                                    session.sendPong(frame.payload)
+                                    val clientTime = json.optLong("clientTime", 0L)
+                                    val pong = JSONObject().apply {
+                                        put("action", "PONG")
+                                        if (clientTime > 0L) {
+                                            put("clientTime", clientTime)
+                                        }
+                                    }.toString()
+                                    session.sendText(pong)
                                 }
                                 "PONG" -> {
                                     // Peer responded to heartbeat

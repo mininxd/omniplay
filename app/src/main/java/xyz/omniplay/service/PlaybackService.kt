@@ -215,8 +215,10 @@ class PlaybackService : Service() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                val currentPos = exo.currentPosition.coerceAtLeast(0L)
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(currentSong, currentPos, isPlaying)
                 if (isPlaying && currentSong != null) {
-                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, exo.currentPosition.coerceAtLeast(0L))
+                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, currentPos)
                     startProgressTracker()
                     try {
                         startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
@@ -224,11 +226,11 @@ class PlaybackService : Service() {
                         e.printStackTrace()
                     }
                     currentSong?.let {
-                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(it, exo.currentPosition.coerceAtLeast(0L), isPlaying = true)
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(it, currentPos, isPlaying = true)
                     }
                 } else {
                     stopProgressTracker()
-                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, exo.currentPosition.coerceAtLeast(0L))
+                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, currentPos)
                     updateNotification(isPlaying = false)
                     xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPause()
                 }
@@ -1048,6 +1050,11 @@ class PlaybackService : Service() {
     private fun stopProgressTracker() {
         progressJob?.cancel()
         progressJob = null
+        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(
+            currentSong,
+            getCurrentPosition().toLong(),
+            isPlaying = false
+        )
     }
 
     private fun updateMediaMetadata(song: Song, durationMs: Long = song.duration, art: Bitmap? = currentAlbumArt) {

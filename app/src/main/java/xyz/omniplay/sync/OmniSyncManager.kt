@@ -71,6 +71,8 @@ class OmniSyncManager private constructor(private val context: Context) {
         fun onTrackInfoChanged(title: String, artist: String)
         fun onPlaybackStateChanged(isPlaying: Boolean)
         fun onError(message: String)
+        fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
+        fun onLatencyUpdate(latencyMs: Long) {}
     }
 
     init {
@@ -130,6 +132,17 @@ class OmniSyncManager private constructor(private val context: Context) {
     private var currentStreamUrl: String? = null
     private var currentStreamSongId: Long? = null
 
+    @Volatile
+    var currentLatencyMs: Long = 0L
+        private set
+
+    @Volatile
+    var currentStreamDurationMs: Long = 0L
+        private set
+
+    private var listenerProgressJob: Job? = null
+    private var latencyPingJob: Job? = null
+
     // NSD discovery
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
@@ -182,6 +195,34 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     private fun notifyError(message: String) {
         mainHandler.post { listeners.forEach { it.onError(message) } }
+    }
+
+    private fun notifyProgress(currentMs: Long, totalMs: Long) {
+        mainHandler.post { listeners.forEach { it.onProgressUpdate(currentMs, totalMs) } }
+    }
+
+    private fun notifyLatency(latencyMs: Long) {
+        mainHandler.post { listeners.forEach { it.onLatencyUpdate(latencyMs) } }
+    }
+
+    private fun startListenerProgressTracker() {
+        listenerProgressJob?.cancel()
+        listenerProgressJob = scope.launch(Dispatchers.Main) {
+            while (isActive && currentRole == OmniSyncRole.LISTENER) {
+                val player = listenerPlayer
+                if (player != null) {
+                    val pos = player.currentPosition.coerceAtLeast(0L)
+                    val dur = player.duration.takeIf { it > 0L } ?: currentStreamDurationMs
+                    notifyProgress(pos, dur)
+                }
+                delay(200L)
+            }
+        }
+    }
+
+    private fun stopListenerProgressTracker() {
+        listenerProgressJob?.cancel()
+        listenerProgressJob = null
     }
 
     fun getLocalIPv4Address(): String? {
@@ -404,12 +445,15 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     fun broadcastPause() {
         if (currentRole != OmniSyncRole.HOST) return
+        isHostLivePlaying = false
         streamServer.isPlaying = false
         val pos = hostPlaybackPositionProvider?.invoke() ?: streamServer.currentPositionMs
+        streamServer.currentPositionMs = pos
 
         val json = JSONObject().apply {
             put("action", "PAUSE")
             put("positionMs", pos)
+            put("timestamp", System.currentTimeMillis())
         }.toString()
 
         streamServer.broadcastEvent(json)
@@ -689,6 +733,18 @@ class OmniSyncManager private constructor(private val context: Context) {
                             put("name", deviceName)
                         }.toString()
                         try { wsClient.send(regJson) } catch (ignored: Exception) {}
+
+                        latencyPingJob?.cancel()
+                        latencyPingJob = scope.launch {
+                            while (isActive && currentRole == OmniSyncRole.LISTENER && wsClient.isConnected) {
+                                val pingJson = JSONObject().apply {
+                                    put("action", "PING")
+                                    put("clientTime", System.currentTimeMillis())
+                                }.toString()
+                                try { wsClient.send(pingJson) } catch (ignored: Exception) {}
+                                delay(2500L)
+                            }
+                        }
                     }
 
                     wsClient.onMessage = { message ->
@@ -747,10 +803,12 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val artist = json.optString("artist")
                 val songId = json.optLong("songId", 0L)
                 val pos = json.optLong("positionMs", 0L)
+                val dur = json.optLong("durationMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
+                if (dur > 0L) currentStreamDurationMs = dur
                 if (title.isNotEmpty()) {
                     val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
-                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
+                    playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur)
                 }
             }
             "PLAY" -> {
@@ -761,19 +819,31 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val positionMs = json.optLong("positionMs", 0L)
                 val songTitle = json.optString("songTitle", "OmniSync Track")
                 val songArtist = json.optString("songArtist", "Host Broadcast")
+                val songDuration = json.optLong("songDuration", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", true)
+                if (songDuration > 0L) currentStreamDurationMs = songDuration
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
                 val streamUrl = "http://$formattedHost:$port/stream?id=$songId"
 
-                playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying)
+                playListenerStream(streamUrl, songId, positionMs, songTitle, songArtist, startPlaying = isHostPlaying, durationMs = songDuration)
             }
             "PAUSE" -> {
-                pauseListenerStream()
+                val pos = json.optLong("positionMs", -1L)
+                pauseListenerStream(pos)
             }
             "SEEK" -> {
                 val pos = json.optLong("positionMs", 0L)
                 seekListenerStream(pos)
+            }
+            "PONG" -> {
+                val clientTime = json.optLong("clientTime", 0L)
+                if (clientTime > 0L) {
+                    val rtt = (System.currentTimeMillis() - clientTime).coerceAtLeast(0L)
+                    val latency = (rtt / 2L).coerceAtLeast(1L)
+                    currentLatencyMs = latency
+                    notifyLatency(latency)
+                }
             }
             "PING" -> {
                 val isHostPlaying = json.optBoolean("isPlaying", false)
@@ -883,7 +953,8 @@ class OmniSyncManager private constructor(private val context: Context) {
         positionMs: Long,
         title: String,
         artist: String,
-        startPlaying: Boolean = true
+        startPlaying: Boolean = true,
+        durationMs: Long = 0L
     ) {
         mainHandler.post {
             try {
@@ -893,9 +964,11 @@ class OmniSyncManager private constructor(private val context: Context) {
                 currentTrackTitle = title
                 currentTrackArtist = artist
                 currentStreamSongId = songId
+                if (durationMs > 0L) currentStreamDurationMs = durationMs
                 notifyTrackInfo(title, artist)
 
                 val player = getOrCreateListenerPlayer()
+                startListenerProgressTracker()
 
                 if (isNewSong) {
                     currentStreamUrl = url
@@ -929,10 +1002,15 @@ class OmniSyncManager private constructor(private val context: Context) {
         }
     }
 
-    private fun pauseListenerStream() {
+    private fun pauseListenerStream(pos: Long = -1L) {
         mainHandler.post {
             try {
-                listenerPlayer?.pause()
+                if (currentRole != OmniSyncRole.LISTENER) return@post
+                val player = listenerPlayer ?: return@post
+                player.pause()
+                if (pos >= 0L && abs(player.currentPosition - pos) > 1000L) {
+                    player.seekTo(pos)
+                }
                 isStreamPlaying = false
                 notifyPlaybackState(false)
             } catch (ignored: Exception) {}
@@ -989,6 +1067,14 @@ class OmniSyncManager private constructor(private val context: Context) {
                 clientWebSocket?.close()
                 clientWebSocket = null
             } catch (ignored: Exception) {}
+
+            stopListenerProgressTracker()
+            latencyPingJob?.cancel()
+            latencyPingJob = null
+            currentLatencyMs = 0L
+            currentStreamDurationMs = 0L
+            notifyLatency(0L)
+            notifyProgress(0L, 0L)
 
             try {
                 listenerPlayer?.stop()

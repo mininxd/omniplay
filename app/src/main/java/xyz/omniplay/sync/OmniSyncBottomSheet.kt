@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import xyz.omniplay.R
+import xyz.omniplay.model.Song
 import xyz.omniplay.databinding.BottomSheetOmnisyncBinding
 import xyz.omniplay.databinding.ItemOmnisyncHostBinding
 
@@ -165,6 +166,13 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                     binding.connectedSongTitleText.text = "Waiting for stream…"
                     binding.connectedSongArtistText.text = "Host Broadcast"
                 }
+
+                if (syncManager.currentLatencyMs > 0L) {
+                    binding.listenerLatencyBadge.text = "(${syncManager.currentLatencyMs}ms)"
+                    binding.listenerLatencyBadge.visibility = View.VISIBLE
+                } else {
+                    binding.listenerLatencyBadge.visibility = View.GONE
+                }
             }
             OmniSyncRole.IDLE -> {
                 val isHostTab = binding.syncModeToggleGroup.checkedButtonId == R.id.btn_tab_host
@@ -177,6 +185,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.listenerConnectedContainer.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
+                binding.listenerLatencyBadge.visibility = View.GONE
+                binding.listenerProgressBar.progress = 0
+                binding.listenerProgressTimeText.text = "0:00"
+                binding.listenerDurationTimeText.text = "0:00"
                 if (!isHostTab) {
                     syncManager.startScanningHosts()
                 }
@@ -246,6 +258,32 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         if (_binding != null && syncManager.currentRole == OmniSyncRole.IDLE) {
             binding.btnManualConnect.isEnabled = true
             onHostsDiscovered(syncManager.discoveredHosts)
+        }
+    }
+
+    override fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {
+        if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
+            if (durationMs > 0L) {
+                val progress = ((currentPositionMs.toDouble() / durationMs) * 1000).toInt().coerceIn(0, 1000)
+                binding.listenerProgressBar.progress = progress
+                binding.listenerProgressTimeText.text = Song.formatTime(currentPositionMs)
+                binding.listenerDurationTimeText.text = Song.formatTime(durationMs)
+            } else {
+                binding.listenerProgressBar.progress = 0
+                binding.listenerProgressTimeText.text = Song.formatTime(currentPositionMs)
+                binding.listenerDurationTimeText.text = "0:00"
+            }
+        }
+    }
+
+    override fun onLatencyUpdate(latencyMs: Long) {
+        if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
+            if (latencyMs > 0L) {
+                binding.listenerLatencyBadge.text = "(${latencyMs}ms)"
+                binding.listenerLatencyBadge.visibility = View.VISIBLE
+            } else {
+                binding.listenerLatencyBadge.visibility = View.GONE
+            }
         }
     }
 
