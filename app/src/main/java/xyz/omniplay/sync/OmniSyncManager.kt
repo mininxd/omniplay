@@ -124,6 +124,8 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     // Listener state
     private var clientJob: Job? = null
+    @Volatile
+    private var clientWebSocket: OmniWebSocketClient? = null
     private var listenerPlayer: ExoPlayer? = null
     private var currentStreamUrl: String? = null
     private var currentStreamSongId: Long? = null
@@ -603,20 +605,22 @@ class OmniSyncManager private constructor(private val context: Context) {
         acquireLocks()
 
         clientJob?.cancel()
+        clientWebSocket?.close()
+        clientWebSocket = null
 
         clientJob = scope.launch(Dispatchers.IO) {
             val targetPort = if (host.port > 0) host.port else PORT
             val baseUrl = "http://${host.address}:$targetPort"
 
-            // 1. Initial HTTP probe & registration with retry
+            // 1. Initial quick probe for room state
             var initialStatus: JSONObject? = null
             var lastError: Exception? = null
             for (attempt in 1..3) {
                 try {
                     val statusUrl = URL("$baseUrl/status")
                     val conn = (statusUrl.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 3000
-                        readTimeout = 3000
+                        connectTimeout = 2500
+                        readTimeout = 2500
                         requestMethod = "GET"
                         setRequestProperty("Connection", "close")
                         setRequestProperty("Accept", "application/json")
@@ -635,7 +639,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                 } catch (e: Exception) {
                     if (e is CancellationException) return@launch
                     lastError = e
-                    delay(300L)
+                    delay(250L)
                 }
             }
 
@@ -659,89 +663,65 @@ class OmniSyncManager private constructor(private val context: Context) {
             val rName = initialStatus.optString("hostName", host.name)
             currentHostRoomName = rName
 
-            // Register listener with host
-            try {
-                val regUrl = URL("$baseUrl/register?id=$deviceId&name=${URLEncoder.encode(deviceName, "UTF-8")}")
-                val regConn = (regUrl.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                    requestMethod = "GET"
-                    setRequestProperty("Connection", "close")
-                    useCaches = false
-                }
-                regConn.responseCode
-                regConn.disconnect()
-            } catch (ignored: Exception) {}
-
             if (title.isNotEmpty()) {
                 val streamUrl = "$baseUrl/stream?id=$songId"
                 playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
             }
 
-            // 2. Persistent Event Channel with Auto-Reconnect (Discord-like Room Connection)
-            var consecutiveErrors = 0
+            // 2. Real-Time RFC 6455 WebSocket Live Synchronization Channel
+            var reconnectAttempts = 0
             while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                var sseConn: HttpURLConnection? = null
                 try {
-                    val eventsUrl = URL("$baseUrl/events")
-                    sseConn = (eventsUrl.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 5000
-                        readTimeout = 0 // Keep connection open indefinitely; do NOT timeout!
-                        requestMethod = "GET"
-                        setRequestProperty("Accept", "text/event-stream")
-                        useCaches = false
+                    val encodedName = try { URLEncoder.encode(deviceName, "UTF-8") } catch (e: Exception) { deviceName }
+                    val wsClient = OmniWebSocketClient(
+                        host = host.address,
+                        port = targetPort,
+                        path = "/ws?id=$deviceId&name=$encodedName",
+                        timeoutMs = 4000
+                    )
+                    clientWebSocket = wsClient
+
+                    wsClient.onOpen = {
+                        reconnectAttempts = 0
+                        val regJson = JSONObject().apply {
+                            put("action", "REGISTER")
+                            put("id", deviceId)
+                            put("name", deviceName)
+                        }.toString()
+                        try { wsClient.send(regJson) } catch (ignored: Exception) {}
                     }
-                    if (sseConn.responseCode == 200) {
-                        consecutiveErrors = 0
-                        val reader = BufferedReader(InputStreamReader(sseConn.inputStream))
-                        while (isActive && currentRole == OmniSyncRole.LISTENER) {
-                            val line = try {
-                                reader.readLine()
-                            } catch (e: Exception) {
-                                null
-                            }
-                            if (line == null) {
-                                // Socket closed or EOF
-                                break
-                            }
-                            if (line.startsWith("data:")) {
-                                val dataJson = line.substring(5).trim()
-                                if (dataJson.isNotEmpty()) {
-                                    val json = try { JSONObject(dataJson) } catch (e: Exception) { null }
-                                    if (json != null) {
-                                        handleListenerCommand(json, host)
-                                    }
-                                }
-                            }
+
+                    wsClient.onMessage = { message ->
+                        try {
+                            val json = JSONObject(message)
+                            handleListenerCommand(json, host)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                    } else {
-                        consecutiveErrors++
                     }
+
+                    wsClient.onClose = { code, reason ->
+                        if (code == 1000 && reason.contains("STOP", ignoreCase = true)) {
+                            disconnectListener("Host stopped broadcasting")
+                        }
+                    }
+
+                    wsClient.connect() // Blocks on socket read loop until disconnected
                 } catch (e: Exception) {
-                    consecutiveErrors++
-                } finally {
-                    try { sseConn?.disconnect() } catch (ignored: Exception) {}
+                    if (e is CancellationException) return@launch
+                    reconnectAttempts++
                 }
 
                 if (!isActive || currentRole != OmniSyncRole.LISTENER) break
 
-                // If multiple consecutive connection failures occur, verify if host is still running
-                if (consecutiveErrors >= 4) {
+                // If disconnected repeatedly, verify if host is still running
+                if (reconnectAttempts >= 3) {
                     var hostAlive = false
                     try {
-                        val testUrl = URL("$baseUrl/status")
-                        val testConn = (testUrl.openConnection() as HttpURLConnection).apply {
-                            connectTimeout = 2000
-                            readTimeout = 2000
-                            requestMethod = "GET"
-                            setRequestProperty("Connection", "close")
-                            useCaches = false
-                        }
-                        if (testConn.responseCode == 200) {
+                        Socket().use { s ->
+                            s.connect(InetSocketAddress(host.address, targetPort), 1500)
                             hostAlive = true
-                            consecutiveErrors = 0
                         }
-                        testConn.disconnect()
                     } catch (ignored: Exception) {}
 
                     if (!hostAlive) {
@@ -750,8 +730,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                     }
                 }
 
-                // Brief backoff before reconnecting to event stream (stay in room)
-                delay(1000L)
+                delay(1000L) // Wait 1 second before reconnecting
             }
         }
     }
@@ -799,7 +778,8 @@ class OmniSyncManager private constructor(private val context: Context) {
             "PING" -> {
                 val isHostPlaying = json.optBoolean("isPlaying", false)
                 val hostPos = json.optLong("positionMs", 0L)
-                syncDrift(hostPos, isHostPlaying)
+                val hostSongId = json.optLong("songId", 0L)
+                syncDrift(hostPos, isHostPlaying, hostSongId)
             }
             "STOP" -> {
                 disconnectListener("Host stopped broadcasting")
@@ -807,7 +787,7 @@ class OmniSyncManager private constructor(private val context: Context) {
         }
     }
 
-    private fun syncDrift(hostPos: Long, isHostPlaying: Boolean) {
+    private fun syncDrift(hostPos: Long, isHostPlaying: Boolean, hostSongId: Long = 0L) {
         mainHandler.post {
             val player = listenerPlayer ?: return@post
             if (isHostPlaying != isStreamPlaying) {
@@ -823,8 +803,8 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
             if (isHostPlaying && hostPos > 0) {
                 val current = player.currentPosition
-                // If drift is more than 2.5 seconds, gently seek to stay synced with host
-                if (abs(current - hostPos) > 2500) {
+                // If drift is more than 1.5 seconds, align position with host
+                if (abs(current - hostPos) > 1500) {
                     player.seekTo(hostPos)
                 }
             }
@@ -921,11 +901,8 @@ class OmniSyncManager private constructor(private val context: Context) {
                     currentStreamUrl = url
                     pendingSeekPositionMs = positionMs
                     val mediaItem = MediaItem.fromUri(url)
-                    player.setMediaItem(mediaItem)
+                    player.setMediaItem(mediaItem, if (positionMs > 0) positionMs else 0L)
                     player.prepare()
-                    if (positionMs > 0) {
-                        player.seekTo(positionMs)
-                    }
                     if (startPlaying) {
                         player.play()
                         isStreamPlaying = true
@@ -934,7 +911,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                         isStreamPlaying = false
                     }
                 } else {
-                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 2000) {
+                    if (positionMs > 0 && abs(player.currentPosition - positionMs) > 1500) {
                         player.seekTo(positionMs)
                     }
                     if (startPlaying) {
@@ -1007,6 +984,11 @@ class OmniSyncManager private constructor(private val context: Context) {
             currentStreamSongId = null
             currentStreamUrl = null
             isStreamPlaying = false
+
+            try {
+                clientWebSocket?.close()
+                clientWebSocket = null
+            } catch (ignored: Exception) {}
 
             try {
                 listenerPlayer?.stop()

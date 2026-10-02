@@ -39,6 +39,7 @@ class OmniSyncStreamServer(
     private var heartbeatJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val sseWriters = CopyOnWriteArrayList<PrintWriter>()
+    private val webSocketSessions = CopyOnWriteArrayList<WebSocketSession>()
     private val activeSockets = CopyOnWriteArrayList<Socket>()
 
     var onPeerJoined: ((OmniSyncPeer) -> Unit)? = null
@@ -102,11 +103,11 @@ class OmniSyncStreamServer(
             }
         }
 
-        // Periodic heartbeat ping: keeps SSE connection alive & synchronizes clock/drift
+        // Periodic heartbeat ping: keeps connection alive & synchronizes clock/drift
         heartbeatJob = scope.launch {
             while (isActive) {
-                delay(3000L)
-                if (sseWriters.isNotEmpty()) {
+                delay(2000L)
+                if (webSocketSessions.isNotEmpty() || sseWriters.isNotEmpty()) {
                     try {
                         val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
                         val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
@@ -131,6 +132,18 @@ class OmniSyncStreamServer(
     }
 
     fun broadcastEvent(jsonString: String) {
+        // 1. Broadcast to WebSocket clients (RFC 6455)
+        for (session in webSocketSessions) {
+            try {
+                session.sendText(jsonString)
+            } catch (e: Exception) {
+                webSocketSessions.remove(session)
+                session.peerId?.let { onPeerLeft?.invoke(it) }
+                try { session.socket.close() } catch (ignored: Exception) {}
+            }
+        }
+
+        // 2. Broadcast to legacy SSE clients
         val sseData = "data: $jsonString\n\n"
         for (writer in sseWriters) {
             try {
@@ -145,37 +158,50 @@ class OmniSyncStreamServer(
     private fun handleClient(socket: Socket) {
         try {
             socket.soTimeout = 15000
-            val input = socket.getInputStream().bufferedReader()
+            val rawInput = socket.getInputStream()
             val output = socket.getOutputStream()
 
-            val requestLine = input.readLine() ?: return
+            val requestLine = OmniWebSocket.readHttpLine(rawInput) ?: return
             val parts = requestLine.split(" ")
             if (parts.size < 2) return
             val method = parts[0]
             val path = parts[1]
 
             val isHeadRequest = method.equals("HEAD", ignoreCase = true)
-            var line = input.readLine()
             var rangeHeader: String? = null
+            var upgradeHeader: String? = null
+            var secWebSocketKey: String? = null
+
+            var line = OmniWebSocket.readHttpLine(rawInput)
             while (!line.isNullOrEmpty()) {
                 if (line.startsWith("Range:", ignoreCase = true)) {
                     rangeHeader = line.substringAfter(":").trim()
+                } else if (line.startsWith("Upgrade:", ignoreCase = true)) {
+                    upgradeHeader = line.substringAfter(":").trim()
+                } else if (line.startsWith("Sec-WebSocket-Key:", ignoreCase = true)) {
+                    secWebSocketKey = line.substringAfter(":").trim()
                 }
-                line = input.readLine()
+                line = OmniWebSocket.readHttpLine(rawInput)
             }
 
             // CORS preflight
             if (method.equals("OPTIONS", ignoreCase = true)) {
-                val cors = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Range, Content-Type\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                val cors = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Range, Content-Type, Upgrade, Sec-WebSocket-Key, Sec-WebSocket-Version\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                 output.write(cors.toByteArray(Charsets.UTF_8))
                 output.flush()
                 socketSafeClose(socket)
                 return
             }
 
-            // Real-time Server-Sent Events (SSE)
+            // WebSocket Upgrade Request (RFC 6455)
+            if (upgradeHeader?.equals("websocket", ignoreCase = true) == true || path.startsWith("/ws")) {
+                handleWebSocketSession(socket, rawInput, output, path, secWebSocketKey)
+                return
+            }
+
+            // Real-time Server-Sent Events (SSE fallback)
             if (path.startsWith("/events")) {
-                handleSseStream(socket, output, input)
+                handleSseStream(socket, output, rawInput)
                 return
             }
 
@@ -217,7 +243,112 @@ class OmniSyncStreamServer(
         }
     }
 
-    private fun handleSseStream(socket: Socket, output: OutputStream, input: java.io.BufferedReader) {
+    private fun handleWebSocketSession(
+        socket: Socket,
+        input: InputStream,
+        output: OutputStream,
+        path: String,
+        secWebSocketKey: String?
+    ) {
+        if (secWebSocketKey.isNullOrEmpty()) {
+            send404(output)
+            socketSafeClose(socket)
+            return
+        }
+
+        val acceptKey = OmniWebSocket.computeAcceptKey(secWebSocketKey)
+        val headers = "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\n" +
+                "Connection: Upgrade\r\n" +
+                "Sec-WebSocket-Accept: $acceptKey\r\n\r\n"
+        output.write(headers.toByteArray(Charsets.UTF_8))
+        output.flush()
+
+        socket.soTimeout = 0 // Keep connection open indefinitely!
+
+        val session = WebSocketSession(socket, output)
+        webSocketSessions.add(session)
+
+        val clientIp = socket.inetAddress?.hostAddress ?: "127.0.0.1"
+        val query = if (path.contains("?")) path.substringAfter("?") else ""
+        val params = query.split("&").associate {
+            val p = it.split("=")
+            if (p.size == 2) {
+                p[0] to try { URLDecoder.decode(p[1], "UTF-8") } catch (e: Exception) { p[1] }
+            } else "" to ""
+        }
+        val pId = params["id"]?.takeIf { it.isNotEmpty() } ?: clientIp
+        val pName = params["name"]?.takeIf { it.isNotEmpty() } ?: "Listener ($clientIp)"
+
+        session.peerId = pId
+        session.peerName = pName
+
+        val peer = OmniSyncPeer(pId, pName, clientIp)
+        onPeerJoined?.invoke(peer)
+
+        // Send initial state event immediately as a WebSocket text frame
+        val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
+        val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+        val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
+        val dur = song?.duration ?: currentDurationMs
+
+        val initEvent = JSONObject().apply {
+            put("action", "WELCOME")
+            put("hostName", hostName)
+            put("songId", song?.id ?: 0L)
+            put("title", song?.title ?: "")
+            put("artist", song?.artist ?: "")
+            put("positionMs", pos)
+            put("durationMs", dur)
+            put("isPlaying", isLive)
+            put("timestamp", System.currentTimeMillis())
+        }.toString()
+        session.sendText(initEvent)
+
+        try {
+            while (!socket.isClosed) {
+                val frame = OmniWebSocket.readFrame(input) ?: break
+                when (frame.opcode) {
+                    OmniWebSocket.OPCODE_TEXT -> {
+                        val msg = frame.asText()
+                        val json = try { JSONObject(msg) } catch (e: Exception) { null }
+                        if (json != null) {
+                            when (json.optString("action")) {
+                                "REGISTER" -> {
+                                    val rId = json.optString("id", pId)
+                                    val rName = json.optString("name", pName)
+                                    session.peerId = rId
+                                    session.peerName = rName
+                                    onPeerJoined?.invoke(OmniSyncPeer(rId, rName, clientIp))
+                                }
+                                "PING" -> {
+                                    session.sendPong(frame.payload)
+                                }
+                                "PONG" -> {
+                                    // Peer responded to heartbeat
+                                }
+                            }
+                        }
+                    }
+                    OmniWebSocket.OPCODE_PING -> {
+                        session.sendPong(frame.payload)
+                    }
+                    OmniWebSocket.OPCODE_PONG -> {}
+                    OmniWebSocket.OPCODE_CLOSE -> {
+                        session.sendClose()
+                        break
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+        } finally {
+            webSocketSessions.remove(session)
+            session.peerId?.let { onPeerLeft?.invoke(it) }
+            try { socket.close() } catch (ignored: Exception) {}
+        }
+    }
+
+    private fun handleSseStream(socket: Socket, output: OutputStream, input: InputStream) {
         socket.soTimeout = 0 // Keep-alive indefinitely for event stream
         val header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\nAccess-Control-Allow-Origin: *\r\n\r\n"
         output.write(header.toByteArray(Charsets.UTF_8))
@@ -246,9 +377,8 @@ class OmniSyncStreamServer(
         writer.flush()
 
         try {
-            // Keep reading or blocking until client closes connection
             while (!socket.isClosed) {
-                val nextLine = input.readLine()
+                val nextLine = OmniWebSocket.readHttpLine(input)
                 if (nextLine == null) break
             }
         } catch (ignored: Exception) {
@@ -444,7 +574,31 @@ class OmniSyncStreamServer(
 
         var streamHandled = false
 
-        // 1. Primary: ParcelFileDescriptor via ContentResolver (Scoped Storage safe, seekable channel)
+        // 1. Primary: Direct RandomAccessFile if direct file is accessible (instant O(1) seek)
+        if (canReadFile && file != null) {
+            try {
+                RandomAccessFile(file, "r").use { raf ->
+                    if (startByte > 0L) {
+                        raf.seek(startByte)
+                    }
+                    val buffer = ByteArray(65536)
+                    var remaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
+                    while (remaining > 0L) {
+                        val toRead = min(buffer.size.toLong(), remaining).toInt()
+                        val read = raf.read(buffer, 0, toRead)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        remaining -= read
+                    }
+                    output.flush()
+                    streamHandled = true
+                }
+            } catch (ignored: Exception) {}
+        }
+
+        if (streamHandled) return
+
+        // 2. Secondary: ParcelFileDescriptor via ContentResolver (Scoped Storage safe, seekable channel)
         if (uri != null && uri != Uri.EMPTY) {
             try {
                 context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -465,7 +619,7 @@ class OmniSyncStreamServer(
 
         if (streamHandled) return
 
-        // 2. Secondary: openInputStream via ContentResolver
+        // 3. Fallback: openInputStream via ContentResolver
         if (uri != null && uri != Uri.EMPTY) {
             try {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -474,29 +628,6 @@ class OmniSyncStreamServer(
                     }
                     writeStreamToOutput(inputStream, output, contentLength)
                     streamHandled = true
-                }
-            } catch (ignored: Exception) {}
-        }
-
-        if (streamHandled) return
-
-        // 3. Fallback: Direct RandomAccessFile if direct file is accessible
-        if (canReadFile) {
-            try {
-                RandomAccessFile(file, "r").use { raf ->
-                    if (startByte > 0L) {
-                        raf.seek(startByte)
-                    }
-                    val buffer = ByteArray(65536)
-                    var remaining = if (contentLength > 0L) contentLength else Long.MAX_VALUE
-                    while (remaining > 0L) {
-                        val toRead = min(buffer.size.toLong(), remaining).toInt()
-                        val read = raf.read(buffer, 0, toRead)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        remaining -= read
-                    }
-                    output.flush()
                 }
             } catch (ignored: Exception) {}
         }
@@ -566,6 +697,15 @@ class OmniSyncStreamServer(
     fun stop() {
         heartbeatJob?.cancel()
         heartbeatJob = null
+
+        val stopMsg = JSONObject().apply { put("action", "STOP") }.toString()
+        for (session in webSocketSessions) {
+            try {
+                session.sendText(stopMsg)
+                session.sendClose()
+            } catch (ignored: Exception) {}
+        }
+        webSocketSessions.clear()
 
         for (writer in sseWriters) {
             try {
