@@ -14,8 +14,8 @@ import xyz.omniplay.databinding.ItemDiscoveredRoomBinding
 
 /**
  * Material You (Material 3) Acoustic Mesh Bottom Sheet:
- * - Host Mode: Manage room broadcast, view connected speakers with real-time sync metrics
- * - Join Mode: Scan nearby local rooms, join as a satellite speaker, select channel (Left/Right/Center/Stereo)
+ * - Host Mode: Manage room broadcast, view connected speakers with real-time sync metrics and channel routing
+ * - Join Mode: Scan nearby local rooms, join as a satellite speaker, select channel (Stereo/Left/Right/Center)
  */
 class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager.MeshListener {
 
@@ -78,6 +78,16 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
     }
 
     private fun setupSatelliteView() {
+        binding.channelChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
+            val channel = when (checkedIds.firstOrNull()) {
+                R.id.chip_left -> AudioChannel.LEFT_ONLY
+                R.id.chip_right -> AudioChannel.RIGHT_ONLY
+                R.id.chip_center -> AudioChannel.CENTER
+                else -> AudioChannel.STEREO
+            }
+            meshManager.setChannel(channel)
+        }
+
         binding.satelliteVolumeSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -114,6 +124,7 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.meshModeToggleGroup.check(R.id.btn_tab_join)
                 binding.satelliteRoomNameText.text = meshManager.currentRoomName ?: "Connected Room"
                 binding.meshSyncBadge.text = "Satellite Node"
+                syncChannelChips(meshManager.currentChannel)
                 binding.satelliteVolumeSlider.progress = (meshManager.volumeTrim * 100).toInt()
                 binding.satelliteLatencyBadge.text = "${meshManager.roundTripLatencyMs}ms"
             }
@@ -128,6 +139,18 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
                 binding.meshSyncBadge.text = "Offline P2P"
                 onRoomsDiscovered(meshManager.discoveredRooms)
             }
+        }
+    }
+
+    private fun syncChannelChips(channel: AudioChannel) {
+        val targetChipId = when (channel) {
+            AudioChannel.STEREO -> R.id.chip_stereo
+            AudioChannel.LEFT_ONLY -> R.id.chip_left
+            AudioChannel.RIGHT_ONLY -> R.id.chip_right
+            AudioChannel.CENTER -> R.id.chip_center
+        }
+        if (binding.channelChipGroup.checkedChipId != targetChipId) {
+            binding.channelChipGroup.check(targetChipId)
         }
     }
 
@@ -147,8 +170,6 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         container.removeAllViews()
 
         if (rooms.isEmpty()) {
-            (binding.joinEmptyRoomsText.parent as? ViewGroup)?.removeView(binding.joinEmptyRoomsText)
-            container.addView(binding.joinEmptyRoomsText)
             binding.joinEmptyRoomsText.visibility = View.VISIBLE
             return
         }
@@ -174,8 +195,6 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         container.removeAllViews()
 
         if (peers.isEmpty()) {
-            (binding.hostEmptySpeakersText.parent as? ViewGroup)?.removeView(binding.hostEmptySpeakersText)
-            container.addView(binding.hostEmptySpeakersText)
             binding.hostEmptySpeakersText.visibility = View.VISIBLE
             return
         }
@@ -185,8 +204,8 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         for (peer in peers) {
             val itemBinding = ItemConnectedSpeakerBinding.inflate(inflater, container, false)
             itemBinding.speakerNameText.text = peer.name
-            itemBinding.speakerIpText.text = "${peer.ip} • Locked"
-            itemBinding.speakerChannelBadge.text = "Connected"
+            itemBinding.speakerIpText.text = "${peer.ip} • Synced"
+            itemBinding.speakerChannelBadge.text = peer.channel.displayName
             container.addView(itemBinding.root)
         }
     }
@@ -197,11 +216,18 @@ class AcousticMeshBottomSheet : BottomSheetDialogFragment(), AcousticMeshManager
         }
     }
 
-    override fun onChannelChanged(channel: AudioChannel) {}
+    override fun onChannelChanged(channel: AudioChannel) {
+        if (_binding != null) {
+            syncChannelChips(channel)
+        }
+    }
 
     override fun onError(message: String) {
         context?.let {
             Toast.makeText(it, message, Toast.LENGTH_SHORT).show()
+        }
+        if (_binding != null && meshManager.currentRole == MeshRole.STANDALONE) {
+            onRoomsDiscovered(meshManager.discoveredRooms)
         }
     }
 

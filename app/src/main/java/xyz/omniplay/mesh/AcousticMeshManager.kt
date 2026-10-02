@@ -67,6 +67,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
         fun onChannelChanged(channel: AudioChannel)
         fun onError(message: String)
         fun onTrackInfoReceived(title: String, artist: String) {}
+        fun onPlaybackStateChanged(isPlaying: Boolean) {}
     }
 
     private val listeners = CopyOnWriteArrayList<MeshListener>()
@@ -101,25 +102,6 @@ class AcousticMeshManager private constructor(private val context: Context) {
     var currentHostIp: String? = null
         private set
 
-    fun getLocalIPv4Address(): String? {
-        try {
-            val interfaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return null
-            for (iface in interfaces) {
-                if (iface.isLoopback || !iface.isUp) continue
-                val addrs = iface.inetAddresses
-                for (addr in addrs) {
-                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
-                        val host = addr.hostAddress
-                        if (!host.isNullOrEmpty() && !host.startsWith("127.")) {
-                            return host
-                        }
-                    }
-                }
-            }
-        } catch (ignored: Exception) {}
-        return null
-    }
-
     var clockOffsetMs: Long = 0L
         private set
 
@@ -133,9 +115,15 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private var hostControlServerSocket: ServerSocket? = null
     private var hostTimeServerJob: Job? = null
     private var hostTimeSocket: DatagramSocket? = null
+    private val peerWriters = CopyOnWriteArrayList<PrintWriter>()
+
     private val pendingResolves = ArrayDeque<NsdServiceInfo>()
     private var isResolving = false
+    private var resolveTimeoutJob: Job? = null
+
     private var clientSocket: Socket? = null
+    private var clientWriter: PrintWriter? = null
+    private val clientWriteLock = Any()
     private var clientJob: Job? = null
     private var timeSyncJob: Job? = null
     private var pingJob: Job? = null
@@ -167,6 +155,33 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     fun removeListener(listener: MeshListener) {
         listeners.remove(listener)
+    }
+
+    fun getLocalIPv4Address(): String? {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()?.toList() ?: return null
+            val sorted = interfaces.sortedByDescending { iface ->
+                when {
+                    iface.name.startsWith("wlan", ignoreCase = true) -> 3
+                    iface.name.startsWith("ap", ignoreCase = true) || iface.name.startsWith("softap", ignoreCase = true) -> 2
+                    iface.name.startsWith("p2p", ignoreCase = true) -> 1
+                    else -> 0
+                }
+            }
+            for (iface in sorted) {
+                if (iface.isLoopback || !iface.isUp) continue
+                val addrs = iface.inetAddresses
+                for (addr in addrs) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val host = addr.hostAddress
+                        if (!host.isNullOrEmpty() && !host.startsWith("127.") && !host.startsWith("169.254.")) {
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (ignored: Exception) {}
+        return null
     }
 
     private fun acquireMeshLocks() {
@@ -246,12 +261,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
         hostSongProvider?.invoke()?.let { song ->
             streamServer.currentSong = song
             streamServer.currentSongUri = song.contentUri
-            val mime = when (song.format.uppercase()) {
+            val format = song.format.ifEmpty { song.filePath.substringAfterLast('.', "") }.uppercase()
+            val mime = when (format) {
                 "FLAC" -> "audio/flac"
                 "WAV" -> "audio/wav"
                 "OGG" -> "audio/ogg"
                 "OPUS" -> "audio/opus"
                 "M4A", "AAC" -> "audio/mp4"
+                "MP3" -> "audio/mpeg"
                 else -> "audio/mpeg"
             }
             streamServer.currentMimeType = mime
@@ -278,6 +295,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
             }
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 notifyError("Room registration failed ($errorCode)")
+                registrationListener = null
             }
             override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {}
             override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
@@ -314,8 +332,6 @@ class AcousticMeshManager private constructor(private val context: Context) {
         }
     }
 
-    private val peerWriters = CopyOnWriteArrayList<PrintWriter>()
-
     private suspend fun handleHostPeerConnection(socket: Socket) {
         var peerId: String? = null
         var currentWriter: PrintWriter? = null
@@ -334,12 +350,18 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     "HELLO" -> {
                         val pId = json.optString("peerId", UUID.randomUUID().toString())
                         val pName = json.optString("peerName", "Speaker")
+                        val channelStr = json.optString("channel", "STEREO")
+                        val channel = try {
+                            AudioChannel.valueOf(channelStr)
+                        } catch (e: Exception) {
+                            AudioChannel.STEREO
+                        }
                         peerId = pId
                         val peer = MeshPeer(
                             id = pId,
                             name = pName,
                             ip = clientIp,
-                            channel = AudioChannel.valueOf(json.optString("channel", "STEREO")),
+                            channel = channel,
                             isHost = false
                         )
                         connectedPeers.removeAll { it.id == pId }
@@ -367,7 +389,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                         if (playingSong != null && isPlaying) {
                             streamServer.currentSong = playingSong
                             streamServer.currentSongUri = playingSong.contentUri
-                            val ext = when (playingSong.format.uppercase()) {
+                            val format = playingSong.format.ifEmpty { playingSong.filePath.substringAfterLast('.', "") }.uppercase()
+                            val ext = when (format) {
                                 "FLAC" -> "flac"
                                 "WAV" -> "wav"
                                 "OGG" -> "ogg"
@@ -392,8 +415,13 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     }
                     "SET_CHANNEL" -> {
                         val ch = json.optString("channel", "STEREO")
+                        val channel = try {
+                            AudioChannel.valueOf(ch)
+                        } catch (e: Exception) {
+                            AudioChannel.STEREO
+                        }
                         peerId?.let { id ->
-                            connectedPeers.find { it.id == id }?.channel = AudioChannel.valueOf(ch)
+                            connectedPeers.find { it.id == id }?.channel = channel
                             notifyPeersChanged()
                         }
                     }
@@ -453,7 +481,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
         if (currentRole != MeshRole.HOST) return
         streamServer.currentSong = song
         streamServer.currentSongUri = song.contentUri
-        val mime = when (song.format.uppercase()) {
+        val format = song.format.ifEmpty { song.filePath.substringAfterLast('.', "") }.uppercase()
+        val mime = when (format) {
             "FLAC" -> "audio/flac"
             "WAV" -> "audio/wav"
             "OGG" -> "audio/ogg"
@@ -464,7 +493,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
         streamServer.currentMimeType = mime
 
         val hostIp = getLocalIPv4Address()
-        val ext = when (song.format.uppercase()) {
+        val ext = when (format) {
             "FLAC" -> "flac"
             "WAV" -> "wav"
             "OGG" -> "ogg"
@@ -472,7 +501,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
             "M4A", "AAC" -> "m4a"
             else -> "mp3"
         }
-        val scheduledAt = System.currentTimeMillis() + 180L // Scheduled presentation timestamp
+        val scheduledAt = System.currentTimeMillis() + 180L
         val json = JSONObject().apply {
             put("action", "PLAY")
             hostIp?.let { put("hostIp", it) }
@@ -543,8 +572,11 @@ class AcousticMeshManager private constructor(private val context: Context) {
             override fun onDiscoveryStopped(serviceType: String) {}
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 notifyError("Discovery failed ($errorCode)")
+                discoveryListener = null
             }
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                discoveryListener = null
+            }
         }
 
         try {
@@ -610,6 +642,18 @@ class AcousticMeshManager private constructor(private val context: Context) {
         if (isResolving || pendingResolves.isEmpty()) return
         val next = pendingResolves.removeFirst()
         isResolving = true
+
+        resolveTimeoutJob?.cancel()
+        resolveTimeoutJob = scope.launch {
+            delay(5000L)
+            synchronized(this@AcousticMeshManager) {
+                if (isResolving) {
+                    isResolving = false
+                    processNextResolve()
+                }
+            }
+        }
+
         resolveServiceInternal(next)
     }
 
@@ -618,6 +662,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
             nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
                     try {
+                        resolveTimeoutJob?.cancel()
+                        resolveTimeoutJob = null
                         val addrs = try {
                             val hostName = resolved.host?.hostName ?: resolved.host?.hostAddress
                             if (hostName != null) java.net.InetAddress.getAllByName(hostName) else arrayOf(resolved.host)
@@ -635,10 +681,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
                                 port = resolved.port,
                                 streamPort = STREAM_PORT
                             )
-                            if (!discoveredRooms.any { it.roomName == room.roomName }) {
-                                discoveredRooms.add(room)
-                                notifyRoomsDiscovered()
-                            }
+                            discoveredRooms.removeAll { it.hostAddress == host || it.roomName == room.roomName }
+                            discoveredRooms.add(room)
+                            notifyRoomsDiscovered()
                         }
                     } finally {
                         synchronized(this@AcousticMeshManager) {
@@ -649,6 +694,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
 
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    resolveTimeoutJob?.cancel()
+                    resolveTimeoutJob = null
                     synchronized(this@AcousticMeshManager) {
                         isResolving = false
                         processNextResolve()
@@ -656,6 +703,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 }
             })
         } catch (e: Exception) {
+            resolveTimeoutJob?.cancel()
+            resolveTimeoutJob = null
             synchronized(this) {
                 isResolving = false
                 processNextResolve()
@@ -697,22 +746,25 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 currentHostIp = remoteIp
 
                 val writer = PrintWriter(socket.getOutputStream(), true)
+                synchronized(clientWriteLock) {
+                    clientWriter = writer
+                }
                 val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
 
-                // Send HELLO handshake
+                // Send HELLO handshake with initial channel
                 val hello = JSONObject().apply {
                     put("action", "HELLO")
                     put("peerId", deviceId)
                     put("peerName", deviceName)
-                    put("channel", "STEREO")
+                    put("channel", currentChannel.name)
                 }
-                writer.println(hello.toString())
+                sendSatelliteCommand(hello)
 
                 // Start Micro-NTP Clock Sync loop with Host
                 startTimeSyncLoop(room.hostAddress)
 
-                // Start periodic ping loop to keep socket active through sleep/menu close
-                startPingLoop(writer)
+                // Start periodic ping loop
+                startPingLoop()
 
                 // Listen for Host Sync Commands
                 while (isActive && !socket.isClosed) {
@@ -729,6 +781,9 @@ class AcousticMeshManager private constructor(private val context: Context) {
                     }
                 }
             } finally {
+                synchronized(clientWriteLock) {
+                    clientWriter = null
+                }
                 try { activeSocket?.close() } catch (ignored: Exception) {}
                 if (clientSocket === activeSocket) {
                     clientSocket = null
@@ -740,17 +795,27 @@ class AcousticMeshManager private constructor(private val context: Context) {
         }
     }
 
-    private fun startPingLoop(writer: PrintWriter) {
+    private fun sendSatelliteCommand(json: JSONObject): Boolean {
+        return try {
+            synchronized(clientWriteLock) {
+                clientWriter?.let {
+                    it.println(json.toString())
+                    !it.checkError()
+                } ?: false
+            }
+        } catch (ignored: Exception) {
+            false
+        }
+    }
+
+    private fun startPingLoop() {
         pingJob?.cancel()
         pingJob = scope.launch {
-            while (isActive) {
+            while (isActive && currentRole == MeshRole.SATELLITE) {
                 delay(8000L)
-                try {
-                    val ping = JSONObject().apply { put("action", "PING") }
-                    writer.println(ping.toString())
-                } catch (e: Exception) {
-                    break
-                }
+                val ping = JSONObject().apply { put("action", "PING") }
+                val sent = sendSatelliteCommand(ping)
+                if (!sent) break
             }
         }
     }
@@ -758,40 +823,43 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private fun startTimeSyncLoop(hostAddress: String) {
         timeSyncJob?.cancel()
         timeSyncJob = scope.launch {
-            val udpSocket = DatagramSocket()
-            udpSocket.soTimeout = 2000
-            val inetAddr = InetAddress.getByName(hostAddress)
+            try {
+                DatagramSocket().use { udpSocket ->
+                    udpSocket.soTimeout = 2000
+                    val inetAddr = InetAddress.getByName(hostAddress)
 
-            while (isActive) {
-                try {
-                    val t1 = System.currentTimeMillis()
-                    val sendBuf = ByteBuffer.allocate(8).putLong(t1).array()
-                    val packet = DatagramPacket(sendBuf, sendBuf.size, inetAddr, TIME_SYNC_PORT)
-                    udpSocket.send(packet)
+                    while (isActive) {
+                        try {
+                            val t1 = System.currentTimeMillis()
+                            val sendBuf = ByteBuffer.allocate(8).putLong(t1).array()
+                            val packet = DatagramPacket(sendBuf, sendBuf.size, inetAddr, TIME_SYNC_PORT)
+                            udpSocket.send(packet)
 
-                    val recvBuf = ByteArray(24)
-                    val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
-                    udpSocket.receive(recvPacket)
-                    val t4 = System.currentTimeMillis()
+                            val recvBuf = ByteArray(24)
+                            val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
+                            udpSocket.receive(recvPacket)
+                            val t4 = System.currentTimeMillis()
 
-                    val byteBuf = ByteBuffer.wrap(recvPacket.data)
-                    val echoT1 = byteBuf.long
-                    val hostT2 = byteBuf.long
-                    val hostT3 = byteBuf.long
+                            val byteBuf = ByteBuffer.wrap(recvPacket.data)
+                            val echoT1 = byteBuf.long
+                            val hostT2 = byteBuf.long
+                            val hostT3 = byteBuf.long
 
-                    if (echoT1 == t1) {
-                        val rtt = (t4 - t1) - (hostT3 - hostT2)
-                        val offset = ((hostT2 - t1) + (hostT3 - t4)) / 2L
+                            if (echoT1 == t1) {
+                                val rtt = (t4 - t1) - (hostT3 - hostT2)
+                                val offset = ((hostT2 - t1) + (hostT3 - t4)) / 2L
 
-                        roundTripLatencyMs = rtt.coerceAtLeast(0L)
-                        clockOffsetMs = offset
+                                roundTripLatencyMs = rtt.coerceAtLeast(0L)
+                                clockOffsetMs = offset
 
-                        notifySyncStatus(roundTripLatencyMs, clockOffsetMs)
+                                notifySyncStatus(roundTripLatencyMs, clockOffsetMs)
+                            }
+                        } catch (ignored: Exception) {}
+
+                        delay(2000L)
                     }
-                } catch (ignored: Exception) {}
-
-                delay(2000L) // Re-sync clock drift every 2s
-            }
+                }
+            } catch (ignored: Exception) {}
         }
     }
 
@@ -824,6 +892,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 if (songTitle.isNotEmpty()) {
                     notifyTrackInfo(songTitle, songArtist)
                 }
+                notifyPlaybackState(true)
 
                 scope.launch(Dispatchers.Main) {
                     playSatelliteStream(streamUrl, positionMs, scheduledAt)
@@ -831,6 +900,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
             }
             "PAUSE" -> {
                 scheduledPlayJob?.cancel()
+                notifyPlaybackState(false)
                 scope.launch(Dispatchers.Main) {
                     try {
                         if (satellitePlayer?.isPlaying == true) {
@@ -844,6 +914,12 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 val scheduledAt = json.optLong("scheduledAt", System.currentTimeMillis())
                 scope.launch(Dispatchers.Main) {
                     seekSatelliteStream(positionMs, scheduledAt)
+                }
+            }
+            "ROOM_CLOSED" -> {
+                notifyError("Host stopped mesh room broadcast")
+                scope.launch(Dispatchers.Main) {
+                    leaveRoom()
                 }
             }
             "PONG" -> {
@@ -889,7 +965,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
             }
 
             player.setOnPreparedListener { mp ->
-                mp.setVolume(volumeTrim, volumeTrim)
+                applyChannelToPlayer(mp)
                 schedulePlaybackStart(mp, positionMs, scheduledAt)
             }
 
@@ -905,6 +981,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
         val targetLocalTime = scheduledAt - clockOffsetMs
         val now = System.currentTimeMillis()
         val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
+        val elapsedSinceStart = if (now > targetLocalTime) (now - targetLocalTime) else 0L
+        val effectivePosition = positionMs + elapsedSinceStart
 
         scheduledPlayJob?.cancel()
         scheduledPlayJob = scope.launch(Dispatchers.Main) {
@@ -912,8 +990,8 @@ class AcousticMeshManager private constructor(private val context: Context) {
                 delay(delayMs)
             }
             try {
-                if (positionMs > 2000L) {
-                    player.seekTo(positionMs.toInt())
+                if (effectivePosition > 1000L) {
+                    player.seekTo(effectivePosition.toInt())
                 }
                 player.start()
             } catch (e: Exception) {
@@ -927,21 +1005,33 @@ class AcousticMeshManager private constructor(private val context: Context) {
         val targetLocalTime = scheduledAt - clockOffsetMs
         val now = System.currentTimeMillis()
         val delayMs = (targetLocalTime - now).coerceAtLeast(0L)
+        val elapsedSinceStart = if (now > targetLocalTime) (now - targetLocalTime) else 0L
+        val effectivePosition = positionMs + elapsedSinceStart
 
         scope.launch(Dispatchers.Main) {
             if (delayMs > 0L) {
                 delay(delayMs)
             }
             try {
-                player.seekTo(positionMs.toInt())
+                player.seekTo(effectivePosition.toInt())
             } catch (ignored: Exception) {}
         }
     }
 
     fun setChannel(channel: AudioChannel) {
-        currentChannel = AudioChannel.STEREO
+        currentChannel = channel
         satellitePlayer?.let { applyChannelToPlayer(it) }
-        notifyChannelChanged(AudioChannel.STEREO)
+        notifyChannelChanged(channel)
+
+        if (currentRole == MeshRole.SATELLITE) {
+            scope.launch {
+                val json = JSONObject().apply {
+                    put("action", "SET_CHANNEL")
+                    put("channel", channel.name)
+                }
+                sendSatelliteCommand(json)
+            }
+        }
     }
 
     fun setVolumeBalance(trim: Float) {
@@ -951,7 +1041,12 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private fun applyChannelToPlayer(player: MediaPlayer) {
         try {
-            player.setVolume(volumeTrim, volumeTrim)
+            when (currentChannel) {
+                AudioChannel.STEREO -> player.setVolume(volumeTrim, volumeTrim)
+                AudioChannel.LEFT_ONLY -> player.setVolume(volumeTrim, 0f)
+                AudioChannel.RIGHT_ONLY -> player.setVolume(0f, volumeTrim)
+                AudioChannel.CENTER -> player.setVolume(volumeTrim, volumeTrim)
+            }
         } catch (ignored: Exception) {}
     }
 
@@ -964,6 +1059,14 @@ class AcousticMeshManager private constructor(private val context: Context) {
 
     private fun stopAll() {
         stopScanningRooms()
+
+        // Inform connected peers if hosting
+        if (currentRole == MeshRole.HOST) {
+            val bye = JSONObject().apply { put("action", "ROOM_CLOSED") }.toString()
+            peerWriters.forEach { writer ->
+                try { writer.println(bye) } catch (ignored: Exception) {}
+            }
+        }
 
         registrationListener?.let {
             try { nsdManager.unregisterService(it) } catch (ignored: Exception) {}
@@ -993,8 +1096,15 @@ class AcousticMeshManager private constructor(private val context: Context) {
         scheduledPlayJob?.cancel()
         scheduledPlayJob = null
 
+        resolveTimeoutJob?.cancel()
+        resolveTimeoutJob = null
+
         clientJob?.cancel()
         clientJob = null
+
+        synchronized(clientWriteLock) {
+            clientWriter = null
+        }
 
         val oldSocket = clientSocket
         clientSocket = null
@@ -1012,6 +1122,7 @@ class AcousticMeshManager private constructor(private val context: Context) {
         releaseMeshLocks()
         currentHostIp = null
         notifyTrackInfo("", "")
+        notifyPlaybackState(false)
     }
 
     // =========================================================================
@@ -1059,6 +1170,12 @@ class AcousticMeshManager private constructor(private val context: Context) {
     private fun notifyTrackInfo(title: String, artist: String) {
         mainHandler.post {
             listeners.forEach { it.onTrackInfoReceived(title, artist) }
+        }
+    }
+
+    private fun notifyPlaybackState(isPlaying: Boolean) {
+        mainHandler.post {
+            listeners.forEach { it.onPlaybackStateChanged(isPlaying) }
         }
     }
 }

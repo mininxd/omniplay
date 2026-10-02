@@ -176,23 +176,22 @@
                 android:textColor="@color/text_primary"
                 android:textSize="14sp" />
 
+            <TextView
+                android:id="@+id/host_empty_speakers_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_material_you"
+                android:gravity="center"
+                android:padding="20dp"
+                android:text="@string/mesh_no_speakers"
+                android:textColor="@color/text_tertiary"
+                android:textSize="12sp" />
+
             <LinearLayout
                 android:id="@+id/host_speakers_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/host_empty_speakers_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_badge_material_you"
-                    android:gravity="center"
-                    android:padding="20dp"
-                    android:text="@string/mesh_no_speakers"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="12sp" />
-            </LinearLayout>
+                android:orientation="vertical" />
         </LinearLayout>
 
         <!-- ============================================================= -->
@@ -222,23 +221,22 @@
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
 
+                <TextView
+                    android:id="@+id/join_empty_rooms_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge_material_you"
+                    android:gravity="center"
+                    android:padding="20dp"
+                    android:text="@string/mesh_searching_rooms"
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="12sp" />
+
                 <LinearLayout
                     android:id="@+id/discovered_rooms_container"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/join_empty_rooms_text"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_badge_material_you"
-                        android:gravity="center"
-                        android:padding="20dp"
-                        android:text="@string/mesh_searching_rooms"
-                        android:textColor="@color/text_tertiary"
-                        android:textSize="12sp" />
-                </LinearLayout>
+                    android:orientation="vertical" />
             </LinearLayout>
 
             <!-- Connected Satellite Controls (Visible when connected to a host) -->
@@ -293,6 +291,54 @@
                                 android:textColor="@color/primary_accent"
                                 android:textSize="11sp" />
                         </LinearLayout>
+
+                        <!-- Acoustic Channel Selector Chips -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="16dp"
+                            android:layout_marginBottom="8dp"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/mesh_channel_mode"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/channel_chip_group"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chip_stereo"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="true"
+                                android:text="Stereo (All)" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chip_left"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Left Channel" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chip_right"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Right Channel" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/chip_center"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Center (Vocal)" />
+                        </com.google.android.material.chip.ChipGroup>
 
                         <!-- Volume Balance Slider -->
                         <TextView

@@ -3,8 +3,7 @@
     <item
         android:id="@+id/action_mesh_mode"
         android:icon="@drawable/ic_mesh_mode"
-        android:title="@string/mesh_mode"
-        android:visible="false" />
+        android:title="@string/mesh_mode" />
     <item
         android:id="@+id/action_select_folder"
         android:icon="@drawable/ic_search"

@@ -1513,6 +1513,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
+        override fun onPlaybackStateChanged(isPlaying: Boolean) {
+            runOnUiThread {
+                if (xyz.omniplay.mesh.AcousticMeshManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.mesh.MeshRole.SATELLITE) {
+                    updatePlayPauseButton(isPlaying)
+                }
+            }
+        }
+
         override fun onRoomsDiscovered(rooms: List<xyz.omniplay.mesh.MeshRoom>) {}
         override fun onPeersChanged(peers: List<xyz.omniplay.mesh.MeshPeer>) {}
         override fun onSyncStatusChanged(latencyMs: Long, clockOffsetMs: Long) {}

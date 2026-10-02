@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import xyz.omniplay.model.Song
@@ -28,7 +29,7 @@ class HostAudioStreamServer(
 ) {
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     @Volatile
     var currentSong: Song? = null
@@ -52,7 +53,12 @@ class HostAudioStreamServer(
                     try {
                         val client = server.accept()
                         client.tcpNoDelay = true
-                        launch { handleClient(client) }
+                        launch(Dispatchers.IO) {
+                            try {
+                                handleClient(client)
+                            } catch (ignored: Exception) {
+                            }
+                        }
                     } catch (e: Exception) {
                         if (!isActive || server.isClosed) break
                     }
@@ -66,6 +72,7 @@ class HostAudioStreamServer(
     private fun handleClient(client: Socket) {
         try {
             client.use { socket ->
+                socket.soTimeout = 15000
                 val input = socket.getInputStream().bufferedReader()
                 val output = socket.getOutputStream()
 
@@ -94,7 +101,13 @@ class HostAudioStreamServer(
         }
     }
 
-    private fun serveAudioStream(song: Song?, uri: Uri?, output: OutputStream, rangeHeader: String?, isHeadRequest: Boolean) {
+    private fun serveAudioStream(
+        song: Song?,
+        uri: Uri?,
+        output: OutputStream,
+        rangeHeader: String?,
+        isHeadRequest: Boolean
+    ) {
         val file = song?.filePath?.let { if (it.isNotEmpty()) File(it) else null }
         val canReadFile = file != null && file.exists() && file.canRead() && file.length() > 0L
 
@@ -130,13 +143,20 @@ class HostAudioStreamServer(
 
         val contentLength = if (endByte >= startByte) (endByte - startByte + 1L) else -1L
 
-        val effectiveMime = when (song?.format?.uppercase()) {
+        val ext = song?.format?.ifEmpty { song.filePath.substringAfterLast('.', "") }?.uppercase()
+        val effectiveMime = when (ext) {
             "FLAC" -> "audio/flac"
             "WAV" -> "audio/wav"
             "OGG" -> "audio/ogg"
             "OPUS" -> "audio/opus"
             "M4A", "AAC" -> "audio/mp4"
-            else -> currentMimeType
+            "MP3" -> "audio/mpeg"
+            else -> {
+                val mimeFromResolver = uri?.let {
+                    try { context.contentResolver.getType(it) } catch (e: Exception) { null }
+                }
+                mimeFromResolver ?: currentMimeType
+            }
         }
 
         val statusLine = if (isRange) "HTTP/1.1 206 Partial Content\r\n" else "HTTP/1.1 200 OK\r\n"
@@ -178,48 +198,41 @@ class HostAudioStreamServer(
                     output.flush()
                 }
                 return
-            } catch (ignored: Exception) {}
+            } catch (ignored: Exception) {
+                return
+            }
         }
 
         // 2. Try ParcelFileDescriptor via ContentResolver
         if (uri != null) {
-            val pfd = try {
-                context.contentResolver.openFileDescriptor(uri, "r")
-            } catch (e: Exception) {
-                null
-            }
-
-            if (pfd != null) {
-                try {
-                    pfd.use { fd ->
-                        FileInputStream(fd.fileDescriptor).use { fis ->
-                            if (startByte > 0L) {
-                                try {
-                                    fis.channel.position(startByte)
-                                } catch (e: Exception) {
-                                    skipBytes(fis, startByte)
-                                }
+            var streamHandled = false
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    FileInputStream(pfd.fileDescriptor).use { fis ->
+                        if (startByte > 0L) {
+                            try {
+                                fis.channel.position(startByte)
+                            } catch (e: Exception) {
+                                skipBytes(fis, startByte)
                             }
-                            writeStreamToOutput(fis, output, contentLength)
                         }
+                        writeStreamToOutput(fis, output, contentLength)
+                        streamHandled = true
                     }
-                    return
-                } catch (ignored: Exception) {}
-            }
+                }
+            } catch (ignored: Exception) {}
+
+            if (streamHandled) return
 
             // 3. Fallback to openInputStream
-            var inputStream: InputStream? = null
             try {
-                inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream != null) {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     if (startByte > 0L) {
                         skipBytes(inputStream, startByte)
                     }
                     writeStreamToOutput(inputStream, output, contentLength)
                 }
-            } finally {
-                try { inputStream?.close() } catch (ignored: Exception) {}
-            }
+            } catch (ignored: Exception) {}
         }
     }
 
@@ -252,6 +265,13 @@ class HostAudioStreamServer(
     }
 
     private fun getFileSize(uri: Uri): Long {
+        if (uri.scheme == "file") {
+            uri.path?.let {
+                val f = File(it)
+                if (f.exists()) return f.length()
+            }
+        }
+
         try {
             context.contentResolver.openFileDescriptor(uri, "r")?.use {
                 if (it.statSize > 0) return it.statSize
