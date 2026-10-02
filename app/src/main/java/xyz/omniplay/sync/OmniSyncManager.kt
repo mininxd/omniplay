@@ -3,6 +3,8 @@ package xyz.omniplay.sync
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -70,9 +72,11 @@ class OmniSyncManager private constructor(private val context: Context) {
 
     private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
     private val wifiManager by lazy { context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager }
+    private val connectivityManager by lazy { context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager }
     private val powerManager by lazy { context.applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager }
 
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     val streamServer = OmniSyncStreamServer(context, STREAM_PORT)
@@ -210,6 +214,23 @@ class OmniSyncManager private constructor(private val context: Context) {
         } catch (ignored: Exception) {}
 
         try {
+            if (wifiLock == null) {
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                } else {
+                    @Suppress("DEPRECATION")
+                    WifiManager.WIFI_MODE_FULL
+                }
+                wifiLock = wifiManager.createWifiLock(mode, "omniplay:omnisync_wifi_lock").apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (wifiLock?.isHeld != true) {
+                wifiLock?.acquire()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
             if (wakeLock == null) {
                 wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "omniplay:omnisync_wake_lock").apply {
                     setReferenceCounted(false)
@@ -225,6 +246,12 @@ class OmniSyncManager private constructor(private val context: Context) {
         try {
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
+            }
+        } catch (ignored: Exception) {}
+
+        try {
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
             }
         } catch (ignored: Exception) {}
 
@@ -665,6 +692,15 @@ class OmniSyncManager private constructor(private val context: Context) {
         clientJob = scope.launch {
             try {
                 val socket = Socket()
+                try {
+                    val cm = connectivityManager
+                    val wifiNetwork = cm?.allNetworks?.firstOrNull { network ->
+                        val caps = cm.getNetworkCapabilities(network)
+                        caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    }
+                    wifiNetwork?.bindSocket(socket)
+                } catch (ignored: Exception) {}
+
                 socket.connect(InetSocketAddress(host.address, host.port), 5000)
                 clientSocket = socket
 
@@ -686,7 +722,13 @@ class OmniSyncManager private constructor(private val context: Context) {
                 }
             } catch (e: Exception) {
                 if (e !is CancellationException) {
-                    notifyError("Disconnected from host: ${e.localizedMessage}")
+                    val msg = if (e.message?.contains("EHOSTUNREACH", ignoreCase = true) == true ||
+                        e.message?.contains("No route to host", ignoreCase = true) == true) {
+                        "Cannot reach host (${host.address}). Ensure Host is actively broadcasting and on the same Wi-Fi/Hotspot (check AP Isolation in router)."
+                    } else {
+                        "Disconnected from host: ${e.localizedMessage}"
+                    }
+                    notifyError(msg)
                 }
             } finally {
                 if (currentRole == OmniSyncRole.LISTENER) {
