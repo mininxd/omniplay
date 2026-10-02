@@ -68,7 +68,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
     }
 
     private fun setupHostView() {
-        binding.hostRoomNameText.text = "${syncManager.deviceName}'s OmniSync"
+        binding.hostRoomNameText.text = syncManager.deviceName
         val ip = syncManager.getLocalIPv4Address() ?: "Wi-Fi / Hotspot"
         binding.hostIpText.text = "$ip:${OmniSyncManager.STREAM_PORT}"
 
@@ -83,7 +83,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             if (syncManager.currentRole == OmniSyncRole.HOST) {
                 syncManager.stopHost()
             } else {
-                syncManager.startHost("${syncManager.deviceName}'s OmniSync")
+                syncManager.startHost(syncManager.deviceName)
             }
         }
     }
@@ -98,7 +98,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             val hostIp = if (raw.contains(":")) raw.substringBefore(":") else raw
             val port = if (raw.contains(":")) raw.substringAfter(":").toIntOrNull() ?: OmniSyncManager.PORT else OmniSyncManager.PORT
             val host = OmniSyncHost(
-                name = "OmniSync Host ($hostIp)",
+                name = hostIp,
                 address = hostIp,
                 port = port,
                 streamPort = port

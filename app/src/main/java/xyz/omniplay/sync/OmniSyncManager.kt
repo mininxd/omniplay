@@ -270,11 +270,29 @@ class OmniSyncManager private constructor(private val context: Context) {
         } catch (ignored: Exception) {}
     }
 
+    @Volatile
+    var currentLivePositionMs: Long = 0L
+
+    @Volatile
+    var isHostLivePlaying: Boolean = false
+
+    fun updateHostLivePlayback(song: Song?, positionMs: Long, isPlaying: Boolean) {
+        currentLivePositionMs = positionMs
+        isHostLivePlaying = isPlaying
+        streamServer.currentPositionMs = positionMs
+        streamServer.isPlaying = isPlaying
+        if (song != null) {
+            streamServer.currentSong = song
+            streamServer.currentSongUri = song.contentUri
+            streamServer.currentDurationMs = song.duration
+        }
+    }
+
     // =========================================================================
     // HOST MODE
     // =========================================================================
 
-    fun startHost(roomName: String = "$deviceName's OmniSync") {
+    fun startHost(roomName: String = deviceName) {
         if (currentRole == OmniSyncRole.HOST) return
         if (currentRole == OmniSyncRole.LISTENER) {
             disconnectListener()
@@ -468,7 +486,7 @@ class OmniSyncManager private constructor(private val context: Context) {
                         Socket().use { s ->
                             s.connect(InetSocketAddress(ip, PORT), 400)
                             val host = OmniSyncHost(
-                                name = "OmniSync Host ($ip)",
+                                name = ip,
                                 address = ip,
                                 port = PORT,
                                 streamPort = PORT

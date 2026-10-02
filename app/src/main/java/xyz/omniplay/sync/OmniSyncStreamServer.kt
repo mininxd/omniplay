@@ -58,7 +58,7 @@ class OmniSyncStreamServer(
     var currentMimeType: String = "audio/mpeg"
 
     @Volatile
-    var hostName: String = "OmniSync Host"
+    var hostName: String = "Host"
 
     @Volatile
     var isPlaying: Boolean = false
@@ -108,9 +108,9 @@ class OmniSyncStreamServer(
                 delay(3000L)
                 if (sseWriters.isNotEmpty()) {
                     try {
-                        val song = currentSong ?: songProvider?.invoke()
-                        val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
-                        val pos = positionProvider?.invoke() ?: currentPositionMs
+                        val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
+                        val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+                        val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
                         val ping = JSONObject().apply {
                             put("action", "PING")
                             put("positionMs", pos)
@@ -226,9 +226,9 @@ class OmniSyncStreamServer(
         val writer = PrintWriter(output, true)
         sseWriters.add(writer)
 
-        val song = currentSong ?: songProvider?.invoke()
-        val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
-        val pos = positionProvider?.invoke() ?: currentPositionMs
+        val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
+        val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+        val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
         val dur = song?.duration ?: currentDurationMs
 
         // Send initial state event immediately
@@ -274,9 +274,9 @@ class OmniSyncStreamServer(
             val peer = OmniSyncPeer(pId, pName, clientIp)
             onPeerJoined?.invoke(peer)
 
-            val song = currentSong ?: songProvider?.invoke()
-            val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
-            val pos = positionProvider?.invoke() ?: currentPositionMs
+            val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
+            val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+            val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
             val dur = song?.duration ?: currentDurationMs
 
             val statusJson = JSONObject().apply {
@@ -295,7 +295,16 @@ class OmniSyncStreamServer(
             output.write(headers.toByteArray(Charsets.UTF_8))
             output.write(bytes)
             output.flush()
-        } catch (ignored: Exception) {}
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                val fallback = "{\"status\":\"ok\"}".toByteArray(Charsets.UTF_8)
+                val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: ${fallback.size}\r\nConnection: close\r\n\r\n"
+                output.write(headers.toByteArray(Charsets.UTF_8))
+                output.write(fallback)
+                output.flush()
+            } catch (ignored: Exception) {}
+        }
     }
 
     private fun handleUnregister(path: String, output: OutputStream) {
@@ -319,9 +328,9 @@ class OmniSyncStreamServer(
 
     private fun serveStatus(output: OutputStream, isHeadRequest: Boolean) {
         try {
-            val song = currentSong ?: songProvider?.invoke()
-            val isLive = isPlaying || (isPlayingProvider?.invoke() == true)
-            val pos = positionProvider?.invoke() ?: currentPositionMs
+            val song = currentSong ?: (try { songProvider?.invoke() } catch (e: Exception) { null })
+            val isLive = isPlaying || (try { isPlayingProvider?.invoke() == true } catch (e: Exception) { false })
+            val pos = (try { positionProvider?.invoke() } catch (e: Exception) { null }) ?: currentPositionMs
             val dur = song?.duration ?: currentDurationMs
 
             val statusJson = JSONObject().apply {
@@ -342,7 +351,16 @@ class OmniSyncStreamServer(
                 output.write(bytes)
             }
             output.flush()
-        } catch (ignored: Exception) {}
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                val err = "{\"status\":\"ok\",\"hostName\":\"$hostName\",\"position\":0,\"isPlaying\":false}".toByteArray(Charsets.UTF_8)
+                val headers = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: ${err.size}\r\nConnection: close\r\n\r\n"
+                output.write(headers.toByteArray(Charsets.UTF_8))
+                output.write(err)
+                output.flush()
+            } catch (ignored: Exception) {}
+        }
     }
 
     private fun serveAudioStream(

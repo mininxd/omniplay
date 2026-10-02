@@ -129,8 +129,20 @@ class PlaybackService : Service() {
 
         val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
         sync.hostSongProvider = { currentSong }
-        sync.hostPlaybackPositionProvider = { getCurrentPosition().toLong() }
-        sync.hostIsPlayingProvider = { isPlaying() }
+        sync.hostPlaybackPositionProvider = {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                getCurrentPosition().toLong()
+            } else {
+                sync.currentLivePositionMs
+            }
+        }
+        sync.hostIsPlayingProvider = {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                isPlaying()
+            } else {
+                sync.isHostLivePlaying
+            }
+        }
         sync.addListener(omniSyncListener)
     }
 
@@ -1020,6 +1032,7 @@ class PlaybackService : Service() {
                 val current = getCurrentPosition()
                 val total = getDuration()
                 listeners.forEach { it.onProgressUpdate(current, total) }
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(currentSong, current.toLong(), isPlaying = true)
 
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastStateSync >= 1000L) {
