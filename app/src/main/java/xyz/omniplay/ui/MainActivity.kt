@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     // Lyrics State
     private var lyricAdapter: LyricAdapter? = null
     private var currentLyrics: Lyrics? = null
+    private var lastOnlineLyricsSongId: Long? = null
     private var isLyricsShowing = false
     private var isUserScrollingLyrics = false
     private val lyricsScrollResetHandler = Handler(Looper.getMainLooper())
@@ -1137,8 +1138,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun prepareLyricsForDisplay() {
         val song = playbackService?.currentSong ?: return
-        if (currentLyrics != null && currentLyrics?.songId == song.id) {
-            renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
+        val lyrics = currentLyrics ?: LrcLibClient.getCachedLyrics(this@MainActivity, song)?.also {
+            currentLyrics = it
+        }
+
+        if (lyrics != null && lyrics.songId == song.id) {
+            renderLyricsResult(LyricsResult.Success(lyrics, isOffline = lyrics.isOffline))
+            // If currently displayed lyrics are static, force an online search for synchronized lyrics
+            if (!lyrics.hasSynced && !lyrics.isInstrumental && lastOnlineLyricsSongId != song.id) {
+                loadLyricsForSong(song, forceRefresh = false)
+            }
         } else {
             showLyricsLoading()
             loadLyricsForSong(song, forceRefresh = false)
@@ -1152,17 +1161,24 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun loadLyricsForSong(song: Song, forceRefresh: Boolean = false) {
         lyricsFetchJob?.cancel()
-        if (currentLyrics?.songId == song.id && !forceRefresh) {
+
+        val isSyncedOrInstrumental = currentLyrics?.let { it.hasSynced || it.isInstrumental } == true
+        val alreadyFetchedOnline = (lastOnlineLyricsSongId == song.id)
+
+        // If we already have synced lyrics or already queried online for this song (and not force refreshing), no need to re-query
+        if (currentLyrics?.songId == song.id && !forceRefresh && (isSyncedOrInstrumental || alreadyFetchedOnline)) {
             if (isLyricsShowing) {
                 renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
             }
             return
         }
 
-        if (isLyricsShowing) {
+        // Only show full loading spinner if we don't have static lyrics already showing, or if user explicitly requested a refresh
+        if (isLyricsShowing && (currentLyrics == null || forceRefresh)) {
             showLyricsLoading()
         }
 
+        lastOnlineLyricsSongId = song.id
         lyricsFetchJob = lifecycleScope.launch {
             val result = LrcLibClient.getLyrics(this@MainActivity, song, forceRefresh)
             if (playbackService?.currentSong?.id == song.id) {
@@ -1174,9 +1190,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         }
                     }
                     is LyricsResult.NotFound, is LyricsResult.Error -> {
-                        currentLyrics = null
-                        if (isLyricsShowing) {
-                            renderLyricsResult(result)
+                        if (currentLyrics == null || forceRefresh) {
+                            currentLyrics = null
+                            if (isLyricsShowing) {
+                                renderLyricsResult(result)
+                            }
                         }
                     }
                     is LyricsResult.Loading -> {}
@@ -2499,6 +2517,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             // Immediately reset lyrics state and clear UI so previous song's lyrics NEVER persist
             lyricsFetchJob?.cancel()
             currentLyrics = null
+            lastOnlineLyricsSongId = null
             lyricAdapter?.submitLines(emptyList())
             binding.lyricsPlainText.text = ""
 
@@ -2536,8 +2555,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             if (isLyricsShowing) {
-                showLyricsLoading()
-                loadLyricsForSong(song, forceRefresh = false)
+                val cached = LrcLibClient.getCachedLyrics(this@MainActivity, song)
+                if (cached != null) {
+                    currentLyrics = cached
+                    renderLyricsResult(LyricsResult.Success(cached, isOffline = cached.isOffline))
+                    if (!cached.hasSynced && !cached.isInstrumental) {
+                        loadLyricsForSong(song, forceRefresh = false)
+                    }
+                } else {
+                    showLyricsLoading()
+                    loadLyricsForSong(song, forceRefresh = false)
+                }
             } else {
                 // If lyrics card is hidden, check embedded/offline lyrics immediately without making any network requests
                 LrcLibClient.getCachedLyrics(this@MainActivity, song)?.let { cached ->

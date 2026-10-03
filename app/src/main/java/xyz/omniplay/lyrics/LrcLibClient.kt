@@ -19,7 +19,7 @@ import java.util.Locale
 object LrcLibClient {
     private const val TAG = "LrcLibClient"
     private const val BASE_URL = "https://lrclib.net/api"
-    private const val USER_AGENT = "Omniplay/0.4 (https://github.com/mininxd/omniplay)"
+    private const val USER_AGENT = "Omniplay/0.4.1 (https://github.com/mininxd/omniplay)"
     private const val TIMEOUT_MS = 8000
 
     // In-memory cache for the current session
@@ -27,48 +27,69 @@ object LrcLibClient {
 
     /**
      * Checks if offline cached lyrics or a local .lrc file exist for [song].
+     * Synchronized sources are prioritized over static/plain sources.
      * This is non-blocking and executes with zero network requests.
      */
     fun getCachedLyrics(context: Context, song: Song): Lyrics? {
-        // 1. Check memory cache
-        memoryCache.get(song.id)?.let { return it }
-
-        // 2. PRIORITY 1: Check embedded container lyrics (FLAC Vorbis Comment, MP3 ID3 USLT, M4A, OGG)
-        EmbeddedLyricsExtractor.extract(context, song)?.let {
-            memoryCache.put(song.id, it)
-            return it
+        // 1. Check memory cache (fast return if already synced or instrumental)
+        memoryCache.get(song.id)?.let { cached ->
+            if (cached.hasSynced || cached.isInstrumental) return cached
         }
 
-        // 3. PRIORITY 2: Check local sidecar .lrc file next to audio file on storage
+        // 2. PRIORITY: Local sidecar .lrc file next to audio file on storage (always synced)
         loadFromLocalLrc(song)?.let {
             memoryCache.put(song.id, it)
             return it
         }
 
-        // 4. PRIORITY 3: Check persistent disk cache (previously downloaded lyrics)
-        loadFromDisk(context, song.id, song.title, song.artist)?.let {
-            memoryCache.put(song.id, it)
-            return it
+        // 3. PRIORITY: Embedded container lyrics with timestamps
+        val embedded = EmbeddedLyricsExtractor.extract(context, song)
+        if (embedded != null && (embedded.hasSynced || embedded.isInstrumental)) {
+            memoryCache.put(song.id, embedded)
+            return embedded
+        }
+
+        // 4. PRIORITY: Persistent disk cache with synchronized lyrics
+        val disk = loadFromDisk(context, song.id, song.title, song.artist)
+        if (disk != null && (disk.hasSynced || disk.isInstrumental)) {
+            memoryCache.put(song.id, disk)
+            return disk
+        }
+
+        // 5. Fallback: Static / unsynced lyrics (prefer embedded over disk, or memory)
+        val staticCandidate = embedded ?: disk ?: memoryCache.get(song.id)
+        if (staticCandidate != null) {
+            memoryCache.put(song.id, staticCandidate)
+            return staticCandidate
         }
 
         return null
     }
 
     /**
-     * Retrieves lyrics for [song]. First checks offline caches (memory, local .lrc, disk),
-     * and if not found, queries LRCLIB with smart search fallbacks and downloads the lyrics
-     * to persistent offline storage for future playbacks.
+     * Retrieves lyrics for [song].
+     * If local or offline cached lyrics are already synchronized (or instrumental), returns them immediately.
+     * If local or offline cached lyrics are static (plain text only), forces an online search via LRCLIB
+     * to find synchronized / animated lyrics, falling back to the static lyrics if online fails or has no synced version.
      */
     suspend fun getLyrics(
         context: Context,
         song: Song,
         forceRefresh: Boolean = false
     ): LyricsResult = withContext(Dispatchers.IO) {
-        if (!forceRefresh) {
-            getCachedLyrics(context, song)?.let {
-                return@withContext LyricsResult.Success(it, isOffline = true)
-            }
+        if (forceRefresh) {
+            memoryCache.remove(song.id)
         }
+
+        val cached = if (!forceRefresh) getCachedLyrics(context, song) else null
+        if (cached != null && (cached.hasSynced || cached.isInstrumental)) {
+            return@withContext LyricsResult.Success(cached, isOffline = true)
+        }
+
+        // If local or offline cached lyrics are static, keep them as fallback while forcing an online search
+        val fallbackStaticLyrics = cached ?: if (forceRefresh) {
+            getCachedLyrics(context, song)
+        } else null
 
         val rawTitle = song.title.trim()
         val rawArtist = song.artist.trim()
@@ -76,7 +97,9 @@ object LrcLibClient {
             rawTitle.equals("Unknown", ignoreCase = true) ||
             rawTitle.equals("No track selected", ignoreCase = true)
         ) {
-            return@withContext LyricsResult.NotFound("No track selected")
+            return@withContext fallbackStaticLyrics?.let {
+                LyricsResult.Success(it, isOffline = true)
+            } ?: LyricsResult.NotFound("No track selected")
         }
 
         val durationSec = (song.duration / 1000).toInt()
@@ -117,17 +140,23 @@ object LrcLibClient {
             return null
         }
 
+        var plainCandidate: Lyrics? = null
+
         // Attempt 1: Exact GET with raw title and artist
         val candidate1 = tryGet(rawTitle, rawArtist)
         if (lastHttpCode == 429) {
-            return@withContext LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true)
+            return@withContext fallbackStaticLyrics?.let {
+                LyricsResult.Success(it, isOffline = true)
+            } ?: LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true)
         }
         if (candidate1 != null) {
             val parsed = parseLyricsJson(song.id, candidate1)
-            if (parsed.hasAnyLyrics) {
+            if (parsed.hasSynced || parsed.isInstrumental) {
                 saveToDisk(context, parsed, rawTitle, rawArtist)
                 memoryCache.put(song.id, parsed)
                 return@withContext LyricsResult.Success(parsed, isOffline = false)
+            } else if (parsed.hasAnyLyrics && plainCandidate == null) {
+                plainCandidate = parsed
             }
         }
 
@@ -135,14 +164,22 @@ object LrcLibClient {
         if (cleanTitle != rawTitle || cleanArtist != rawArtist) {
             val candidate2 = tryGet(cleanTitle, cleanArtist)
             if (lastHttpCode == 429) {
-                return@withContext LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true)
+                return@withContext fallbackStaticLyrics?.let {
+                    LyricsResult.Success(it, isOffline = true)
+                } ?: (plainCandidate?.let {
+                    saveToDisk(context, it, rawTitle, rawArtist)
+                    memoryCache.put(song.id, it)
+                    LyricsResult.Success(it, isOffline = false)
+                } ?: LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true))
             }
             if (candidate2 != null) {
                 val parsed = parseLyricsJson(song.id, candidate2)
-                if (parsed.hasAnyLyrics) {
+                if (parsed.hasSynced || parsed.isInstrumental) {
                     saveToDisk(context, parsed, rawTitle, rawArtist)
                     memoryCache.put(song.id, parsed)
                     return@withContext LyricsResult.Success(parsed, isOffline = false)
+                } else if (parsed.hasAnyLyrics && plainCandidate == null) {
+                    plainCandidate = parsed
                 }
             }
         }
@@ -158,14 +195,22 @@ object LrcLibClient {
 
         val candidate3 = trySearch(structuredUrl, durationSec)
         if (lastHttpCode == 429) {
-            return@withContext LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true)
+            return@withContext fallbackStaticLyrics?.let {
+                LyricsResult.Success(it, isOffline = true)
+            } ?: (plainCandidate?.let {
+                saveToDisk(context, it, rawTitle, rawArtist)
+                memoryCache.put(song.id, it)
+                LyricsResult.Success(it, isOffline = false)
+            } ?: LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true))
         }
         if (candidate3 != null) {
             val parsed = parseLyricsJson(song.id, candidate3)
-            if (parsed.hasAnyLyrics) {
+            if (parsed.hasSynced || parsed.isInstrumental) {
                 saveToDisk(context, parsed, rawTitle, rawArtist)
                 memoryCache.put(song.id, parsed)
                 return@withContext LyricsResult.Success(parsed, isOffline = false)
+            } else if (parsed.hasAnyLyrics && plainCandidate == null) {
+                plainCandidate = parsed
             }
         }
 
@@ -178,15 +223,36 @@ object LrcLibClient {
         val qUrl = "$BASE_URL/search?q=" + URLEncoder.encode(query, "UTF-8")
         val candidate4 = trySearch(qUrl, durationSec)
         if (lastHttpCode == 429) {
-            return@withContext LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true)
+            return@withContext fallbackStaticLyrics?.let {
+                LyricsResult.Success(it, isOffline = true)
+            } ?: (plainCandidate?.let {
+                saveToDisk(context, it, rawTitle, rawArtist)
+                memoryCache.put(song.id, it)
+                LyricsResult.Success(it, isOffline = false)
+            } ?: LyricsResult.Error("LRCLIB rate limit reached (HTTP 429). Please wait a moment before retrying.", isRateLimited = true))
         }
         if (candidate4 != null) {
             val parsed = parseLyricsJson(song.id, candidate4)
-            if (parsed.hasAnyLyrics) {
+            if (parsed.hasSynced || parsed.isInstrumental) {
                 saveToDisk(context, parsed, rawTitle, rawArtist)
                 memoryCache.put(song.id, parsed)
                 return@withContext LyricsResult.Success(parsed, isOffline = false)
+            } else if (parsed.hasAnyLyrics && plainCandidate == null) {
+                plainCandidate = parsed
             }
+        }
+
+        // Fallback priority when no synchronized lyrics are found online:
+        // 1. If local / cached static lyrics exist, keep them (offline source)
+        if (fallbackStaticLyrics != null) {
+            return@withContext LyricsResult.Success(fallbackStaticLyrics, isOffline = true)
+        }
+
+        // 2. If online search found plain lyrics, use them
+        if (plainCandidate != null) {
+            saveToDisk(context, plainCandidate, rawTitle, rawArtist)
+            memoryCache.put(song.id, plainCandidate)
+            return@withContext LyricsResult.Success(plainCandidate, isOffline = false)
         }
 
         if (lastHttpCode == -1) {
@@ -223,7 +289,8 @@ object LrcLibClient {
         val plainLyrics = json.optString("plainLyrics").takeIf { it.isNotBlank() }
 
         val syncedLines = if (syncedRaw != null) {
-            LrcParser.parse(syncedRaw)
+            val parsed = LrcParser.parse(syncedRaw)
+            if (parsed.isNotEmpty()) parsed else null
         } else null
 
         return Lyrics(
@@ -233,7 +300,7 @@ object LrcLibClient {
             syncedLyrics = syncedLines,
             plainLyrics = plainLyrics,
             isInstrumental = isInstrumental,
-            syncedRaw = syncedRaw,
+            syncedRaw = if (syncedLines != null) syncedRaw else null,
             source = "LRCLIB",
             isOffline = false
         )
@@ -280,6 +347,15 @@ object LrcLibClient {
         try {
             val dir = File(context.filesDir, "lyrics")
             if (!dir.exists()) dir.mkdirs()
+
+            // If saving static lyrics, do not overwrite if synced lyrics are already saved
+            if (!lyrics.hasSynced && !lyrics.isInstrumental) {
+                val existing = loadFromDisk(context, lyrics.songId, songTitle, songArtist)
+                if (existing != null && (existing.hasSynced || existing.isInstrumental)) {
+                    return
+                }
+            }
+
             val json = JSONObject().apply {
                 put("songId", lyrics.songId)
                 put("trackName", lyrics.trackName)
