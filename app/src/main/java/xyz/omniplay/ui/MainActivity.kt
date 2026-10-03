@@ -892,6 +892,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 else -> false
             }
         }
+    }
 
     /**
      * Initializes the lyrics view components, adapter, and interaction listeners.
