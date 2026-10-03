@@ -893,11 +893,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        binding.albumArtCard.setOnClickListener {
-            openLyricsCard()
-        }
-    }
-
     /**
      * Initializes the lyrics view components, adapter, and interaction listeners.
      */
@@ -931,199 +926,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             closeLyricsCard()
         }
 
+        binding.lyricsHeaderBar.setOnClickListener {
+            closeLyricsCard()
+        }
+
         binding.btnLyricsRetry.setOnClickListener {
             loadLyricsForCurrentSong(forceRefresh = true)
         }
-
-        setupLyricsCloseGestures()
-    }
-
-    /**
-     * Interactive horizontal gesture to close lyrics (slide left or right 1:1).
-     */
-    private fun setupLyricsCloseGestures() {
-        val card = binding.lyricsCard
-
-        fun handleSwipeMove(dx: Float) {
-            card.translationX = dx
-            val cardWidth = card.width.toFloat().coerceAtLeast(1f)
-            val progress = (Math.abs(dx) / (cardWidth * 0.35f)).coerceIn(0f, 1f)
-            binding.albumArtCard.visibility = View.VISIBLE
-            binding.albumArtCard.translationX = 0f
-            binding.albumArtCard.translationY = 0f
-            binding.albumArtCard.scaleX = 0.92f + 0.08f * progress
-            binding.albumArtCard.scaleY = 0.92f + 0.08f * progress
-            binding.albumArtCard.alpha = 0.5f + 0.5f * progress
-        }
-
-        fun handleSwipeUp(xVel: Float) {
-            val currentX = card.translationX
-            val cardWidth = card.width.toFloat().coerceAtLeast(1f)
-            val absX = Math.abs(currentX)
-            val ratio = absX / cardWidth
-
-            val isClose = ratio >= 0.22f ||
-                (ratio >= 0.10f && Math.abs(xVel) > 300f) ||
-                (absX >= 15f && Math.abs(xVel) > 600f)
-
-            if (isClose) {
-                val targetX = if (currentX >= 0) cardWidth * 1.25f else -cardWidth * 1.25f
-                binding.albumArtCard.animate()
-                    .scaleX(1f).scaleY(1f).alpha(1f)
-                    .setDuration(180L).start()
-
-                card.animate()
-                    .translationX(targetX)
-                    .setDuration(180L)
-                    .setInterpolator(DecelerateInterpolator())
-                    .withEndAction {
-                        card.visibility = View.INVISIBLE
-                        card.translationX = 0f
-                        isLyricsShowing = false
-                        binding.albumArtCard.visibility = View.VISIBLE
-                        binding.albumArtCard.translationX = 0f
-                        binding.albumArtCard.translationY = 0f
-                        binding.albumArtCard.scaleX = 1f
-                        binding.albumArtCard.scaleY = 1f
-                        binding.albumArtCard.alpha = 1f
-                    }
-                    .start()
-            } else {
-                card.animate()
-                    .translationX(0f)
-                    .setDuration(180L)
-                    .setInterpolator(DecelerateInterpolator())
-                    .start()
-
-                binding.albumArtCard.animate()
-                    .scaleX(0.92f).scaleY(0.92f).alpha(0.5f)
-                    .setDuration(180L)
-                    .withEndAction {
-                        if (isLyricsShowing) {
-                            binding.albumArtCard.visibility = View.INVISIBLE
-                        }
-                    }
-                    .start()
-            }
-        }
-
-        // Gesture interceptor on lyrics RecyclerView
-        binding.lyricsRecyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            private var startX = 0f
-            private var startY = 0f
-            private var isSwipingToClose = false
-            private var velocityTracker: VelocityTracker? = null
-
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        startX = e.rawX
-                        startY = e.rawY
-                        isSwipingToClose = false
-                        velocityTracker?.recycle()
-                        velocityTracker = VelocityTracker.obtain().apply { addMovement(e) }
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = e.rawX - startX
-                        val dy = e.rawY - startY
-                        if (!isSwipingToClose && Math.abs(dx) > 12f && Math.abs(dx) > Math.abs(dy) * 1.2f) {
-                            isSwipingToClose = true
-                            rv.parent?.requestDisallowInterceptTouchEvent(true)
-                            return true
-                        }
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        if (isSwipingToClose) {
-                            velocityTracker?.addMovement(e)
-                            velocityTracker?.computeCurrentVelocity(1000)
-                            val xVel = velocityTracker?.xVelocity ?: 0f
-                            handleSwipeUp(xVel)
-                            velocityTracker?.recycle()
-                            velocityTracker = null
-                            isSwipingToClose = false
-                            return true
-                        }
-                        velocityTracker?.recycle()
-                        velocityTracker = null
-                    }
-                }
-                return isSwipingToClose
-            }
-
-            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_MOVE -> {
-                        velocityTracker?.addMovement(e)
-                        val dx = e.rawX - startX
-                        handleSwipeMove(dx)
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        velocityTracker?.addMovement(e)
-                        velocityTracker?.computeCurrentVelocity(1000)
-                        val xVel = velocityTracker?.xVelocity ?: 0f
-                        handleSwipeUp(xVel)
-                        velocityTracker?.recycle()
-                        velocityTracker = null
-                        isSwipingToClose = false
-                    }
-                }
-            }
-        })
-
-        // Touch listener on Header bar, Plain scroll, and Status layout
-        fun attachCloseTouchListener(view: View) {
-            var sX = 0f
-            var sY = 0f
-            var isSwipe = false
-            var vTracker: VelocityTracker? = null
-
-            view.setOnTouchListener { v, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        sX = event.rawX
-                        sY = event.rawY
-                        isSwipe = false
-                        vTracker?.recycle()
-                        vTracker = VelocityTracker.obtain().apply { addMovement(event) }
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                        true
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        vTracker?.addMovement(event)
-                        val dx = event.rawX - sX
-                        val dy = event.rawY - sY
-                        if (!isSwipe && Math.abs(dx) > 10f && Math.abs(dx) > Math.abs(dy) * 0.8f) {
-                            isSwipe = true
-                        }
-                        if (isSwipe) {
-                            handleSwipeMove(dx)
-                        }
-                        true
-                    }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        if (isSwipe) {
-                            vTracker?.addMovement(event)
-                            vTracker?.computeCurrentVelocity(1000)
-                            val xVel = vTracker?.xVelocity ?: 0f
-                            handleSwipeUp(xVel)
-                        } else {
-                            if (event.actionMasked == MotionEvent.ACTION_UP && v == binding.lyricsHeaderBar) {
-                                closeLyricsCard()
-                            }
-                        }
-                        vTracker?.recycle()
-                        vTracker = null
-                        isSwipe = false
-                        true
-                    }
-                    else -> false
-                }
-            }
-        }
-
-        attachCloseTouchListener(binding.lyricsHeaderBar)
-        attachCloseTouchListener(binding.lyricsPlainScroll)
-        attachCloseTouchListener(binding.lyricsStatusLayout)
     }
 
     private fun openLyricsCard() {
@@ -1165,31 +974,35 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun closeLyricsCard() {
         if (!isLyricsShowing) return
-        val card = binding.lyricsCard
-        val cardWidth = card.width.toFloat().coerceAtLeast(1f)
+        val lyrics = binding.lyricsCard
+        val album = binding.albumArtCard
+        val cardHeight = album.height.toFloat().coerceAtLeast(1f)
 
-        binding.albumArtCard.visibility = View.VISIBLE
-        binding.albumArtCard.translationX = 0f
-        binding.albumArtCard.translationY = 0f
-        binding.albumArtCard.scaleX = 0.94f
-        binding.albumArtCard.scaleY = 0.94f
-        binding.albumArtCard.alpha = 0.6f
+        album.visibility = View.VISIBLE
+        album.translationX = 0f
+        album.translationY = -cardHeight * 1.15f
+        album.scaleX = 1f
+        album.scaleY = 1f
+        album.alpha = 1f
 
-        binding.albumArtCard.animate()
-            .scaleX(1f).scaleY(1f).alpha(1f)
-            .setDuration(200L).start()
+        album.animate()
+            .translationY(0f)
+            .setDuration(200L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
 
-        card.animate()
-            .translationX(cardWidth * 1.25f)
+        lyrics.animate()
+            .scaleX(0.92f).scaleY(0.92f).alpha(0f)
             .setDuration(200L)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
-                card.visibility = View.INVISIBLE
-                card.translationX = 0f
+                lyrics.visibility = View.INVISIBLE
+                lyrics.translationX = 0f
+                lyrics.translationY = 0f
+                lyrics.scaleX = 1f
+                lyrics.scaleY = 1f
+                lyrics.alpha = 1f
                 isLyricsShowing = false
-                binding.albumArtCard.scaleX = 1f
-                binding.albumArtCard.scaleY = 1f
-                binding.albumArtCard.alpha = 1f
             }
             .start()
     }
