@@ -9,6 +9,7 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.Charset
+import java.util.Locale
 
 object EmbeddedLyricsExtractor {
     private const val TAG = "EmbeddedLyrics"
