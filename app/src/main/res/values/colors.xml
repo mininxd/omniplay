@@ -5,6 +5,7 @@
     <color name="surface_dark">#161820</color>
     <color name="surface_container">#1E212B</color>
     <color name="surface_container_high">#282C3A</color>
+    <color name="surface_container_highest">#333748</color>
 
     <!-- Material You Primary & Accent -->
     <color name="primary_accent">#B4C8EB</color>
