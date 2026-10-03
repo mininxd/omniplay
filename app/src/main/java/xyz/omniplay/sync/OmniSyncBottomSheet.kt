@@ -64,14 +64,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         if (_binding == null) return
         when (quality) {
             OmniSyncQuality.HIGH -> {
-                binding.streamQualityBadge.text = "Native (High)"
-                binding.streamQualityBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.primary_accent))
-                binding.streamQualityDescText.text = "High: Natively from host source audio"
+                binding.streamQualityDescText.text = "Native from host"
             }
             OmniSyncQuality.LOW -> {
-                binding.streamQualityBadge.text = "32float (Low)"
-                binding.streamQualityBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
-                binding.streamQualityDescText.text = "Low: 32-bit float direct audio pipeline"
+                binding.streamQualityDescText.text = "32-bit float direct"
             }
         }
     }

@@ -106,97 +106,6 @@
                 android:textColor="@color/text_primary" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
-        <!-- Streaming Quality Option Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/stream_quality_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="@color/surface_container"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/surface_container_high"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="14dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="Stream Quality"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/stream_quality_badge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_badge_material_you"
-                        android:fontFamily="sans-serif-medium"
-                        android:paddingStart="8dp"
-                        android:paddingTop="3dp"
-                        android:paddingEnd="8dp"
-                        android:paddingBottom="3dp"
-                        android:text="Native (High)"
-                        android:textColor="@color/primary_accent"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/stream_quality_desc_text"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:layout_marginBottom="10dp"
-                    android:text="High: Natively from host • Low: 32-bit float direct"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButtonToggleGroup
-                    android:id="@+id/stream_quality_toggle_group"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:checkedButton="@id/btn_quality_high"
-                    app:selectionRequired="true"
-                    app:singleSelection="true">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_quality_high"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="High (Native)"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_quality_low"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="Low (32float)"
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp" />
-                </com.google.android.material.button.MaterialButtonToggleGroup>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
         <!-- ============================================================= -->
         <!-- HOST CONTAINER                                                -->
         <!-- ============================================================= -->
@@ -344,6 +253,81 @@
             android:layout_marginTop="16dp"
             android:orientation="vertical"
             android:visibility="gone">
+
+            <!-- Compact Stream Quality Selector (Listener Only) -->
+            <LinearLayout
+                android:id="@+id/stream_quality_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="Stream Quality"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/stream_quality_desc_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="Native from host"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/stream_quality_toggle_group"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:checkedButton="@id/btn_quality_high"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quality_high"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:minHeight="36dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:paddingTop="0dp"
+                        android:paddingBottom="0dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="Native"
+                        android:textSize="11sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_quality_low"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:minHeight="36dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:paddingTop="0dp"
+                        android:paddingBottom="0dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="32float"
+                        android:textSize="11sp" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+            </LinearLayout>
 
             <!-- Scanning / Discovery State (Visible when not connected) -->
             <LinearLayout

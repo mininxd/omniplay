@@ -128,7 +128,7 @@ class PlaybackService : Service() {
         registerBecomingNoisyReceiver()
 
         val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
-        sync.hostSongProvider = { currentSong }
+        sync.hostSongProvider = { currentSong?.let { getResolvedSongForSync(it) } }
         sync.hostPlaybackPositionProvider = {
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
                 getCurrentPosition().toLong()
@@ -226,7 +226,7 @@ class PlaybackService : Service() {
                         e.printStackTrace()
                     }
                     currentSong?.let {
-                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(it, currentPos, isPlaying = true)
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(it), currentPos, isPlaying = true)
                     }
                 } else {
                     stopProgressTracker()
@@ -640,18 +640,25 @@ class PlaybackService : Service() {
                 p.prepare()
                 if (startPlaying) {
                     p.play()
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = true)
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
                 } else {
                     stopProgressTracker()
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
                     updateNotification(isPlaying = false)
                     listeners.forEach { it.onPlaybackStateChanged(false) }
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = false)
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = false)
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun getResolvedSongForSync(song: Song): Song {
+        val f = currentAudioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song.format
+        val q = currentAudioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
+        val h = currentAudioInfo?.checkHiRes() ?: song.isHiRes
+        return song.copy(format = f, audioQuality = q, isHiRes = h)
     }
 
     private fun updateAudioInfoForSong(song: Song) {
@@ -725,6 +732,12 @@ class PlaybackService : Service() {
                 e.printStackTrace()
             }
         }
+        info?.let {
+            if (it.format.isNotEmpty() && it.format != "AUDIO") {
+                val q = it.formatQualityString()
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostAudioInfo(it.format, q, it.checkHiRes())
+            }
+        }
     }
 
     fun play() {
@@ -751,7 +764,7 @@ class PlaybackService : Service() {
                 }
                 listeners.forEach { l -> l.onPlaybackStateChanged(true) }
                 currentSong?.let { s ->
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(s, getCurrentPosition().toLong())
+                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(s), getCurrentPosition().toLong())
                 }
             }
         }

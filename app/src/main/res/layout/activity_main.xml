@@ -353,6 +353,24 @@
                 android:visibility="gone" />
 
             <TextView
+                android:id="@+id/badge_float"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_badge_material_you"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.02"
+                android:paddingStart="8dp"
+                android:paddingTop="3dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="3dp"
+                android:text="32bit Float"
+                android:textColor="@color/primary_accent"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/badge_latency"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

@@ -377,7 +377,9 @@ object AudioInfoExtractor {
             format.sampleMimeType?.contains("mpeg", ignoreCase = true) == true ||
             format.sampleMimeType?.contains("mp3", ignoreCase = true) == true -> "MP3"
             format.sampleMimeType?.contains("aac", ignoreCase = true) == true ||
-            format.sampleMimeType?.contains("mp4a", ignoreCase = true) == true -> "AAC"
+            format.sampleMimeType?.contains("mp4a", ignoreCase = true) == true -> {
+                if (fallbackFormat.equals("M4A", ignoreCase = true)) "M4A" else "AAC"
+            }
             format.sampleMimeType?.contains("opus", ignoreCase = true) == true -> "OPUS"
             format.sampleMimeType?.contains("vorbis", ignoreCase = true) == true ||
             format.sampleMimeType?.contains("ogg", ignoreCase = true) == true -> "OGG"

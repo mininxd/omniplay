@@ -546,6 +546,25 @@ class OmniSyncManager private constructor(private val context: Context) {
         streamServer.broadcastEvent(json)
     }
 
+    fun updateHostAudioInfo(format: String, quality: String, isHiRes: Boolean) {
+        if (currentRole != OmniSyncRole.HOST) return
+        val currentSong = streamServer.currentSong ?: return
+        val updatedSong = currentSong.copy(
+            format = format,
+            audioQuality = quality,
+            isHiRes = isHiRes
+        )
+        streamServer.currentSong = updatedSong
+        val json = JSONObject().apply {
+            put("action", "AUDIO_INFO")
+            put("songId", updatedSong.id)
+            put("songFormat", format)
+            put("songQuality", quality)
+            put("isHiRes", isHiRes)
+        }.toString()
+        streamServer.broadcastEvent(json)
+    }
+
     // =========================================================================
     // LISTENER MODE
     // =========================================================================
@@ -781,7 +800,14 @@ class OmniSyncManager private constructor(private val context: Context) {
             val pos = initialStatus.optLong("position", 0L)
             val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
             val rName = initialStatus.optString("hostName", host.name)
+            val format = initialStatus.optString("format", "").ifEmpty { initialStatus.optString("songFormat", "") }
+            val quality = initialStatus.optString("quality", "").ifEmpty { initialStatus.optString("songQuality", "") }
+            val isHiRes = initialStatus.optBoolean("isHiRes", false)
             currentHostRoomName = rName
+
+            if (format.isNotEmpty() || quality.isNotEmpty()) {
+                notifyTrackAudioInfo(format, quality, isHiRes)
+            }
 
             if (title.isNotEmpty()) {
                 val streamUrl = "$baseUrl/stream?id=$songId"
@@ -877,8 +903,8 @@ class OmniSyncManager private constructor(private val context: Context) {
                 }
                 val title = json.optString("title")
                 val artist = json.optString("artist")
-                val format = json.optString("format")
-                val quality = json.optString("quality")
+                val format = json.optString("format").ifEmpty { json.optString("songFormat") }
+                val quality = json.optString("quality").ifEmpty { json.optString("songQuality") }
                 val isHiRes = json.optBoolean("isHiRes", false)
                 val songId = json.optLong("songId", 0L)
                 val pos = json.optLong("positionMs", 0L)
@@ -900,12 +926,12 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val port = json.optInt("streamPort", targetPort)
                 val songId = json.optLong("songId", 0L)
                 val positionMs = json.optLong("positionMs", 0L)
-                val songTitle = json.optString("songTitle", "OmniSync Track")
-                val songArtist = json.optString("songArtist", "Host Broadcast")
-                val songFormat = json.optString("songFormat")
-                val songQuality = json.optString("songQuality")
+                val songTitle = json.optString("songTitle", json.optString("title", "OmniSync Track"))
+                val songArtist = json.optString("songArtist", json.optString("artist", "Host Broadcast"))
+                val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
+                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
                 val isHiRes = json.optBoolean("isHiRes", false)
-                val songDuration = json.optLong("songDuration", 0L)
+                val songDuration = json.optLong("songDuration", json.optLong("durationMs", 0L))
                 val isHostPlaying = json.optBoolean("isPlaying", true)
                 val hostTimestamp = json.optLong("timestamp", 0L)
                 if (songDuration > 0L) currentStreamDurationMs = songDuration
@@ -940,6 +966,14 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val hostPos = json.optLong("positionMs", 0L)
                 val hostSongId = json.optLong("songId", 0L)
                 syncDrift(hostPos, isHostPlaying, hostSongId)
+            }
+            "AUDIO_INFO" -> {
+                val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
+                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
+                val isHiRes = json.optBoolean("isHiRes", false)
+                if (songFormat.isNotEmpty() || songQuality.isNotEmpty()) {
+                    notifyTrackAudioInfo(songFormat, songQuality, isHiRes)
+                }
             }
             "STOP" -> {
                 disconnectListener("Host stopped broadcasting")
@@ -1044,6 +1078,37 @@ class OmniSyncManager private constructor(private val context: Context) {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 isStreamPlaying = isPlaying
                 notifyPlaybackState(isPlaying)
+            }
+
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                for (group in tracks.groups) {
+                    if (group.type == C.TRACK_TYPE_AUDIO && group.isSelected) {
+                        for (i in 0 until group.length) {
+                            if (group.isTrackSelected(i)) {
+                                val exoFormat = group.getTrackFormat(i)
+                                val detected = xyz.omniplay.util.AudioInfoExtractor.fromExoFormat(exoFormat, currentTrackFormat)
+                                val detectedQuality = detected.formatQualityString()
+                                val resolvedFormat = if (currentTrackFormat.equals("M4A", ignoreCase = true) && (detected.format == "AAC" || detected.format == "AUDIO")) {
+                                    "M4A"
+                                } else if (detected.format.isNotEmpty() && detected.format != "AUDIO") {
+                                    detected.format
+                                } else {
+                                    currentTrackFormat
+                                }
+                                val resolvedQuality = when {
+                                    detectedQuality.isEmpty() -> currentTrackQuality
+                                    currentTrackQuality.contains("bit") && !detectedQuality.contains("bit") -> currentTrackQuality
+                                    else -> detectedQuality
+                                }
+                                val resolvedHiRes = detected.checkHiRes() || currentTrackIsHiRes
+                                if (resolvedFormat.isNotEmpty() || resolvedQuality.isNotEmpty()) {
+                                    notifyTrackAudioInfo(resolvedFormat, resolvedQuality, resolvedHiRes)
+                                }
+                                break
+                            }
+                        }
+                    }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {

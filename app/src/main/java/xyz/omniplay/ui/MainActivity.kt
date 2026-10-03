@@ -1359,21 +1359,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isListener = syncManager.currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER
 
         if (isListener) {
-            val format = syncManager.currentTrackFormat.ifEmpty {
-                audioInfo?.format?.takeIf { it.isNotEmpty() && it != "AUDIO" } ?: song?.format ?: ""
-            }
-            val quality = if (syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW) {
-                "32bit Float"
-            } else {
-                syncManager.currentTrackQuality.ifEmpty {
-                    audioInfo?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song?.audioQuality ?: ""
-                }
-            }
-            val isHiRes = if (syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW) {
-                false
-            } else {
-                syncManager.currentTrackIsHiRes || (song != null && isHiResAudio(song, audioInfo, format, quality))
-            }
+            val format = syncManager.currentTrackFormat
+            val quality = syncManager.currentTrackQuality
+            val isHiRes = syncManager.currentTrackIsHiRes
+            val isFloat = syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW
 
             var hasAnyBadge = false
             if (format.isNotEmpty()) {
@@ -1392,7 +1381,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.badgeQuality.visibility = View.GONE
             }
 
-            if (isHiRes) {
+            if (isFloat) {
+                binding.badgeFloat.visibility = View.VISIBLE
+                hasAnyBadge = true
+            } else {
+                binding.badgeFloat.visibility = View.GONE
+            }
+
+            if (isHiRes && !isFloat) {
                 binding.badgeHires.visibility = View.VISIBLE
                 hasAnyBadge = true
             } else {
@@ -1414,6 +1410,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             return
         }
 
+        binding.badgeFloat.visibility = View.GONE
         binding.badgeLatency.visibility = View.GONE
         if (song == null) {
             binding.audioBadgeContainer.visibility = View.GONE
@@ -1557,6 +1554,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isSeekable = true
                     binding.playbackSlider.setNeutralMode(false)
                     binding.badgeLatency.visibility = View.GONE
+                    binding.badgeFloat.visibility = View.GONE
                     playbackService?.currentSong?.let {
                         binding.playbackSlider.isEnabled = true
                         onTrackChanged(it)
