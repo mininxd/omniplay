@@ -17,7 +17,7 @@
             android:layout_height="match_parent"
             android:clipChildren="false"
             android:clipToPadding="false"
-            android:paddingBottom="56dp">
+            android:paddingBottom="64dp">
 
             <!-- Top Bar -->
             <TextView
@@ -737,15 +737,28 @@
         android:background="@drawable/bg_bottom_sheet"
         android:elevation="12dp"
         android:orientation="vertical"
+        app:behavior_fitToContents="false"
+        app:behavior_halfExpandedRatio="0.90"
         app:behavior_hideable="false"
-        app:behavior_peekHeight="56dp"
+        app:behavior_peekHeight="64dp"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <!-- Drag Handle Indicator Pill -->
+        <View
+            android:id="@+id/sheet_drag_handle"
+            android:layout_width="38dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="2dp"
+            android:alpha="0.5"
+            android:background="@drawable/bg_sheet_drag_handle" />
 
         <!-- Sliding Panel Peek Header (Draggable & Clickable) -->
         <LinearLayout
             android:id="@+id/playlist_peek_header"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="52dp"
             android:background="?attr/selectableItemBackground"
             android:gravity="center_vertical"
             android:orientation="horizontal"
