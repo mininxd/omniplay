@@ -335,14 +335,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun setupInWindowPlaylistPanel() {
         bottomSheetBehavior = BottomSheetBehavior.from(binding.playlistSlidingPanel)
         bottomSheetBehavior.isHideable = false
-        bottomSheetBehavior.isFitToContents = false
-        bottomSheetBehavior.halfExpandedRatio = 0.90f
+        bottomSheetBehavior.isFitToContents = true
         bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
 
-        // Apply system window insets so queue peek header and list items are never hidden behind navigation/status bars
+        fun updateSheetDimensions() {
+            val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+            // YouTube Music style: Queue takes ~62% of screen height, leaving ~38% showing current track artwork and title
+            val maxSheetHeight = (parentH * 0.62f).toInt()
+            bottomSheetBehavior.maxHeight = maxSheetHeight
+            bottomSheetBehavior.expandedOffset = (parentH - maxSheetHeight).coerceAtLeast(0)
+        }
+
+        // Apply system window insets so queue peek header and list items are never hidden behind navigation bar
         ViewCompat.setOnApplyWindowInsetsListener(binding.playlistSlidingPanel) { _, insets ->
             val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            val statusBarInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
 
             val basePeekHeight = (64 * resources.displayMetrics.density).toInt()
             bottomSheetBehavior.peekHeight = basePeekHeight + navInsets.bottom
@@ -361,15 +367,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 navInsets.bottom + (28 * resources.displayMetrics.density).toInt()
             )
 
-            bottomSheetBehavior.expandedOffset = statusBarInsets.top
+            updateSheetDimensions()
             insets
+        }
+
+        binding.coordinatorRoot.post {
+            updateSheetDimensions()
         }
 
         bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
-                    BottomSheetBehavior.STATE_EXPANDED,
-                    BottomSheetBehavior.STATE_HALF_EXPANDED -> {
+                    BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
@@ -387,20 +396,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         })
 
-        // Tap on peek header toggles panel between collapsed and 90% max height
+        // Tap on peek header toggles panel between collapsed and expanded (YouTube Music height)
         binding.playlistPeekHeader.setOnClickListener {
-            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+            if (bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             } else {
-                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             }
         }
 
         binding.sheetTitleText.isSelected = true
 
         binding.btnSortQueue.setOnClickListener {
-            if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             }
             showSortDialog()
         }
@@ -450,33 +459,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.songsRecyclerView.adapter = songAdapter
         binding.songsRecyclerView.layoutManager = LinearLayoutManager(this)
 
-        // Auto-expand from 90% to 100% when scrolled to bottom of queue
-        binding.songsRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                if (!::bottomSheetBehavior.isInitialized) return
-
-                if (bottomSheetBehavior.state == BottomSheetBehavior.STATE_HALF_EXPANDED) {
-                    val lm = recyclerView.layoutManager as? LinearLayoutManager
-                    val lastVisible = lm?.findLastCompletelyVisibleItemPosition() ?: -1
-                    val totalCount = recyclerView.adapter?.itemCount ?: 0
-                    val reachedBottom = (totalCount > 0 && lastVisible >= totalCount - 1) || !recyclerView.canScrollVertically(1)
-
-                    if (dy > 0 && reachedBottom) {
-                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
-                    }
-                } else if (bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
-                    val lm = recyclerView.layoutManager as? LinearLayoutManager
-                    val firstVisible = lm?.findFirstCompletelyVisibleItemPosition() ?: -1
-                    val reachedTop = firstVisible == 0 || !recyclerView.canScrollVertically(-1)
-
-                    if (dy < 0 && reachedTop) {
-                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
-                    }
-                }
-            }
-        })
-
         binding.btnSelectFolderEmpty.setOnClickListener {
             openFolderPicker()
         }
@@ -501,9 +483,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: binding.root.height
-            val halfExpandedTop = (parentH * (1f - 0.90f)).toInt()
+            val maxSheetH = (parentH * 0.62f).toInt()
+            val targetTop = (parentH - maxSheetH).coerceAtLeast(0)
             val collapsedTop = parentH - bottomSheetBehavior.peekHeight
-            val maxTravel = (collapsedTop - halfExpandedTop).toFloat().coerceAtLeast(1f)
+            val maxTravel = (collapsedTop - targetTop).toFloat().coerceAtLeast(1f)
 
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -527,7 +510,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
 
                     if (isDraggingSheet) {
-                        // Clamp translation between -maxTravel (90% half expanded) and 0f (collapsed)
+                        // Clamp translation between -maxTravel (expanded) and 0f (collapsed)
                         val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
                         binding.playlistSlidingPanel.translationY = targetTranslation
                         val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
@@ -565,10 +548,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 override fun onAnimationEnd(animation: Animator) {
                                     val panel = binding.playlistSlidingPanel
                                     if (shouldExpand) {
-                                        val offset = halfExpandedTop - panel.top
+                                        val offset = targetTop - panel.top
                                         panel.offsetTopAndBottom(offset)
                                         panel.translationY = 0f
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
                                         binding.ivChevron.rotation = 180f
                                     } else {
                                         panel.translationY = 0f
@@ -2041,7 +2024,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             title = album,
                             count = songs.size,
                             isAlbum = true,
-                            isSelected = album.equals(selectedFilterValue, ignoreCase = true)
+                            isSelected = album.equals(selectedFilterValue, ignoreCase = true),
+                            representativeSong = songs.firstOrNull()
                         )
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
@@ -2062,7 +2046,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         applyCurrentFilter()
         closeLeftMenu()
         if (::bottomSheetBehavior.isInitialized) {
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
 
@@ -2248,6 +2232,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (isBound && playbackService != null && playbackService?.queue.isNullOrEmpty() && displayedSongs.isNotEmpty()) {
             playbackService?.refreshQueue(displayedSongs)
         }
+        AlbumArtLoader.preloadAll(applicationContext, songs, lifecycleScope)
     }
 
     private fun showOptionsMenu(anchor: View) {

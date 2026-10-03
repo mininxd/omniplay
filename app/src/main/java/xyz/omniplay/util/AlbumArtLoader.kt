@@ -9,7 +9,10 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.LruCache
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.model.Song
 import java.io.File
@@ -33,10 +36,23 @@ object AlbumArtLoader {
         }
     }
 
-    // 2. Negative Cache: prevents repeatedly parsing songs that have NO album art
+    // 2. Pre-rendered Album-level cache: instantly supplies artwork for all songs in an album
+    private val albumArtCache: LruCache<String, Bitmap> by lazy {
+        val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+        val cacheSize = (maxMemory / 6).coerceAtLeast(2048)
+        object : LruCache<String, Bitmap>(cacheSize) {
+            override fun sizeOf(key: String, bitmap: Bitmap): Int {
+                return (bitmap.byteCount / 1024).coerceAtLeast(1)
+            }
+        }
+    }
+
+    // 3. Negative Cache: prevents repeatedly parsing songs that have NO album art
     private val negativeCache: LruCache<String, Boolean> by lazy {
         LruCache<String, Boolean>(1000)
     }
+
+    private var preloadJob: Job? = null
 
     fun getCacheKey(song: Song): String {
         return if (song.contentUri != Uri.EMPTY) {
@@ -50,16 +66,81 @@ object AlbumArtLoader {
 
     fun getCachedAlbumArt(song: Song): Bitmap? {
         val key = getCacheKey(song)
-        return memoryCache.get(key) ?: memoryCache.get(song.id.toString())
+        val fromMem = memoryCache.get(key) ?: memoryCache.get(song.id.toString())
+        if (fromMem != null) return fromMem
+
+        // Fast check in pre-rendered album cache
+        if (song.album.isNotBlank() && song.album != "Unknown Album") {
+            val albumBitmap = albumArtCache.get(song.album.lowercase())
+            if (albumBitmap != null) {
+                memoryCache.put(key, albumBitmap)
+                return albumBitmap
+            }
+        }
+        return null
     }
 
     fun getCachedAlbumArt(songId: Long): Bitmap? {
         return memoryCache.get(songId.toString())
     }
 
+    fun getAlbumArt(albumName: String): Bitmap? {
+        if (albumName.isBlank() || albumName == "Unknown Album") return null
+        return albumArtCache.get(albumName.lowercase())
+    }
+
     fun clearMemoryCache() {
         memoryCache.evictAll()
+        albumArtCache.evictAll()
         negativeCache.evictAll()
+    }
+
+    /**
+     * Pre-renders and pre-loads all album art like game textures in the background.
+     * Phase 1: Pre-renders all unique albums first for immediate broad coverage.
+     * Phase 2: Pre-renders all remaining songs so there is zero pop-in during scrolling.
+     */
+    fun preloadAll(context: Context, songs: List<Song>, scope: CoroutineScope) {
+        preloadJob?.cancel()
+        preloadJob = scope.launch(Dispatchers.IO) {
+            if (songs.isEmpty()) return@launch
+
+            // Phase 1: Pre-render and cache Album Covers
+            val albumGroups = songs.groupBy {
+                if (it.album.isNotBlank() && it.album != "Unknown Album") it.album.lowercase() else ""
+            }
+
+            for ((albumName, albumSongs) in albumGroups) {
+                if (albumName.isNotEmpty()) {
+                    val existing = albumArtCache.get(albumName)
+                    if (existing == null) {
+                        for (candidate in albumSongs) {
+                            val art = loadAlbumArt(context, candidate)
+                            if (art != null) {
+                                albumArtCache.put(albumName, art)
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Phase 2: Full Pre-render of ALL remaining individual songs
+            for (song in songs) {
+                val key = getCacheKey(song)
+                if (memoryCache.get(key) != null || negativeCache.get(key) == true) {
+                    continue
+                }
+                val albumKey = if (song.album.isNotBlank() && song.album != "Unknown Album") song.album.lowercase() else null
+                val albumArt = if (albumKey != null) albumArtCache.get(albumKey) else null
+                if (albumArt != null) {
+                    memoryCache.put(key, albumArt)
+                    memoryCache.put(song.id.toString(), albumArt)
+                } else {
+                    loadAlbumArt(context, song)
+                }
+            }
+        }
     }
 
     suspend fun loadAlbumArt(context: Context, song: Song): Bitmap? = withContext(Dispatchers.IO) {
@@ -72,22 +153,35 @@ object AlbumArtLoader {
                 return@withContext cachedMem
             }
 
-            // Step 2: Check negative cache (known to have no art)
+            // Step 2: Check pre-rendered album cache
+            if (song.album.isNotBlank() && song.album != "Unknown Album") {
+                val albumBitmap = albumArtCache.get(song.album.lowercase())
+                if (albumBitmap != null) {
+                    memoryCache.put(cacheKey, albumBitmap)
+                    memoryCache.put(song.id.toString(), albumBitmap)
+                    return@withContext albumBitmap
+                }
+            }
+
+            // Step 3: Check negative cache (known to have no art)
             if (negativeCache.get(cacheKey) == true || negativeCache.get(song.id.toString()) == true) {
                 return@withContext null
             }
 
-            // Step 3: Check persistent disk LRU cache
+            // Step 4: Check persistent disk LRU cache
             val diskBitmap = loadFromDiskCache(context, cacheKey)
             if (diskBitmap != null) {
                 memoryCache.put(cacheKey, diskBitmap)
                 memoryCache.put(song.id.toString(), diskBitmap)
+                if (song.album.isNotBlank() && song.album != "Unknown Album") {
+                    albumArtCache.put(song.album.lowercase(), diskBitmap)
+                }
                 return@withContext diskBitmap
             }
 
             var decodedBitmap: Bitmap? = null
 
-            // Step 4: Extract embedded artwork directly from audio file (TOP PRIORITY)
+            // Step 5: Extract embedded artwork directly from audio file (TOP PRIORITY)
             if (song.contentUri != Uri.EMPTY) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -133,7 +227,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 5: Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
+            // Step 6: Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
             if (decodedBitmap == null && (song.format.equals("FLAC", ignoreCase = true) || song.contentUri.toString().endsWith(".flac", ignoreCase = true) || song.filePath.endsWith(".flac", ignoreCase = true))) {
                 try {
                     context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
@@ -159,7 +253,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 6: Fallback to file path embedded picture if contentUri didn't yield artwork
+            // Step 7: Fallback to file path embedded picture if contentUri didn't yield artwork
             if (decodedBitmap == null && song.filePath.isNotBlank()) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -176,7 +270,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 7: SECONDARY FALLBACK: MediaStore album art URI (only when audio file itself has NO embedded picture)
+            // Step 8: SECONDARY FALLBACK: MediaStore album art URI (only when audio file itself has NO embedded picture)
             // and only if the album name is known, avoiding MediaStore's shared albumId collision across unrelated songs
             if (decodedBitmap == null && song.albumArtUri != null && song.album != "Unknown Album") {
                 try {
@@ -206,7 +300,7 @@ object AlbumArtLoader {
                 } catch (ignored: Throwable) {}
             }
 
-            // Step 8: Validate decoded bitmap and write to caches
+            // Step 9: Validate decoded bitmap and write to caches
             val finalBitmap = decodedBitmap
             if (finalBitmap != null) {
                 if (isSolidOrBlankBitmap(finalBitmap)) {
@@ -216,6 +310,9 @@ object AlbumArtLoader {
                 }
                 memoryCache.put(cacheKey, finalBitmap)
                 memoryCache.put(song.id.toString(), finalBitmap)
+                if (song.album.isNotBlank() && song.album != "Unknown Album") {
+                    albumArtCache.put(song.album.lowercase(), finalBitmap)
+                }
                 saveToDiskCache(context, cacheKey, finalBitmap)
                 return@withContext finalBitmap
             }
