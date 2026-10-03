@@ -105,15 +105,26 @@ class MusicScanner(private val context: Context) {
         val finalSongs = if (songsList.isNotEmpty()) {
             if (mediaStoreSongs.isNotEmpty()) {
                 val mediaStoreByPath = mediaStoreSongs.associateBy { it.filePath.lowercase(Locale.ROOT) }
-                val mediaStoreByName = mediaStoreSongs.associateBy { File(it.filePath).name.lowercase(Locale.ROOT) }
+                val mediaStoreByName = mediaStoreSongs.groupBy { File(it.filePath).name.lowercase(Locale.ROOT) }
 
                 songsList.map { safSong ->
-                    val match = mediaStoreByPath[safSong.filePath.lowercase(Locale.ROOT)]
-                        ?: mediaStoreByName[safSong.filePath.lowercase(Locale.ROOT)]
+                    val safFileName = File(safSong.filePath).name.lowercase(Locale.ROOT)
+                    val match = (if (safSong.filePath.isNotBlank()) mediaStoreByPath[safSong.filePath.lowercase(Locale.ROOT)] else null)
+                        ?: run {
+                            val candidateList = mediaStoreByName[safFileName]
+                            if (candidateList != null && candidateList.size == 1) {
+                                val candidate = candidateList.first()
+                                val sizeMatches = safSong.fileSize <= 0L || candidate.fileSize <= 0L ||
+                                        kotlin.math.abs(safSong.fileSize - candidate.fileSize) < 4096
+                                val durationMatches = safSong.duration <= 0L || candidate.duration <= 0L ||
+                                        kotlin.math.abs(safSong.duration - candidate.duration) < 3000
+                                if (sizeMatches && durationMatches) candidate else null
+                            } else null
+                        }
+
                     if (match != null) {
                         safSong.copy(
-                            id = match.id,
-                            albumArtUri = safSong.albumArtUri ?: match.albumArtUri,
+                            albumArtUri = safSong.albumArtUri ?: (if (match.album != "Unknown Album") match.albumArtUri else null),
                             title = if (safSong.title == safSong.filePath.substringBeforeLast('.')) match.title else safSong.title,
                             artist = if (safSong.artist == "Unknown Artist") match.artist else safSong.artist,
                             album = if (safSong.album == "Unknown Album") match.album else safSong.album,
@@ -428,8 +439,12 @@ class MusicScanner(private val context: Context) {
         val audioInfo = AudioInfoExtractor.extractFromUri(context, uri, format)
         val resolvedFormat = audioInfo.format.ifEmpty { format }
 
+        val uniqueId = (java.util.UUID.nameUUIDFromBytes((uri.toString() + resolvedName).toByteArray()).mostSignificantBits and Long.MAX_VALUE).let {
+            if (it == 0L) 1L else it
+        }
+
         return Song(
-            id = (uri.toString() + resolvedName).hashCode().toLong(),
+            id = uniqueId,
             title = title,
             artist = artist,
             album = album,

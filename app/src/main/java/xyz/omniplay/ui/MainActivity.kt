@@ -363,6 +363,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
+        binding.sheetTitleText.isSelected = true
+
         binding.btnSortQueue.setOnClickListener {
             if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state != BottomSheetBehavior.STATE_EXPANDED) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
@@ -591,7 +593,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.peekArtistText.textAlignment = textAlignment
                     binding.peekArtistText.text = peekSong.artist
 
-                    val cached = AlbumArtLoader.getCachedAlbumArt(peekSong.id)
+                    val cached = AlbumArtLoader.getCachedAlbumArt(peekSong)
                     if (cached != null) {
                         binding.peekAlbumArtImage.setImageBitmap(cached)
                         updatePeekTextContrast(isBitmapBright(cached))
@@ -754,7 +756,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         } else {
                                             val current = songBefore ?: songAfter
                                             if (current != null) {
-                                                val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
+                                                val cached = AlbumArtLoader.getCachedAlbumArt(current)
                                                 if (cached != null) {
                                                     binding.albumArtImage.setImageBitmap(cached)
                                                 } else {
@@ -808,7 +810,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         } else {
                                             val current = songBefore ?: songAfter
                                             if (current != null) {
-                                                val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
+                                                val cached = AlbumArtLoader.getCachedAlbumArt(current)
                                                 if (cached != null) {
                                                     binding.albumArtImage.setImageBitmap(cached)
                                                 } else {
@@ -2156,10 +2158,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val filterVal = selectedFilterValue
         if (!filterVal.isNullOrEmpty()) {
-            binding.sheetTitleText.text = "Queue • $filterVal"
+            binding.sheetTitleText.text = filterVal
         } else {
             binding.sheetTitleText.text = getString(R.string.queue_title)
         }
+        binding.sheetTitleText.isSelected = true
 
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
@@ -2429,7 +2432,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
             }
 
-            val cachedArt = AlbumArtLoader.getCachedAlbumArt(song.id)
+            val cachedArt = AlbumArtLoader.getCachedAlbumArt(song)
             if (cachedArt != null) {
                 binding.albumArtImage.setImageBitmap(cachedArt)
             } else {
@@ -2730,7 +2733,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
 
                         val streamSong = Song(
-                            id = (title + artist).hashCode().toLong(),
+                            id = (java.util.UUID.nameUUIDFromBytes((title + artist).toByteArray()).mostSignificantBits and Long.MAX_VALUE).let { if (it == 0L) 1L else it },
                             title = title,
                             artist = artist,
                             album = "",

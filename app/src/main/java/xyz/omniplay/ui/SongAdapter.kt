@@ -67,13 +67,24 @@ class SongAdapter(
 
     override fun getItemCount(): Int = songs.size
 
+    override fun onViewRecycled(holder: SongViewHolder) {
+        super.onViewRecycled(holder)
+        holder.cancelLoading()
+    }
+
     inner class SongViewHolder(private val binding: ItemSongBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
         private var loadJob: Job? = null
 
-        fun bind(song: Song, isPlaying: Boolean) {
+        fun cancelLoading() {
             loadJob?.cancel()
+            loadJob = null
+            binding.itemThumbnailImage.tag = null
+        }
+
+        fun bind(song: Song, isPlaying: Boolean) {
+            cancelLoading()
             val context = binding.root.context
 
             binding.itemTitleText.text = song.title
@@ -110,18 +121,18 @@ class SongAdapter(
             if (!showAlbumArt) {
                 showDefaultAlbumArt()
             } else {
-                val cachedBitmap = AlbumArtLoader.getCachedAlbumArt(song.id)
+                val cachedBitmap = AlbumArtLoader.getCachedAlbumArt(song)
                 if (cachedBitmap != null) {
                     showAlbumArt(cachedBitmap)
                 } else {
                     showDefaultAlbumArt()
-                    val songId = song.id
-                    binding.itemThumbnailImage.tag = songId
+                    val imageKey = AlbumArtLoader.getCacheKey(song)
+                    binding.itemThumbnailImage.tag = imageKey
 
                     loadJob = adapterScope.launch {
                         val bitmap = AlbumArtLoader.loadAlbumArt(context, song)
-                        if (binding.itemThumbnailImage.tag == songId) {
-                            withContext(Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
+                            if (binding.itemThumbnailImage.tag == imageKey) {
                                 if (bitmap != null) {
                                     showAlbumArt(bitmap)
                                 } else {

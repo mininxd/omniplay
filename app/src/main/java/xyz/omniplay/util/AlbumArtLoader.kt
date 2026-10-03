@@ -15,46 +15,48 @@ import xyz.omniplay.model.Song
 
 object AlbumArtLoader {
 
-    private val memoryCache: LruCache<Long, Bitmap> by lazy {
+    private val memoryCache: LruCache<String, Bitmap> by lazy {
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
         val cacheSize = (maxMemory / 8).coerceAtLeast(1024)
-        object : LruCache<Long, Bitmap>(cacheSize) {
-            override fun sizeOf(key: Long, bitmap: Bitmap): Int {
+        object : LruCache<String, Bitmap>(cacheSize) {
+            override fun sizeOf(key: String, bitmap: Bitmap): Int {
                 return (bitmap.byteCount / 1024).coerceAtLeast(1)
             }
         }
     }
 
+    fun getCacheKey(song: Song): String {
+        return if (song.contentUri != Uri.EMPTY) {
+            song.contentUri.toString()
+        } else if (song.filePath.isNotBlank()) {
+            song.filePath
+        } else {
+            song.id.toString()
+        }
+    }
+
+    fun getCachedAlbumArt(song: Song): Bitmap? {
+        val key = getCacheKey(song)
+        return memoryCache.get(key) ?: memoryCache.get(song.id.toString())
+    }
+
     fun getCachedAlbumArt(songId: Long): Bitmap? {
-        return memoryCache.get(songId)
+        return memoryCache.get(songId.toString())
     }
 
     suspend fun loadAlbumArt(context: Context, song: Song): Bitmap? = withContext(Dispatchers.IO) {
         try {
-            val cached = memoryCache.get(song.id)
+            val cacheKey = getCacheKey(song)
+            val cached = memoryCache.get(cacheKey) ?: memoryCache.get(song.id.toString())
             if (cached != null) {
                 return@withContext cached
             }
 
             var decodedBitmap: Bitmap? = null
 
-            // 1. Try MediaStore album art URI first if available (official indexed artwork)
-            if (song.albumArtUri != null) {
-                try {
-                    decodedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, song.albumArtUri)) { decoder, _, _ ->
-                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                            decoder.isMutableRequired = false
-                        }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        MediaStore.Images.Media.getBitmap(context.contentResolver, song.albumArtUri)
-                    }
-                } catch (ignored: Throwable) {}
-            }
-
-            // 2. Try extracting embedded ID3 / FLAC picture directly from audio content URI
-            if (decodedBitmap == null && song.contentUri != Uri.EMPTY) {
+            // 1. TOP PRIORITY: Extract embedded ID3 / FLAC picture directly from this specific audio file
+            // Embedded artwork is strictly tied to THIS individual song file, preventing Song A from showing Song B's artwork.
+            if (song.contentUri != Uri.EMPTY) {
                 val retriever = MediaMetadataRetriever()
                 try {
                     var loaded = false
@@ -99,7 +101,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // 3. Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
+            // 2. Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
             if (decodedBitmap == null && (song.format.equals("FLAC", ignoreCase = true) || song.contentUri.toString().endsWith(".flac", ignoreCase = true) || song.filePath.endsWith(".flac", ignoreCase = true))) {
                 try {
                     context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
@@ -125,7 +127,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // 4. Fallback: try file path if contentUri didn't yield artwork
+            // 3. Fallback: try file path embedded picture if contentUri didn't yield artwork
             if (decodedBitmap == null && song.filePath.isNotBlank()) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -142,13 +144,30 @@ object AlbumArtLoader {
                 }
             }
 
-            // 4. Validate decoded bitmap: reject corrupted or solid black/blank placeholders
+            // 4. SECONDARY FALLBACK: MediaStore album art URI (only when audio file itself has NO embedded picture)
+            // and only if the album name is known, avoiding MediaStore's shared albumId collision across unrelated songs
+            if (decodedBitmap == null && song.albumArtUri != null && song.album != "Unknown Album") {
+                try {
+                    decodedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, song.albumArtUri)) { decoder, _, _ ->
+                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                            decoder.isMutableRequired = false
+                        }
+                    } else {
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Media.getBitmap(context.contentResolver, song.albumArtUri)
+                    }
+                } catch (ignored: Throwable) {}
+            }
+
+            // 5. Validate decoded bitmap: reject corrupted or solid black/blank placeholders
             val finalBitmap = decodedBitmap
             if (finalBitmap != null) {
                 if (isSolidOrBlankBitmap(finalBitmap)) {
                     return@withContext null
                 }
-                memoryCache.put(song.id, finalBitmap)
+                memoryCache.put(cacheKey, finalBitmap)
+                memoryCache.put(song.id.toString(), finalBitmap)
                 return@withContext finalBitmap
             }
 
