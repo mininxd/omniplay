@@ -342,7 +342,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         fun updateSheetDimensions(topInset: Int = 0) {
             bottomSheetBehavior.isFitToContents = false
             bottomSheetBehavior.halfExpandedRatio = 0.62f
-            bottomSheetBehavior.maxHeight = BottomSheetBehavior.NO_MAX_SIZE
+            bottomSheetBehavior.maxHeight = -1
             bottomSheetBehavior.expandedOffset = topInset
         }
 
