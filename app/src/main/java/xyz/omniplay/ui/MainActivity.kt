@@ -22,6 +22,8 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.os.Handler
+import android.os.Looper
 import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -32,14 +34,19 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.R
 import xyz.omniplay.data.MusicScanner
 import xyz.omniplay.databinding.ActivityMainBinding
+import xyz.omniplay.lyrics.LyricLine
+import xyz.omniplay.lyrics.Lyrics
+import xyz.omniplay.lyrics.LrcLibClient
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.util.AlbumArtLoader
@@ -58,6 +65,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var playbackService: PlaybackService? = null
     private var isBound = false
     private var isUserTrackingSlider = false
+
+    // Lyrics State
+    private var lyricAdapter: LyricAdapter? = null
+    private var currentLyrics: Lyrics? = null
+    private var isLyricsShowing = false
+    private var isUserScrollingLyrics = false
+    private val lyricsScrollResetHandler = Handler(Looper.getMainLooper())
+    private val resetUserScrollingRunnable = Runnable { isUserScrollingLyrics = false }
+    private var lyricsFetchJob: Job? = null
 
     enum class LibraryFilterMode {
         TRACK, ARTIST, ALBUM
@@ -168,6 +184,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupLeftDrawerMenu()
         setupBottomSwipeGesture()
         setupAlbumArtSwipeGesture()
+        setupLyricsView()
         setupTitleDoubleTapGestures()
         setupListeners()
         bindPlaybackService()
@@ -219,13 +236,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Closes left drawer or playlist panel when pressing back button instead of exiting the app.
+     * Closes left drawer, lyrics card, or playlist panel when pressing back button instead of exiting the app.
      */
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isFilterMenuOpen) {
                     closeLeftMenu()
+                } else if (isLyricsShowing) {
+                    closeLyricsCard()
                 } else if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
                     bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                 } else {
@@ -241,6 +260,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     override fun onBackPressed() {
         if (isFilterMenuOpen) {
             closeLeftMenu()
+            return
+        }
+        if (isLyricsShowing) {
+            closeLyricsCard()
             return
         }
         if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
@@ -456,7 +479,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun setupAlbumArtSwipeGesture() {
         var startX = 0f
         var startY = 0f
-        var isDragging = false
+        var isDraggingX = false
+        var isDraggingY = false
         var velocityTracker: VelocityTracker? = null
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         var activeAnimator: ValueAnimator? = null
@@ -536,9 +560,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 MotionEvent.ACTION_DOWN -> {
                     activeAnimator?.cancel()
                     binding.peekAlbumArtCard.animate().cancel()
+                    binding.lyricsCard.animate().cancel()
                     startX = event.rawX
                     startY = event.rawY
-                    isDragging = false
+                    isDraggingX = false
+                    isDraggingY = false
                     currentPeekSong = null
                     peekDirection = 0
                     binding.peekAlbumArtCard.visibility = View.INVISIBLE
@@ -557,33 +583,54 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val deltaX = event.rawX - startX
                     val deltaY = event.rawY - startY
 
-                    if (!isDragging) {
-                        if (Math.abs(deltaX) > 8f && Math.abs(deltaX) > Math.abs(deltaY) * 0.5f) {
-                            isDragging = true
+                    if (!isDraggingX && !isDraggingY) {
+                        if (Math.abs(deltaX) > 8f && Math.abs(deltaX) > Math.abs(deltaY) * 0.7f) {
+                            isDraggingX = true
                             v.parent?.requestDisallowInterceptTouchEvent(true)
-                        } else if (Math.abs(deltaY) > 35f && Math.abs(deltaY) > Math.abs(deltaX) * 2f) {
+                        } else if (deltaY < -8f && Math.abs(deltaY) > Math.abs(deltaX) * 0.7f) {
+                            isDraggingY = true
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                            binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                            binding.lyricsCard.visibility = View.VISIBLE
+                            binding.lyricsCard.translationX = 0f
+                            binding.lyricsCard.translationY = 0f
+                            binding.lyricsCard.scaleX = 0.92f
+                            binding.lyricsCard.scaleY = 0.92f
+                            binding.lyricsCard.alpha = 0.5f
+                            loadLyricsForCurrentSong()
+                        } else if (deltaY > 35f && Math.abs(deltaY) > Math.abs(deltaX) * 2f) {
                             v.parent?.requestDisallowInterceptTouchEvent(false)
                         }
                     }
 
-                    if (isDragging) {
+                    if (isDraggingX) {
                         val cardWidth = v.width.toFloat().coerceAtLeast(1f)
                         val dir = if (deltaX < 0) -1 else 1
                         updatePeekCard(dir)
 
-                        // If no song in that direction, apply rubber band resistance
                         val effectiveDeltaX = if (currentPeekSong == null) deltaX * 0.25f else deltaX
                         val rotationDeg = (effectiveDeltaX / cardWidth) * 12f
                         v.translationX = effectiveDeltaX
+                        v.translationY = 0f
                         v.rotation = rotationDeg
 
-                        // Reveal peek card behind with swift, responsive scaling
                         if (currentPeekSong != null) {
                             val progress = (Math.abs(effectiveDeltaX) / (cardWidth * 0.35f)).coerceIn(0f, 1f)
                             binding.peekAlbumArtCard.scaleX = 0.92f + 0.08f * progress
                             binding.peekAlbumArtCard.scaleY = 0.92f + 0.08f * progress
                             binding.peekAlbumArtCard.alpha = 0.5f + 0.5f * progress
                         }
+                    } else if (isDraggingY) {
+                        val cardHeight = v.height.toFloat().coerceAtLeast(1f)
+                        val effectiveDeltaY = if (deltaY < 0f) deltaY else deltaY * 0.2f
+                        v.translationY = effectiveDeltaY
+                        v.translationX = 0f
+                        v.rotation = 0f
+
+                        val progress = (Math.abs(effectiveDeltaY) / (cardHeight * 0.35f)).coerceIn(0f, 1f)
+                        binding.lyricsCard.scaleX = 0.92f + 0.08f * progress
+                        binding.lyricsCard.scaleY = 0.92f + 0.08f * progress
+                        binding.lyricsCard.alpha = 0.5f + 0.5f * progress
                     }
                     true
                 }
@@ -591,7 +638,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     velocityTracker?.addMovement(event)
                     v.parent?.requestDisallowInterceptTouchEvent(false)
 
-                    if (isDragging) {
+                    if (isDraggingX) {
                         velocityTracker?.computeCurrentVelocity(1000)
                         val xVel = velocityTracker?.xVelocity ?: 0f
                         val currentX = v.translationX
@@ -600,9 +647,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val ratio = absX / cardWidth
                         val isCanceled = (event.actionMasked == MotionEvent.ACTION_CANCEL)
 
-                        // 1. Swiping over 50% unconditionally commits as long as target exists.
-                        // 2. Swiping 18% - 50% commits unless explicitly flung backward with high velocity.
-                        // 3. Small movements commit on flick (>250 px/s).
                         val isSwipeNext = !isCanceled && currentX < 0 && (
                             ratio >= 0.50f ||
                             (ratio >= 0.18f && xVel < 350f) ||
@@ -631,13 +675,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
-                                var isCanceled = false
+                                var isCanc = false
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationCancel(animation: Animator) {
-                                        isCanceled = true
+                                        isCanc = true
                                     }
                                     override fun onAnimationEnd(animation: Animator) {
-                                        if (isCanceled) return
+                                        if (isCanc) return
                                         val songBefore = playbackService?.currentSong
                                         playbackService?.skipNext(forceNext = true)
                                         val songAfter = playbackService?.currentSong
@@ -647,7 +691,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                                 binding.albumArtImage.setImageDrawable(it)
                                             }
                                         } else {
-                                            // Fallback: restore current song artwork if track didn't change
                                             val current = songBefore ?: songAfter
                                             if (current != null) {
                                                 val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
@@ -660,6 +703,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         }
 
                                         v.translationX = 0f
+                                        v.translationY = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                         binding.peekAlbumArtCard.scaleX = 0.90f
@@ -685,13 +729,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
-                                var isCanceled = false
+                                var isCanc = false
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationCancel(animation: Animator) {
-                                        isCanceled = true
+                                        isCanc = true
                                     }
                                     override fun onAnimationEnd(animation: Animator) {
-                                        if (isCanceled) return
+                                        if (isCanc) return
                                         val songBefore = playbackService?.currentSong
                                         playbackService?.skipPrevious(forcePrevious = true)
                                         val songAfter = playbackService?.currentSong
@@ -701,7 +745,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                                 binding.albumArtImage.setImageDrawable(it)
                                             }
                                         } else {
-                                            // Fallback: restore current song artwork if track didn't change
                                             val current = songBefore ?: songAfter
                                             if (current != null) {
                                                 val cached = AlbumArtLoader.getCachedAlbumArt(current.id)
@@ -714,6 +757,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         }
 
                                         v.translationX = 0f
+                                        v.translationY = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                         binding.peekAlbumArtCard.scaleX = 0.90f
@@ -726,7 +770,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 start()
                             }
                         } else {
-                            // User dragged back, no song in that direction, or didn't cross threshold -> smoothly snap back!
                             binding.peekAlbumArtCard.animate()
                                 .scaleX(0.90f).scaleY(0.90f).alpha(0.6f)
                                 .setDuration(200L).start()
@@ -739,14 +782,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                     v.translationX = x
                                     v.rotation = (x / cardWidth) * 12f
                                 }
-                                var isCanceled = false
+                                var isCanc = false
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationCancel(animation: Animator) {
-                                        isCanceled = true
+                                        isCanc = true
                                     }
                                     override fun onAnimationEnd(animation: Animator) {
-                                        if (isCanceled) return
+                                        if (isCanc) return
                                         v.translationX = 0f
+                                        v.translationY = 0f
                                         v.rotation = 0f
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                         binding.peekAlbumArtCard.scaleX = 0.90f
@@ -759,10 +803,87 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                 start()
                             }
                         }
-                        isDragging = false
+                        isDraggingX = false
+                    } else if (isDraggingY) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = velocityTracker?.yVelocity ?: 0f
+                        val currentY = v.translationY
+                        val cardHeight = v.height.toFloat().coerceAtLeast(1f)
+                        val absY = Math.abs(currentY)
+                        val ratio = absY / cardHeight
+                        val isCanceled = (event.actionMasked == MotionEvent.ACTION_CANCEL)
+
+                        // Upward swipe commits to opening lyrics if dragged > 22% or flicked up
+                        val isOpenLyrics = !isCanceled && currentY < 0 && (
+                            ratio >= 0.22f ||
+                            (ratio >= 0.10f && yVel < -300f) ||
+                            (absY >= 15f && yVel < -600f)
+                        )
+
+                        if (isOpenLyrics) {
+                            val targetY = -cardHeight * 1.25f
+                            binding.lyricsCard.animate()
+                                .scaleX(1f).scaleY(1f).alpha(1f)
+                                .setDuration(180L).start()
+
+                            activeAnimator = ValueAnimator.ofFloat(currentY, targetY).apply {
+                                duration = 180L
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { anim ->
+                                    v.translationY = anim.animatedValue as Float
+                                }
+                                var isCanc = false
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationCancel(animation: Animator) {
+                                        isCanc = true
+                                    }
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        if (isCanc) return
+                                        v.visibility = View.INVISIBLE
+                                        v.translationY = 0f
+                                        isLyricsShowing = true
+                                        binding.lyricsCard.visibility = View.VISIBLE
+                                        binding.lyricsCard.scaleX = 1f
+                                        binding.lyricsCard.scaleY = 1f
+                                        binding.lyricsCard.alpha = 1f
+                                        playbackService?.let { service ->
+                                            updateLyricsProgress(service.getCurrentPosition().toLong())
+                                        }
+                                        activeAnimator = null
+                                    }
+                                })
+                                start()
+                            }
+                        } else {
+                            binding.lyricsCard.animate()
+                                .scaleX(0.92f).scaleY(0.92f).alpha(0.5f)
+                                .setDuration(180L)
+                                .withEndAction {
+                                    if (!isLyricsShowing) {
+                                        binding.lyricsCard.visibility = View.INVISIBLE
+                                    }
+                                }
+                                .start()
+
+                            activeAnimator = ValueAnimator.ofFloat(currentY, 0f).apply {
+                                duration = 180L
+                                interpolator = DecelerateInterpolator()
+                                addUpdateListener { anim ->
+                                    v.translationY = anim.animatedValue as Float
+                                }
+                                addListener(object : AnimatorListenerAdapter() {
+                                    override fun onAnimationEnd(animation: Animator) {
+                                        v.translationY = 0f
+                                        activeAnimator = null
+                                    }
+                                })
+                                start()
+                            }
+                        }
+                        isDraggingY = false
                     } else {
-                        if (v.translationX != 0f) {
-                            v.animate().translationX(0f).rotation(0f).setDuration(150L).start()
+                        if (v.translationX != 0f || v.translationY != 0f) {
+                            v.animate().translationX(0f).translationY(0f).rotation(0f).setDuration(150L).start()
                         }
                         if (event.actionMasked == MotionEvent.ACTION_UP) {
                             v.performClick()
@@ -775,7 +896,423 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 else -> false
             }
         }
+
+        binding.albumArtCard.setOnClickListener {
+            openLyricsCard()
+        }
     }
+
+    /**
+     * Initializes the lyrics view components, adapter, and interaction listeners.
+     */
+    private fun setupLyricsView() {
+        lyricAdapter = LyricAdapter { line ->
+            playbackService?.seekTo(line.timeMs.toInt())
+            binding.playbackSlider.setProgress(line.timeMs)
+            binding.currentTimeText.text = Song.formatTime(line.timeMs)
+            isUserScrollingLyrics = false
+            try {
+                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (ignored: Exception) {}
+        }
+        binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(this)
+        binding.lyricsRecyclerView.adapter = lyricAdapter
+
+        binding.lyricsRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                super.onScrollStateChanged(recyclerView, newState)
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    isUserScrollingLyrics = true
+                    lyricsScrollResetHandler.removeCallbacks(resetUserScrollingRunnable)
+                } else if (newState == RecyclerView.SCROLL_STATE_IDLE && isUserScrollingLyrics) {
+                    lyricsScrollResetHandler.removeCallbacks(resetUserScrollingRunnable)
+                    lyricsScrollResetHandler.postDelayed(resetUserScrollingRunnable, 3500L)
+                }
+            }
+        })
+
+        binding.btnCloseLyrics.setOnClickListener {
+            closeLyricsCard()
+        }
+
+        binding.btnLyricsRetry.setOnClickListener {
+            loadLyricsForCurrentSong(forceRefresh = true)
+        }
+
+        setupLyricsCloseGestures()
+    }
+
+    /**
+     * Interactive horizontal gesture to close lyrics (slide left or right 1:1).
+     */
+    private fun setupLyricsCloseGestures() {
+        val card = binding.lyricsCard
+
+        fun handleSwipeMove(dx: Float) {
+            card.translationX = dx
+            val cardWidth = card.width.toFloat().coerceAtLeast(1f)
+            val progress = (Math.abs(dx) / (cardWidth * 0.35f)).coerceIn(0f, 1f)
+            binding.albumArtCard.visibility = View.VISIBLE
+            binding.albumArtCard.translationX = 0f
+            binding.albumArtCard.translationY = 0f
+            binding.albumArtCard.scaleX = 0.92f + 0.08f * progress
+            binding.albumArtCard.scaleY = 0.92f + 0.08f * progress
+            binding.albumArtCard.alpha = 0.5f + 0.5f * progress
+        }
+
+        fun handleSwipeUp(xVel: Float) {
+            val currentX = card.translationX
+            val cardWidth = card.width.toFloat().coerceAtLeast(1f)
+            val absX = Math.abs(currentX)
+            val ratio = absX / cardWidth
+
+            val isClose = ratio >= 0.22f ||
+                (ratio >= 0.10f && Math.abs(xVel) > 300f) ||
+                (absX >= 15f && Math.abs(xVel) > 600f)
+
+            if (isClose) {
+                val targetX = if (currentX >= 0) cardWidth * 1.25f else -cardWidth * 1.25f
+                binding.albumArtCard.animate()
+                    .scaleX(1f).scaleY(1f).alpha(1f)
+                    .setDuration(180L).start()
+
+                card.animate()
+                    .translationX(targetX)
+                    .setDuration(180L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .withEndAction {
+                        card.visibility = View.INVISIBLE
+                        card.translationX = 0f
+                        isLyricsShowing = false
+                        binding.albumArtCard.visibility = View.VISIBLE
+                        binding.albumArtCard.translationX = 0f
+                        binding.albumArtCard.translationY = 0f
+                        binding.albumArtCard.scaleX = 1f
+                        binding.albumArtCard.scaleY = 1f
+                        binding.albumArtCard.alpha = 1f
+                    }
+                    .start()
+            } else {
+                card.animate()
+                    .translationX(0f)
+                    .setDuration(180L)
+                    .setInterpolator(DecelerateInterpolator())
+                    .start()
+
+                binding.albumArtCard.animate()
+                    .scaleX(0.92f).scaleY(0.92f).alpha(0.5f)
+                    .setDuration(180L)
+                    .withEndAction {
+                        if (isLyricsShowing) {
+                            binding.albumArtCard.visibility = View.INVISIBLE
+                        }
+                    }
+                    .start()
+            }
+        }
+
+        // Gesture interceptor on lyrics RecyclerView
+        binding.lyricsRecyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            private var startX = 0f
+            private var startY = 0f
+            private var isSwipingToClose = false
+            private var velocityTracker: VelocityTracker? = null
+
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startX = e.rawX
+                        startY = e.rawY
+                        isSwipingToClose = false
+                        velocityTracker?.recycle()
+                        velocityTracker = VelocityTracker.obtain().apply { addMovement(e) }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = e.rawX - startX
+                        val dy = e.rawY - startY
+                        if (!isSwipingToClose && Math.abs(dx) > 12f && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                            isSwipingToClose = true
+                            rv.parent?.requestDisallowInterceptTouchEvent(true)
+                            return true
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (isSwipingToClose) {
+                            velocityTracker?.addMovement(e)
+                            velocityTracker?.computeCurrentVelocity(1000)
+                            val xVel = velocityTracker?.xVelocity ?: 0f
+                            handleSwipeUp(xVel)
+                            velocityTracker?.recycle()
+                            velocityTracker = null
+                            isSwipingToClose = false
+                            return true
+                        }
+                        velocityTracker?.recycle()
+                        velocityTracker = null
+                    }
+                }
+                return isSwipingToClose
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_MOVE -> {
+                        velocityTracker?.addMovement(e)
+                        val dx = e.rawX - startX
+                        handleSwipeMove(dx)
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        velocityTracker?.addMovement(e)
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = velocityTracker?.xVelocity ?: 0f
+                        handleSwipeUp(xVel)
+                        velocityTracker?.recycle()
+                        velocityTracker = null
+                        isSwipingToClose = false
+                    }
+                }
+            }
+        })
+
+        // Touch listener on Header bar, Plain scroll, and Status layout
+        fun attachCloseTouchListener(view: View) {
+            var sX = 0f
+            var sY = 0f
+            var isSwipe = false
+            var vTracker: VelocityTracker? = null
+
+            view.setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        sX = event.rawX
+                        sY = event.rawY
+                        isSwipe = false
+                        vTracker?.recycle()
+                        vTracker = VelocityTracker.obtain().apply { addMovement(event) }
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        vTracker?.addMovement(event)
+                        val dx = event.rawX - sX
+                        val dy = event.rawY - sY
+                        if (!isSwipe && Math.abs(dx) > 10f && Math.abs(dx) > Math.abs(dy) * 0.8f) {
+                            isSwipe = true
+                        }
+                        if (isSwipe) {
+                            handleSwipeMove(dx)
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (isSwipe) {
+                            vTracker?.addMovement(event)
+                            vTracker?.computeCurrentVelocity(1000)
+                            val xVel = vTracker?.xVelocity ?: 0f
+                            handleSwipeUp(xVel)
+                        } else {
+                            if (event.actionMasked == MotionEvent.ACTION_UP && v == binding.lyricsHeaderBar) {
+                                closeLyricsCard()
+                            }
+                        }
+                        vTracker?.recycle()
+                        vTracker = null
+                        isSwipe = false
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+
+        attachCloseTouchListener(binding.lyricsHeaderBar)
+        attachCloseTouchListener(binding.lyricsPlainScroll)
+        attachCloseTouchListener(binding.lyricsStatusLayout)
+    }
+
+    private fun openLyricsCard() {
+        if (isLyricsShowing) return
+        val card = binding.albumArtCard
+        val cardHeight = card.height.toFloat().coerceAtLeast(1f)
+
+        binding.peekAlbumArtCard.visibility = View.INVISIBLE
+        binding.lyricsCard.visibility = View.VISIBLE
+        binding.lyricsCard.translationX = 0f
+        binding.lyricsCard.translationY = 0f
+        binding.lyricsCard.scaleX = 0.94f
+        binding.lyricsCard.scaleY = 0.94f
+        binding.lyricsCard.alpha = 0.6f
+
+        loadLyricsForCurrentSong()
+
+        binding.lyricsCard.animate()
+            .scaleX(1f).scaleY(1f).alpha(1f)
+            .setDuration(220L).start()
+
+        card.animate()
+            .translationY(-cardHeight * 1.25f)
+            .setDuration(220L)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                card.visibility = View.INVISIBLE
+                card.translationY = 0f
+                isLyricsShowing = true
+                binding.lyricsCard.scaleX = 1f
+                binding.lyricsCard.scaleY = 1f
+                binding.lyricsCard.alpha = 1f
+                playbackService?.let { service ->
+                    updateLyricsProgress(service.getCurrentPosition().toLong())
+                }
+            }
+            .start()
+    }
+
+    private fun closeLyricsCard() {
+        if (!isLyricsShowing) return
+        val card = binding.lyricsCard
+        val cardWidth = card.width.toFloat().coerceAtLeast(1f)
+
+        binding.albumArtCard.visibility = View.VISIBLE
+        binding.albumArtCard.translationX = 0f
+        binding.albumArtCard.translationY = 0f
+        binding.albumArtCard.scaleX = 0.94f
+        binding.albumArtCard.scaleY = 0.94f
+        binding.albumArtCard.alpha = 0.6f
+
+        binding.albumArtCard.animate()
+            .scaleX(1f).scaleY(1f).alpha(1f)
+            .setDuration(200L).start()
+
+        card.animate()
+            .translationX(cardWidth * 1.25f)
+            .setDuration(200L)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                card.visibility = View.INVISIBLE
+                card.translationX = 0f
+                isLyricsShowing = false
+                binding.albumArtCard.scaleX = 1f
+                binding.albumArtCard.scaleY = 1f
+                binding.albumArtCard.alpha = 1f
+            }
+            .start()
+    }
+
+    private fun loadLyricsForCurrentSong(forceRefresh: Boolean = false) {
+        val song = playbackService?.currentSong ?: return
+        loadLyricsForSong(song, forceRefresh)
+    }
+
+    private fun loadLyricsForSong(song: Song, forceRefresh: Boolean = false) {
+        lyricsFetchJob?.cancel()
+        if (currentLyrics?.songId == song.id && !forceRefresh) {
+            if (isLyricsShowing) {
+                renderLyrics(currentLyrics)
+            }
+            return
+        }
+
+        if (isLyricsShowing) {
+            showLyricsLoading()
+        }
+
+        lyricsFetchJob = lifecycleScope.launch {
+            val lyrics = LrcLibClient.getLyrics(this@MainActivity, song)
+            if (playbackService?.currentSong?.id == song.id) {
+                currentLyrics = lyrics
+                if (isLyricsShowing) {
+                    renderLyrics(lyrics)
+                }
+            }
+        }
+    }
+
+    private fun showLyricsLoading() {
+        if (!::binding.isInitialized) return
+        binding.lyricsRecyclerView.visibility = View.GONE
+        binding.lyricsPlainScroll.visibility = View.GONE
+        binding.lyricsStatusLayout.visibility = View.VISIBLE
+        binding.lyricsProgressBar.visibility = View.VISIBLE
+        binding.lyricsStatusIcon.visibility = View.GONE
+        binding.lyricsStatusText.text = "Loading lyrics..."
+        binding.btnLyricsRetry.visibility = View.GONE
+    }
+
+    private fun renderLyrics(lyrics: Lyrics?) {
+        if (!::binding.isInitialized) return
+        if (lyrics == null) {
+            binding.lyricsRecyclerView.visibility = View.GONE
+            binding.lyricsPlainScroll.visibility = View.GONE
+            binding.lyricsStatusLayout.visibility = View.VISIBLE
+            binding.lyricsProgressBar.visibility = View.GONE
+            binding.lyricsStatusIcon.visibility = View.VISIBLE
+            binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+            binding.lyricsStatusText.text = "No lyrics found"
+            binding.btnLyricsRetry.visibility = View.VISIBLE
+            return
+        }
+
+        if (lyrics.isInstrumental) {
+            binding.lyricsRecyclerView.visibility = View.GONE
+            binding.lyricsPlainScroll.visibility = View.GONE
+            binding.lyricsStatusLayout.visibility = View.VISIBLE
+            binding.lyricsProgressBar.visibility = View.GONE
+            binding.lyricsStatusIcon.visibility = View.VISIBLE
+            binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+            binding.lyricsStatusText.text = "Instrumental Track"
+            binding.btnLyricsRetry.visibility = View.GONE
+            return
+        }
+
+        if (lyrics.hasSynced) {
+            binding.lyricsStatusLayout.visibility = View.GONE
+            binding.lyricsPlainScroll.visibility = View.GONE
+            binding.lyricsRecyclerView.visibility = View.VISIBLE
+            lyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
+            playbackService?.let { service ->
+                updateLyricsProgress(service.getCurrentPosition().toLong())
+            }
+            return
+        }
+
+        if (lyrics.hasPlain) {
+            binding.lyricsStatusLayout.visibility = View.GONE
+            binding.lyricsRecyclerView.visibility = View.GONE
+            binding.lyricsPlainScroll.visibility = View.VISIBLE
+            binding.lyricsPlainText.text = lyrics.plainLyrics
+            return
+        }
+
+        binding.lyricsRecyclerView.visibility = View.GONE
+        binding.lyricsPlainScroll.visibility = View.GONE
+        binding.lyricsStatusLayout.visibility = View.VISIBLE
+        binding.lyricsProgressBar.visibility = View.GONE
+        binding.lyricsStatusIcon.visibility = View.VISIBLE
+        binding.lyricsStatusText.text = "No lyrics available"
+        binding.btnLyricsRetry.visibility = View.VISIBLE
+    }
+
+    private fun updateLyricsProgress(currentPositionMs: Long) {
+        if (!::binding.isInitialized || !isLyricsShowing) return
+        val lyrics = currentLyrics ?: return
+        val synced = lyrics.syncedLyrics ?: return
+        if (synced.isEmpty()) return
+
+        val activeIndex = synced.indexOfLast { it.timeMs <= currentPositionMs }
+        val adapter = lyricAdapter ?: return
+        if (activeIndex != adapter.activeIndex) {
+            val changed = adapter.setActiveIndex(activeIndex)
+            if (changed && activeIndex >= 0 && !isUserScrollingLyrics) {
+                val layoutManager = binding.lyricsRecyclerView.layoutManager as? LinearLayoutManager
+                if (layoutManager != null && binding.lyricsRecyclerView.height > 0) {
+                    val offset = (binding.lyricsRecyclerView.height / 2) - dpToPx(24)
+                    layoutManager.scrollToPositionWithOffset(activeIndex, offset)
+                }
+            }
+        }
+    }
+
+    private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
     /**
      * Determines whether the given album art bitmap is perceived as bright or dark,
@@ -1777,6 +2314,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (song == null) {
                 setupDefaultView()
                 songAdapter?.setCurrentPlayingSongId(-1L)
+                currentLyrics = null
+                renderLyrics(null)
                 return@runOnUiThread
             }
 
@@ -1799,6 +2338,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.albumArtCard.translationX = 0f
             binding.albumArtCard.rotation = 0f
             binding.peekAlbumArtCard.visibility = View.INVISIBLE
+
+            if (!isLyricsShowing) {
+                binding.albumArtCard.visibility = View.VISIBLE
+                binding.albumArtCard.translationY = 0f
+                binding.lyricsCard.visibility = View.INVISIBLE
+            }
+
+            loadLyricsForSong(song)
 
             val cachedArt = AlbumArtLoader.getCachedAlbumArt(song.id)
             if (cachedArt != null) {
@@ -1977,6 +2524,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
                 binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
             }
+            if (isLyricsShowing) {
+                updateLyricsProgress(currentPositionMs.toLong())
+            }
         }
     }
 
@@ -2096,6 +2646,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         }
                         updatePlayPauseButton(isPlaying = true)
                         updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
+
+                        val streamSong = Song(
+                            id = (title + artist).hashCode().toLong(),
+                            title = title,
+                            artist = artist,
+                            album = "",
+                            duration = dur,
+                            contentUri = Uri.EMPTY
+                        )
+                        loadLyricsForSong(streamSong)
                     }
                 }
             }
@@ -2135,6 +2695,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                     binding.playbackSlider.setProgress(currentPositionMs)
                     binding.currentTimeText.text = Song.formatTime(currentPositionMs)
+                    if (isLyricsShowing) {
+                        updateLyricsProgress(currentPositionMs)
+                    }
                 }
             }
         }

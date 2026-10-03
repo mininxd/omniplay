@@ -44,8 +44,9 @@
 -dontwarn kotlin.**
 -dontwarn kotlinx.coroutines.**
 
-# Keep Models and ViewBinding
+# Keep Models, Lyrics, and ViewBinding
 -keep class xyz.omniplay.model.** { *; }
+-keep class xyz.omniplay.lyrics.** { *; }
 -keep class xyz.omniplay.databinding.** { *; }
 
 # Strip debugging attributes
