@@ -29,9 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
-import androidx.core.view.GravityCompat
 import androidx.core.view.WindowCompat
-import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -74,6 +72,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var selectedFilterValue: String? = null
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
+
+    private var isFilterMenuOpen = false
+    private var filterDrawerAnimator: ValueAnimator? = null
 
     private var pendingExternalUri: Uri? = null
 
@@ -223,8 +224,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    binding.drawerLayout.closeDrawer(GravityCompat.START)
+                if (isFilterMenuOpen) {
+                    closeLeftMenu()
                 } else if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
                     bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                 } else {
@@ -238,8 +239,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        if (isFilterMenuOpen) {
+            closeLeftMenu()
             return
         }
         if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
@@ -843,18 +844,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     /**
      * Handles double tap in the empty space left and right of the song titles to seek 5 seconds,
-     * and horizontal slide/swipe to the right in the titles area to open the left side menu.
+     * and horizontal slide/swipe to the right in the titles area to open the left filter library menu.
+     * The slide tracks the user's finger in real-time 1:1 without sudden snapping.
      */
     private fun setupTitleDoubleTapGestures() {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
         var startX = 0f
         var startY = 0f
-        var isSwipedRight = false
+        var isDraggingDrawer = false
+        var velocityTracker: VelocityTracker? = null
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isDraggingDrawer) return false
                 val width = binding.titleGestureArea.width.toFloat().coerceAtLeast(1f)
                 if (e.x <= width * 0.40f) {
                     seekRelative(-5000L)
@@ -865,66 +869,163 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 return true
             }
-
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (e1 != null) {
-                    val dx = e2.x - e1.x
-                    val dy = e2.y - e1.y
-                    if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.2f && velocityX > 150) {
-                        openLeftMenu()
-                        return true
-                    }
-                }
-                return false
-            }
         })
 
-        binding.titleGestureArea.setOnTouchListener { _, event ->
+        binding.titleGestureArea.setOnTouchListener { v, event ->
+            if (isFilterMenuOpen) {
+                return@setOnTouchListener false
+            }
+
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    filterDrawerAnimator?.cancel()
                     startX = event.rawX
                     startY = event.rawY
-                    isSwipedRight = false
+                    isDraggingDrawer = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    gestureDetector.onTouchEvent(event)
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - startX
-                    val dy = event.rawY - startY
-                    if (!isSwipedRight && dx > touchSlop * 2 && Math.abs(dx) > Math.abs(dy) * 1.3f) {
-                        isSwipedRight = true
-                        openLeftMenu()
+                    velocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - startX
+                    val deltaY = event.rawY - startY
+
+                    if (!isDraggingDrawer) {
+                        // Slide trigger is on titles area to center UI maybe 60%
+                        val titleAreaWidth = v.width.toFloat().coerceAtLeast(1f)
+                        val touchXInView = event.x - deltaX
+                        val inTriggerZone = touchXInView <= titleAreaWidth * 0.70f
+
+                        if (inTriggerZone && deltaX > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
+                            isDraggingDrawer = true
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                            val drawerWidth = getDrawerWidth()
+                            binding.leftDrawerMenu.translationX = -drawerWidth
+                            binding.leftDrawerMenu.visibility = View.VISIBLE
+                            binding.filterDrawerScrim.visibility = View.VISIBLE
+                        } else {
+                            gestureDetector.onTouchEvent(event)
+                        }
                     }
+
+                    if (isDraggingDrawer) {
+                        val drawerWidth = getDrawerWidth()
+                        val targetTranslation = (-drawerWidth + deltaX).coerceIn(-drawerWidth, 0f)
+                        binding.leftDrawerMenu.translationX = targetTranslation
+                        val progress = ((targetTranslation + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                        binding.filterDrawerScrim.alpha = progress * 0.6f
+                    }
+                    true
                 }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isDraggingDrawer) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = velocityTracker?.xVelocity ?: 0f
+                        val drawerWidth = getDrawerWidth()
+                        val currentTrans = binding.leftDrawerMenu.translationX
+                        val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+
+                        // Trigger open if flung right (>700) or dragged towards center UI (~55%-60% progress)
+                        val shouldOpen = when {
+                            xVel > 700f -> true
+                            xVel < -700f -> false
+                            else -> progress >= 0.55f
+                        }
+                        animateLeftMenu(toOpen = shouldOpen, currentTrans = currentTrans, drawerWidth = drawerWidth)
+                        isDraggingDrawer = false
+                    } else {
+                        gestureDetector.onTouchEvent(event)
+                        if (event.actionMasked == MotionEvent.ACTION_UP) {
+                            v.performClick()
+                        }
+                    }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
+                    true
+                }
+                else -> false
             }
-            gestureDetector.onTouchEvent(event)
-            true
         }
 
-        // Slide to right in the top Omniplay title bar
+        // Slide to right in the top Omniplay title bar or press to open
         var titleStartX = 0f
         var titleStartY = 0f
-        var titleSwipedRight = false
+        var isTitleDragging = false
+        var titleVelocityTracker: VelocityTracker? = null
+
         binding.appTitleText.setOnTouchListener { v, event ->
+            if (isFilterMenuOpen) {
+                return@setOnTouchListener false
+            }
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    filterDrawerAnimator?.cancel()
                     titleStartX = event.rawX
                     titleStartY = event.rawY
-                    titleSwipedRight = false
+                    isTitleDragging = false
+                    titleVelocityTracker?.recycle()
+                    titleVelocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - titleStartX
-                    val dy = event.rawY - titleStartY
-                    if (!titleSwipedRight && dx > touchSlop * 1.5f && Math.abs(dx) > Math.abs(dy) * 1.2f) {
-                        titleSwipedRight = true
+                    titleVelocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - titleStartX
+                    val deltaY = event.rawY - titleStartY
+
+                    if (!isTitleDragging && deltaX > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
+                        isTitleDragging = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        val drawerWidth = getDrawerWidth()
+                        binding.leftDrawerMenu.translationX = -drawerWidth
+                        binding.leftDrawerMenu.visibility = View.VISIBLE
+                        binding.filterDrawerScrim.visibility = View.VISIBLE
+                    }
+
+                    if (isTitleDragging) {
+                        val drawerWidth = getDrawerWidth()
+                        val targetTranslation = (-drawerWidth + deltaX).coerceIn(-drawerWidth, 0f)
+                        binding.leftDrawerMenu.translationX = targetTranslation
+                        val progress = ((targetTranslation + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                        binding.filterDrawerScrim.alpha = progress * 0.6f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    titleVelocityTracker?.addMovement(event)
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isTitleDragging) {
+                        titleVelocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = titleVelocityTracker?.xVelocity ?: 0f
+                        val drawerWidth = getDrawerWidth()
+                        val currentTrans = binding.leftDrawerMenu.translationX
+                        val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+
+                        val shouldOpen = when {
+                            xVel > 700f -> true
+                            xVel < -700f -> false
+                            else -> progress >= 0.55f
+                        }
+                        animateLeftMenu(toOpen = shouldOpen, currentTrans = currentTrans, drawerWidth = drawerWidth)
+                        isTitleDragging = false
+                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
                         openLeftMenu()
                     }
+                    titleVelocityTracker?.recycle()
+                    titleVelocityTracker = null
+                    true
                 }
-                MotionEvent.ACTION_UP -> {
-                    if (!titleSwipedRight) {
-                        v.performClick()
-                    }
-                }
+                else -> false
             }
-            true
         }
     }
 
@@ -959,9 +1060,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupListeners() {
-        // Menu button (Hamburger) -> open left side menu
-        binding.btnMenu.setOnClickListener {
-            openLeftMenu()
+        // Menu button (Hamburger) -> open options popup menu
+        binding.btnMenu.setOnClickListener { view ->
+            showOptionsMenu(view)
         }
 
         // Omniplay Title -> press to open left side menu
@@ -1152,39 +1253,158 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private fun getDrawerWidth(): Float {
+        return binding.leftDrawerMenu.width.toFloat().takeIf { it > 0f }
+            ?: (320f * resources.displayMetrics.density)
+    }
+
     private fun openLeftMenu() {
-        if (!binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            binding.drawerLayout.openDrawer(GravityCompat.START)
-            try {
-                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            } catch (ignored: Exception) {}
-        }
+        if (isFilterMenuOpen) return
+        val drawer = binding.leftDrawerMenu
+        val scrim = binding.filterDrawerScrim
+        drawer.visibility = View.VISIBLE
+        scrim.visibility = View.VISIBLE
+        val drawerWidth = getDrawerWidth()
+        val currentTrans = drawer.translationX.coerceAtMost(0f)
+        animateLeftMenu(toOpen = true, currentTrans = currentTrans, drawerWidth = drawerWidth)
+        try {
+            binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        } catch (ignored: Exception) {}
     }
 
     private fun closeLeftMenu() {
-        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
-            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        if (!isFilterMenuOpen && binding.leftDrawerMenu.visibility != View.VISIBLE) return
+        val drawerWidth = getDrawerWidth()
+        animateLeftMenu(toOpen = false, currentTrans = binding.leftDrawerMenu.translationX, drawerWidth = drawerWidth)
+    }
+
+    private fun animateLeftMenu(toOpen: Boolean, currentTrans: Float, drawerWidth: Float) {
+        filterDrawerAnimator?.cancel()
+        val targetX = if (toOpen) 0f else -drawerWidth
+        val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+        val remaining = if (toOpen) (1f - progress) else progress
+        val duration = (260L * remaining).toLong().coerceIn(120L, 280L)
+
+        binding.leftDrawerMenu.visibility = View.VISIBLE
+        binding.filterDrawerScrim.visibility = View.VISIBLE
+
+        filterDrawerAnimator = ValueAnimator.ofFloat(currentTrans, targetX).apply {
+            this.duration = duration
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                val v = anim.animatedValue as Float
+                binding.leftDrawerMenu.translationX = v
+                val p = ((v + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                binding.filterDrawerScrim.alpha = p * 0.6f
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (toOpen) {
+                        binding.leftDrawerMenu.translationX = 0f
+                        binding.filterDrawerScrim.alpha = 0.6f
+                        isFilterMenuOpen = true
+                    } else {
+                        binding.leftDrawerMenu.translationX = -drawerWidth
+                        binding.leftDrawerMenu.visibility = View.GONE
+                        binding.filterDrawerScrim.alpha = 0f
+                        binding.filterDrawerScrim.visibility = View.GONE
+                        isFilterMenuOpen = false
+                    }
+                    filterDrawerAnimator = null
+                }
+            })
+            start()
         }
     }
 
     private fun setupLeftDrawerMenu() {
-        // Lock drawer so sliding/swiping from edge or anywhere else on screen will NOT open it.
-        // Opening only works via gestures/clicks directly on the titles.
-        binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
-        binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
-            override fun onDrawerOpened(drawerView: View) {
-                // When opened, unlock so user can drag it back closed or tap outside to dismiss
-                binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
-            }
-
-            override fun onDrawerClosed(drawerView: View) {
-                // When closed, re-lock so swiping elsewhere does not open the drawer
-                binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
-            }
-        })
+        binding.leftDrawerMenu.post {
+            val drawerWidth = getDrawerWidth()
+            binding.leftDrawerMenu.translationX = -drawerWidth
+            binding.leftDrawerMenu.visibility = View.GONE
+            binding.filterDrawerScrim.alpha = 0f
+            binding.filterDrawerScrim.visibility = View.GONE
+        }
 
         binding.btnCloseDrawer.setOnClickListener {
             closeLeftMenu()
+        }
+
+        binding.filterDrawerScrim.setOnClickListener {
+            closeLeftMenu()
+        }
+
+        // Allow dragging drawer back closed
+        var closeStartX = 0f
+        var closeStartY = 0f
+        var isDraggingClose = false
+        var closeVelocityTracker: VelocityTracker? = null
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+
+        binding.leftDrawerMenu.setOnTouchListener { _, event ->
+            if (!isFilterMenuOpen) return@setOnTouchListener false
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    filterDrawerAnimator?.cancel()
+                    closeStartX = event.rawX
+                    closeStartY = event.rawY
+                    isDraggingClose = false
+                    closeVelocityTracker?.recycle()
+                    closeVelocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    closeVelocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - closeStartX
+                    val deltaY = event.rawY - closeStartY
+
+                    if (!isDraggingClose && deltaX < -touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
+                        isDraggingClose = true
+                        binding.leftDrawerMenu.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+
+                    if (isDraggingClose) {
+                        val drawerWidth = getDrawerWidth()
+                        val targetTranslation = deltaX.coerceIn(-drawerWidth, 0f)
+                        binding.leftDrawerMenu.translationX = targetTranslation
+                        val progress = ((targetTranslation + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                        binding.filterDrawerScrim.alpha = progress * 0.6f
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    closeVelocityTracker?.addMovement(event)
+                    binding.leftDrawerMenu.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isDraggingClose) {
+                        closeVelocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = closeVelocityTracker?.xVelocity ?: 0f
+                        val drawerWidth = getDrawerWidth()
+                        val progress = ((binding.leftDrawerMenu.translationX + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+
+                        val shouldStayOpen = when {
+                            xVel < -700f -> false
+                            xVel > 700f -> true
+                            else -> progress >= 0.55f
+                        }
+                        animateLeftMenu(toOpen = shouldStayOpen, currentTrans = binding.leftDrawerMenu.translationX, drawerWidth = drawerWidth)
+                        isDraggingClose = false
+                        closeVelocityTracker?.recycle()
+                        closeVelocityTracker = null
+                        true
+                    } else {
+                        closeVelocityTracker?.recycle()
+                        closeVelocityTracker = null
+                        false
+                    }
+                }
+                else -> false
+            }
         }
 
         drawerFilterAdapter = DrawerFilterAdapter { item ->
@@ -1204,55 +1424,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.btnClearFilter.setOnClickListener {
             clearFilter()
-        }
-
-        binding.settingMusicFolder.setOnClickListener {
-            closeLeftMenu()
-            openFolderPicker()
-        }
-        updateFolderDisplay()
-
-        binding.settingRescan.setOnClickListener {
-            closeLeftMenu()
-            rescanMusic()
-        }
-
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
-        binding.switchShowAlbumArt.isChecked = isShowArt
-        binding.settingAlbumArt.setOnClickListener {
-            val newState = !binding.switchShowAlbumArt.isChecked
-            binding.switchShowAlbumArt.isChecked = newState
-            prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
-            songAdapter?.setShowAlbumArt(newState)
-        }
-
-        binding.settingOmnisync.setOnClickListener {
-            closeLeftMenu()
-            xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
-                .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
-        }
-
-        binding.settingAbout.setOnClickListener {
-            closeLeftMenu()
-            showAboutDialog()
-        }
-    }
-
-    private fun updateFolderDisplay() {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val uriStr = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
-        if (uriStr != null) {
-            try {
-                val uri = Uri.parse(uriStr)
-                val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)
-                val name = docFile?.name ?: uri.lastPathSegment ?: "Selected Folder"
-                binding.tvFolderPath.text = name
-            } catch (e: Exception) {
-                binding.tvFolderPath.text = "Folder Selected"
-            }
-        } else {
-            binding.tvFolderPath.text = getString(R.string.music_folder_desc)
         }
     }
 
@@ -1405,7 +1576,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun updateSongList(songs: List<Song>) {
         allScannedSongs = songs
         binding.drawerSubtitleText.text = "${songs.size} songs"
-        updateFolderDisplay()
         updateFilterSubList()
         applyCurrentFilter()
     }
@@ -1429,7 +1599,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val newState = !item.isChecked
                     item.isChecked = newState
                     prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
-                    binding.switchShowAlbumArt.isChecked = newState
                     songAdapter?.setShowAlbumArt(newState)
                     true
                 }
