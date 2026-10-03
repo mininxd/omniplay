@@ -1991,26 +1991,36 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun sortSongs(songs: List<Song>, field: SortField, ascending: Boolean): List<Song> {
-        val comparator = when (field) {
-            SortField.TITLE -> if (ascending) {
-                compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            } else {
-                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
-            }
-            SortField.DATE -> if (ascending) {
-                compareBy<Song> { it.dateModified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            } else {
-                compareByDescending<Song> { it.dateModified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            }
-            SortField.ARTIST -> if (ascending) {
-                compareBy(String.CASE_INSENSITIVE_ORDER) { it.artist }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            } else {
-                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.artist }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            }
-            SortField.ALBUM -> if (ascending) {
-                compareBy(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            } else {
-                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+        val comparator = Comparator<Song> { a, b ->
+            when (field) {
+                SortField.TITLE -> {
+                    val res = a.title.compareTo(b.title, ignoreCase = true)
+                    if (ascending) res else -res
+                }
+                SortField.DATE -> {
+                    val res = a.dateModified.compareTo(b.dateModified)
+                    if (res != 0) {
+                        if (ascending) res else -res
+                    } else {
+                        a.title.compareTo(b.title, ignoreCase = true)
+                    }
+                }
+                SortField.ARTIST -> {
+                    val res = a.artist.compareTo(b.artist, ignoreCase = true)
+                    if (res != 0) {
+                        if (ascending) res else -res
+                    } else {
+                        a.title.compareTo(b.title, ignoreCase = true)
+                    }
+                }
+                SortField.ALBUM -> {
+                    val res = a.album.compareTo(b.album, ignoreCase = true)
+                    if (res != 0) {
+                        if (ascending) res else -res
+                    } else {
+                        a.title.compareTo(b.title, ignoreCase = true)
+                    }
+                }
             }
         }
         return songs.sortedWith(comparator)
