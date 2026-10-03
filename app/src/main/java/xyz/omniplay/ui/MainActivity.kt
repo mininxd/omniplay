@@ -342,12 +342,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             }
             playbackService?.let { service ->
-                val wasPlaying = service.isPlaying()
-                if (service.queue.isEmpty() && scannedSongs.isNotEmpty()) {
-                    service.setSongQueue(scannedSongs, startIndex = index, startPlaying = wasPlaying)
-                } else {
-                    service.playSongFromPlaylist(song, index, startPlaying = wasPlaying)
-                }
+                val listToPlay = if (displayedSongs.isNotEmpty()) displayedSongs else scannedSongs
+                service.setSongQueue(listToPlay, startIndex = index, startPlaying = true)
             }
         }
 
@@ -2050,6 +2046,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         updateFilterSubList()
         applyCurrentFilter()
         closeLeftMenu()
+        if (::bottomSheetBehavior.isInitialized) {
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
     }
 
     private fun clearFilter() {
@@ -2093,20 +2092,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 binding.sheetTitleText.text = getString(R.string.queue_title)
             }
-
-            if (isBound && playbackService != null) {
-                playbackService?.refreshQueue(filtered)
-            }
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
             binding.songsRecyclerView.visibility = View.GONE
-
-            if (isBound && playbackService != null) {
-                playbackService?.refreshQueue(emptyList())
-            } else {
-                setupDefaultView()
-            }
         }
     }
 
@@ -2115,6 +2104,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.drawerSubtitleText.text = "${songs.size} songs"
         updateFilterSubList()
         applyCurrentFilter()
+        if (isBound && playbackService != null && playbackService?.queue.isNullOrEmpty() && songs.isNotEmpty()) {
+            playbackService?.refreshQueue(songs)
+        }
     }
 
     private fun showOptionsMenu(anchor: View) {
