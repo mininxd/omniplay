@@ -18,6 +18,7 @@ import xyz.omniplay.model.Song
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.Locale
 
 object AlbumArtLoader {
 
@@ -25,7 +26,7 @@ object AlbumArtLoader {
     private const val MAX_DISK_CACHE_SIZE = 50 * 1024 * 1024L // 50MB
     private const val DISK_CACHE_SUBDIR = "album_art_cache"
 
-    // 1. Fast in-memory LRU Cache for decoded bitmaps
+    // 1. Fast in-memory LRU Cache for decoded bitmaps, keyed by unique song cacheKey
     private val memoryCache: LruCache<String, Bitmap> by lazy {
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
         val cacheSize = (maxMemory / 4).coerceAtLeast(2048)
@@ -36,7 +37,7 @@ object AlbumArtLoader {
         }
     }
 
-    // 2. Pre-rendered Album-level cache: instantly supplies artwork for all songs in an album
+    // 2. Pre-rendered Album-level cache: keyed strictly by "artist::album" to prevent cross-artist collisions
     private val albumArtCache: LruCache<String, Bitmap> by lazy {
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
         val cacheSize = (maxMemory / 6).coerceAtLeast(2048)
@@ -64,29 +65,60 @@ object AlbumArtLoader {
         }
     }
 
+    /**
+     * Builds a strict, collision-free album key combining artist and album.
+     * Returns null for generic or unknown albums to prevent songs from different artists
+     * from sharing artwork.
+     */
+    private fun getAlbumKey(song: Song): String? {
+        val album = song.album.trim()
+        val artist = song.artist.trim()
+
+        if (album.isEmpty() ||
+            album.equals("Unknown Album", ignoreCase = true) ||
+            album.equals("Unknown", ignoreCase = true) ||
+            album.equals("<unknown>", ignoreCase = true) ||
+            album.equals("Untitled", ignoreCase = true)
+        ) {
+            return null
+        }
+
+        if (artist.isEmpty() ||
+            artist.equals("Unknown Artist", ignoreCase = true) ||
+            artist.equals("Unknown", ignoreCase = true) ||
+            artist.equals("<unknown>", ignoreCase = true)
+        ) {
+            return null
+        }
+
+        val cleanAlbum = album.lowercase(Locale.ROOT)
+        val cleanArtist = artist.lowercase(Locale.ROOT)
+        return "$cleanArtist::$cleanAlbum"
+    }
+
+    /**
+     * Synchronously returns cached album art in memory specifically for [song].
+     * Never returns another song's artwork to avoid wrong/randomized art display.
+     */
     fun getCachedAlbumArt(song: Song): Bitmap? {
         val key = getCacheKey(song)
-        val fromMem = memoryCache.get(key) ?: memoryCache.get(song.id.toString())
-        if (fromMem != null) return fromMem
-
-        // Fast check in pre-rendered album cache
-        if (song.album.isNotBlank() && song.album != "Unknown Album") {
-            val albumBitmap = albumArtCache.get(song.album.lowercase())
-            if (albumBitmap != null) {
-                memoryCache.put(key, albumBitmap)
-                return albumBitmap
-            }
-        }
-        return null
+        return memoryCache.get(key)
     }
 
     fun getCachedAlbumArt(songId: Long): Bitmap? {
-        return memoryCache.get(songId.toString())
+        return null
     }
 
-    fun getAlbumArt(albumName: String): Bitmap? {
-        if (albumName.isBlank() || albumName == "Unknown Album") return null
-        return albumArtCache.get(albumName.lowercase())
+    fun getAlbumArt(albumName: String, artistName: String? = null): Bitmap? {
+        if (albumName.isBlank() || albumName.equals("Unknown Album", ignoreCase = true)) return null
+        val cleanAlbum = albumName.trim().lowercase(Locale.ROOT)
+        if (artistName != null && artistName.isNotBlank() && !artistName.equals("Unknown Artist", ignoreCase = true)) {
+            val cleanArtist = artistName.trim().lowercase(Locale.ROOT)
+            val key = "$cleanArtist::$cleanAlbum"
+            val bitmap = albumArtCache.get(key)
+            if (bitmap != null) return bitmap
+        }
+        return albumArtCache.snapshot().entries.firstOrNull { it.key.endsWith("::$cleanAlbum") }?.value
     }
 
     fun clearMemoryCache() {
@@ -96,49 +128,20 @@ object AlbumArtLoader {
     }
 
     /**
-     * Pre-renders and pre-loads all album art like game textures in the background.
-     * Phase 1: Pre-renders all unique albums first for immediate broad coverage.
-     * Phase 2: Pre-renders all remaining songs so there is zero pop-in during scrolling.
+     * Pre-renders and pre-loads album art for all songs in the background.
+     * Each song is loaded individually to ensure its authentic embedded artwork is preserved.
      */
     fun preloadAll(context: Context, songs: List<Song>, scope: CoroutineScope) {
         preloadJob?.cancel()
         preloadJob = scope.launch(Dispatchers.IO) {
             if (songs.isEmpty()) return@launch
 
-            // Phase 1: Pre-render and cache Album Covers
-            val albumGroups = songs.groupBy {
-                if (it.album.isNotBlank() && it.album != "Unknown Album") it.album.lowercase() else ""
-            }
-
-            for ((albumName, albumSongs) in albumGroups) {
-                if (albumName.isNotEmpty()) {
-                    val existing = albumArtCache.get(albumName)
-                    if (existing == null) {
-                        for (candidate in albumSongs) {
-                            val art = loadAlbumArt(context, candidate)
-                            if (art != null) {
-                                albumArtCache.put(albumName, art)
-                                break
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Phase 2: Full Pre-render of ALL remaining individual songs
             for (song in songs) {
                 val key = getCacheKey(song)
                 if (memoryCache.get(key) != null || negativeCache.get(key) == true) {
                     continue
                 }
-                val albumKey = if (song.album.isNotBlank() && song.album != "Unknown Album") song.album.lowercase() else null
-                val albumArt = if (albumKey != null) albumArtCache.get(albumKey) else null
-                if (albumArt != null) {
-                    memoryCache.put(key, albumArt)
-                    memoryCache.put(song.id.toString(), albumArt)
-                } else {
-                    loadAlbumArt(context, song)
-                }
+                loadAlbumArt(context, song)
             }
         }
     }
@@ -148,40 +151,30 @@ object AlbumArtLoader {
             val cacheKey = getCacheKey(song)
 
             // Step 1: Check in-memory LRU cache
-            val cachedMem = memoryCache.get(cacheKey) ?: memoryCache.get(song.id.toString())
+            val cachedMem = memoryCache.get(cacheKey)
             if (cachedMem != null) {
                 return@withContext cachedMem
             }
 
-            // Step 2: Check pre-rendered album cache
-            if (song.album.isNotBlank() && song.album != "Unknown Album") {
-                val albumBitmap = albumArtCache.get(song.album.lowercase())
-                if (albumBitmap != null) {
-                    memoryCache.put(cacheKey, albumBitmap)
-                    memoryCache.put(song.id.toString(), albumBitmap)
-                    return@withContext albumBitmap
-                }
-            }
-
-            // Step 3: Check negative cache (known to have no art)
-            if (negativeCache.get(cacheKey) == true || negativeCache.get(song.id.toString()) == true) {
-                return@withContext null
-            }
-
-            // Step 4: Check persistent disk LRU cache
+            // Step 2: Check persistent disk LRU cache
             val diskBitmap = loadFromDiskCache(context, cacheKey)
             if (diskBitmap != null) {
                 memoryCache.put(cacheKey, diskBitmap)
-                memoryCache.put(song.id.toString(), diskBitmap)
-                if (song.album.isNotBlank() && song.album != "Unknown Album") {
-                    albumArtCache.put(song.album.lowercase(), diskBitmap)
+                val albumKey = getAlbumKey(song)
+                if (albumKey != null) {
+                    albumArtCache.put(albumKey, diskBitmap)
                 }
                 return@withContext diskBitmap
             }
 
+            // Step 3: Check negative cache (known to have no art)
+            if (negativeCache.get(cacheKey) == true) {
+                return@withContext null
+            }
+
             var decodedBitmap: Bitmap? = null
 
-            // Step 5: Extract embedded artwork directly from audio file (TOP PRIORITY)
+            // Step 4: Extract embedded artwork directly from audio file (TOP PRIORITY)
             if (song.contentUri != Uri.EMPTY) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -227,7 +220,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 6: Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
+            // Step 5: Try extracting FLAC picture directly via FlacHeaderParser if retriever failed
             if (decodedBitmap == null && (song.format.equals("FLAC", ignoreCase = true) || song.contentUri.toString().endsWith(".flac", ignoreCase = true) || song.filePath.endsWith(".flac", ignoreCase = true))) {
                 try {
                     context.contentResolver.openInputStream(song.contentUri)?.use { stream ->
@@ -253,7 +246,7 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 7: Fallback to file path embedded picture if contentUri didn't yield artwork
+            // Step 6: Fallback to file path embedded picture if contentUri didn't yield artwork
             if (decodedBitmap == null && song.filePath.isNotBlank()) {
                 val retriever = MediaMetadataRetriever()
                 try {
@@ -270,9 +263,39 @@ object AlbumArtLoader {
                 }
             }
 
-            // Step 8: SECONDARY FALLBACK: MediaStore album art URI (only when audio file itself has NO embedded picture)
-            // and only if the album name is known, avoiding MediaStore's shared albumId collision across unrelated songs
-            if (decodedBitmap == null && song.albumArtUri != null && song.album != "Unknown Album") {
+            // Step 7: Check local directory sidecar image (cover.jpg, folder.jpg, etc.) in the audio file's folder
+            if (decodedBitmap == null && song.filePath.isNotBlank()) {
+                try {
+                    val parentDir = File(song.filePath).parentFile
+                    if (parentDir != null && parentDir.exists() && parentDir.isDirectory) {
+                        val sidecarNames = listOf("cover.jpg", "cover.png", "folder.jpg", "folder.png", "album.jpg", "front.jpg", "cover.jpeg", "folder.jpeg")
+                        for (name in sidecarNames) {
+                            val sidecarFile = File(parentDir, name)
+                            if (sidecarFile.exists() && sidecarFile.canRead() && sidecarFile.length() > 0) {
+                                val sidecarBitmap = decodeSampledBitmapFromFile(sidecarFile.absolutePath, MAX_DIMENSION)
+                                if (sidecarBitmap != null) {
+                                    decodedBitmap = sidecarBitmap
+                                    break
+                                }
+                            }
+                        }
+                    }
+                } catch (ignored: Throwable) {}
+            }
+
+            // Step 8: Fallback to verified album art of the exact same artist and album
+            if (decodedBitmap == null) {
+                val albumKey = getAlbumKey(song)
+                if (albumKey != null) {
+                    val albumArt = albumArtCache.get(albumKey)
+                    if (albumArt != null) {
+                        decodedBitmap = albumArt
+                    }
+                }
+            }
+
+            // Step 9: Final fallback: MediaStore album art URI (only for verified known artist and album)
+            if (decodedBitmap == null && song.albumArtUri != null && getAlbumKey(song) != null) {
                 try {
                     decodedBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                         ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, song.albumArtUri)) { decoder, info, _ ->
@@ -300,26 +323,49 @@ object AlbumArtLoader {
                 } catch (ignored: Throwable) {}
             }
 
-            // Step 9: Validate decoded bitmap and write to caches
+            // Step 10: Validate decoded bitmap and write to caches
             val finalBitmap = decodedBitmap
             if (finalBitmap != null) {
                 if (isSolidOrBlankBitmap(finalBitmap)) {
                     negativeCache.put(cacheKey, true)
-                    negativeCache.put(song.id.toString(), true)
                     return@withContext null
                 }
                 memoryCache.put(cacheKey, finalBitmap)
-                memoryCache.put(song.id.toString(), finalBitmap)
-                if (song.album.isNotBlank() && song.album != "Unknown Album") {
-                    albumArtCache.put(song.album.lowercase(), finalBitmap)
+                val albumKey = getAlbumKey(song)
+                if (albumKey != null) {
+                    albumArtCache.put(albumKey, finalBitmap)
                 }
                 saveToDiskCache(context, cacheKey, finalBitmap)
                 return@withContext finalBitmap
             }
 
             negativeCache.put(cacheKey, true)
-            negativeCache.put(song.id.toString(), true)
             null
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    private fun decodeSampledBitmapFromFile(filePath: String, targetMaxDim: Int): Bitmap? {
+        return try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(filePath, options)
+            val origW = options.outWidth
+            val origH = options.outHeight
+            if (origW <= 0 || origH <= 0) return null
+
+            var inSampleSize = 1
+            val maxDim = origW.coerceAtLeast(origH)
+            while (maxDim / (inSampleSize * 2) >= targetMaxDim) {
+                inSampleSize *= 2
+            }
+
+            options.inSampleSize = inSampleSize
+            options.inJustDecodeBounds = false
+            options.inPreferredConfig = Bitmap.Config.ARGB_8888
+            BitmapFactory.decodeFile(filePath, options)
         } catch (t: Throwable) {
             null
         }
