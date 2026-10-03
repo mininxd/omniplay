@@ -60,6 +60,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         private const val PREFS_NAME = "omniplay_prefs"
         private const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
         private const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
+        private const val KEY_SORT_FIELD = "key_sort_field"
+        private const val KEY_SORT_ASCENDING = "key_sort_ascending"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -79,6 +81,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     enum class LibraryFilterMode {
         TRACK, ARTIST, ALBUM
     }
+
+    enum class SortField {
+        TITLE, DATE, ARTIST, ALBUM
+    }
+
+    private data class SortOption(
+        val label: String,
+        val field: SortField,
+        val ascending: Boolean
+    )
+
+    private var currentSortField: SortField = SortField.TITLE
+    private var isSortAscending: Boolean = true
 
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private val musicScanner by lazy { MusicScanner(this) }
@@ -108,11 +123,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 playExternalAudioUri(pendingUri)
             }
 
-            if (scannedSongs.isNotEmpty()) {
+            val currentQueueList = displayedSongs.ifEmpty { scannedSongs }
+            if (currentQueueList.isNotEmpty()) {
                 if (playbackService?.currentSong != null) {
-                    playbackService?.refreshQueue(scannedSongs)
+                    playbackService?.refreshQueue(currentQueueList)
                 } else if (playbackService?.queue.isNullOrEmpty()) {
-                    playbackService?.setSongQueue(scannedSongs, startIndex = 0, startPlaying = false)
+                    playbackService?.setSongQueue(currentQueueList, startIndex = 0, startPlaying = false)
                 }
             }
 
@@ -178,6 +194,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        currentSortField = try {
+            SortField.valueOf(prefs.getString(KEY_SORT_FIELD, SortField.TITLE.name) ?: SortField.TITLE.name)
+        } catch (e: Exception) {
+            SortField.TITLE
+        }
+        isSortAscending = prefs.getBoolean(KEY_SORT_ASCENDING, true)
 
         setupBackPressHandler()
         setupDefaultView()
@@ -311,7 +335,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
                     BottomSheetBehavior.STATE_EXPANDED -> binding.ivChevron.rotation = 180f
-                    BottomSheetBehavior.STATE_COLLAPSED -> binding.ivChevron.rotation = 0f
+                    BottomSheetBehavior.STATE_COLLAPSED -> {
+                        binding.ivChevron.rotation = 0f
+                        if (selectedFilterValue != null || currentFilterMode != LibraryFilterMode.TRACK) {
+                            clearFilter()
+                        }
+                    }
                     else -> {}
                 }
             }
@@ -328,6 +357,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
             }
+        }
+
+        binding.btnSortQueue.setOnClickListener {
+            if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_EXPANDED
+            }
+            showSortDialog()
         }
 
         // Initialize playlist adapter
@@ -348,7 +384,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     service.playSongFromPlaylist(song, startPlaying = true)
                 } else {
                     // If not currently in queue, initialize queue from all scanned songs to maintain full library
-                    val fullList = if (allScannedSongs.isNotEmpty()) allScannedSongs else listOf(song)
+                    val fullList = if (displayedSongs.isNotEmpty() && currentFilterMode == LibraryFilterMode.TRACK) {
+                        displayedSongs
+                    } else if (allScannedSongs.isNotEmpty()) {
+                        sortSongs(allScannedSongs, currentSortField, isSortAscending)
+                    } else {
+                        listOf(song)
+                    }
                     val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
                     service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
                 }
@@ -1948,39 +1990,121 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setFilterMode(LibraryFilterMode.TRACK)
     }
 
+    private fun sortSongs(songs: List<Song>, field: SortField, ascending: Boolean): List<Song> {
+        val comparator = when (field) {
+            SortField.TITLE -> if (ascending) {
+                compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            } else {
+                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
+            }
+            SortField.DATE -> if (ascending) {
+                compareBy<Song> { it.dateModified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            } else {
+                compareByDescending<Song> { it.dateModified }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            }
+            SortField.ARTIST -> if (ascending) {
+                compareBy(String.CASE_INSENSITIVE_ORDER) { it.artist }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            } else {
+                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.artist }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            }
+            SortField.ALBUM -> if (ascending) {
+                compareBy(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            } else {
+                compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            }
+        }
+        return songs.sortedWith(comparator)
+    }
+
+    private fun showSortDialog() {
+        val options = mutableListOf<SortOption>()
+        options.add(SortOption("Title (A → Z)", SortField.TITLE, true))
+        options.add(SortOption("Title (Z → A)", SortField.TITLE, false))
+        options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
+        options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
+
+        when (currentFilterMode) {
+            LibraryFilterMode.TRACK -> {
+                options.add(SortOption("Artist (A → Z)", SortField.ARTIST, true))
+                options.add(SortOption("Artist (Z → A)", SortField.ARTIST, false))
+                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
+                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
+            }
+            LibraryFilterMode.ARTIST -> {
+                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
+                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
+            }
+            LibraryFilterMode.ALBUM -> {
+                options.add(SortOption("Artist (A → Z)", SortField.ARTIST, true))
+                options.add(SortOption("Artist (Z → A)", SortField.ARTIST, false))
+            }
+        }
+
+        val checkedIndex = options.indexOfFirst { it.field == currentSortField && it.ascending == isSortAscending }
+            .let { if (it >= 0) it else 0 }
+
+        val labels = options.map { it.label }.toTypedArray()
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.sort_queue)
+            .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
+                val selected = options[which]
+                currentSortField = selected.field
+                isSortAscending = selected.ascending
+
+                getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_SORT_FIELD, currentSortField.name)
+                    .putBoolean(KEY_SORT_ASCENDING, isSortAscending)
+                    .apply()
+
+                applyCurrentFilter()
+
+                if (currentFilterMode == LibraryFilterMode.TRACK && playbackService != null && displayedSongs.isNotEmpty()) {
+                    playbackService?.refreshQueue(displayedSongs)
+                }
+
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun applyCurrentFilter() {
-        val filtered = when (currentFilterMode) {
+        val baseList = when (currentFilterMode) {
             LibraryFilterMode.TRACK -> allScannedSongs
             LibraryFilterMode.ARTIST -> {
                 if (selectedFilterValue.isNullOrEmpty()) {
-                    allScannedSongs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.artist })
+                    allScannedSongs
                 } else {
                     allScannedSongs.filter { it.artist.equals(selectedFilterValue, ignoreCase = true) }
                 }
             }
             LibraryFilterMode.ALBUM -> {
                 if (selectedFilterValue.isNullOrEmpty()) {
-                    allScannedSongs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+                    allScannedSongs
                 } else {
                     allScannedSongs.filter { it.album.equals(selectedFilterValue, ignoreCase = true) }
                 }
             }
         }
 
+        val filtered = sortSongs(baseList, currentSortField, isSortAscending)
         displayedSongs = filtered
         songAdapter?.setSongs(filtered)
+        playbackService?.currentSong?.let { songAdapter?.setCurrentPlayingSongId(it.id) }
+
+        val filterVal = selectedFilterValue
+        if (!filterVal.isNullOrEmpty()) {
+            binding.sheetTitleText.text = "Queue • $filterVal"
+        } else {
+            binding.sheetTitleText.text = getString(R.string.queue_title)
+        }
 
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
             binding.songsRecyclerView.visibility = View.VISIBLE
-
-            val filterVal = selectedFilterValue
-            if (!filterVal.isNullOrEmpty()) {
-                binding.sheetTitleText.text = "Music List • $filterVal"
-            } else {
-                binding.sheetTitleText.text = getString(R.string.queue_title)
-            }
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
@@ -1994,8 +2118,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.drawerSubtitleText.text = "${songs.size} songs"
         updateFilterSubList()
         applyCurrentFilter()
-        if (isBound && playbackService != null && playbackService?.queue.isNullOrEmpty() && songs.isNotEmpty()) {
-            playbackService?.refreshQueue(songs)
+        if (isBound && playbackService != null && playbackService?.queue.isNullOrEmpty() && displayedSongs.isNotEmpty()) {
+            playbackService?.refreshQueue(displayedSongs)
         }
     }
 

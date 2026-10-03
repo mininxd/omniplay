@@ -117,7 +117,8 @@ class MusicScanner(private val context: Context) {
                             title = if (safSong.title == safSong.filePath.substringBeforeLast('.')) match.title else safSong.title,
                             artist = if (safSong.artist == "Unknown Artist") match.artist else safSong.artist,
                             album = if (safSong.album == "Unknown Album") match.album else safSong.album,
-                            duration = if (safSong.duration > 0L) safSong.duration else match.duration
+                            duration = if (safSong.duration > 0L) safSong.duration else match.duration,
+                            dateModified = if (match.dateModified > 0L) match.dateModified else safSong.dateModified
                         )
                     } else {
                         safSong
@@ -157,7 +158,8 @@ class MusicScanner(private val context: Context) {
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.MIME_TYPE
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.DATE_MODIFIED
         )
 
         val cleanPath = folderPath.trim('/')
@@ -240,12 +242,14 @@ class MusicScanner(private val context: Context) {
                 val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val mimeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
                 val sizeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                val lastModCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
 
                 while (cursor.moveToNext()) {
                     val docId = if (idCol >= 0) cursor.getString(idCol) else continue
                     val name = if (nameCol >= 0) cursor.getString(nameCol) ?: "" else ""
                     val mime = if (mimeCol >= 0) cursor.getString(mimeCol) ?: "" else ""
                     val size = if (sizeCol >= 0) cursor.getLong(sizeCol) else 0L
+                    val lastMod = if (lastModCol >= 0) cursor.getLong(lastModCol) else 0L
 
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                         subDirs.add(docId)
@@ -258,7 +262,7 @@ class MusicScanner(private val context: Context) {
                                 (mime == "application/octet-stream" && ext in supportedExtensions)
                         if (isAudio) {
                             val fileDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size)
+                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size, lastMod)
                             songsList.add(song)
                         }
                     }
@@ -283,12 +287,12 @@ class MusicScanner(private val context: Context) {
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
                 val mime = file.type ?: ""
                 val isAudio = ext in supportedExtensions ||
-                        mime.startsWith("audio/") ||
-                        mime.contains("flac", ignoreCase = true) ||
-                        mime.contains("ogg", ignoreCase = true) ||
-                        (mime == "application/octet-stream" && ext in supportedExtensions)
+                                mime.startsWith("audio/") ||
+                                mime.contains("flac", ignoreCase = true) ||
+                                mime.contains("ogg", ignoreCase = true) ||
+                                (mime == "application/octet-stream" && ext in supportedExtensions)
                 if (isAudio) {
-                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length())
+                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length(), file.lastModified())
                     songsList.add(song)
                 }
             }
@@ -299,7 +303,8 @@ class MusicScanner(private val context: Context) {
         uri: Uri,
         displayName: String = "",
         ext: String = "",
-        size: Long = 0L
+        size: Long = 0L,
+        dateModified: Long = 0L
     ): Song {
         var resolvedName = displayName
         var resolvedSize = size
@@ -435,7 +440,8 @@ class MusicScanner(private val context: Context) {
             filePath = resolvedName,
             fileSize = resolvedSize,
             audioQuality = audioInfo.formatQualityString(),
-            isHiRes = audioInfo.isHiRes
+            isHiRes = audioInfo.isHiRes,
+            dateModified = if (dateModified > 0L) dateModified else if (resolvedName.isNotEmpty()) File(resolvedName).lastModified() else 0L
         )
     }
 
@@ -459,7 +465,8 @@ class MusicScanner(private val context: Context) {
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.MIME_TYPE
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.DATE_MODIFIED
         )
 
         val selection = "(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR " +
@@ -502,6 +509,7 @@ class MusicScanner(private val context: Context) {
         val sizeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
         val albumIdColumn = cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID)
         val mimeColumn = cursor.getColumnIndex(MediaStore.Audio.Media.MIME_TYPE)
+        val dateModifiedColumn = cursor.getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED)
 
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
@@ -515,6 +523,8 @@ class MusicScanner(private val context: Context) {
             val fileSize = if (sizeColumn >= 0) cursor.getLong(sizeColumn) else 0L
             val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else -1L
             val mimeType = if (mimeColumn >= 0) cursor.getString(mimeColumn) ?: "" else ""
+            val dateSec = if (dateModifiedColumn >= 0) cursor.getLong(dateModifiedColumn) else 0L
+            val dateModified = if (dateSec > 0) dateSec * 1000L else if (filePath.isNotEmpty()) File(filePath).lastModified() else 0L
 
             val contentUri = ContentUris.withAppendedId(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
@@ -581,7 +591,8 @@ class MusicScanner(private val context: Context) {
                     format = format,
                     filePath = filePath,
                     fileSize = fileSize,
-                    isHiRes = isFormatHiRes
+                    isHiRes = isFormatHiRes,
+                    dateModified = dateModified
                 )
             )
         }

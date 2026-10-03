@@ -16,7 +16,8 @@ data class Song(
     val filePath: String = "",
     val fileSize: Long = 0L,
     val audioQuality: String = "",
-    val isHiRes: Boolean = false
+    val isHiRes: Boolean = false,
+    val dateModified: Long = 0L
 ) : Serializable {
 
     companion object {

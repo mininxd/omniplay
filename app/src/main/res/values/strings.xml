@@ -18,6 +18,7 @@
     <string name="repeat">Repeat</string>
     <string name="expand_queue">Queue</string>
     <string name="show_album_art_in_playlist">Show album art in queue</string>
+    <string name="sort_queue">Sort Queue</string>
     <string name="release_to_cancel">Release to cancel</string>
 
     <!-- OmniSync -->
