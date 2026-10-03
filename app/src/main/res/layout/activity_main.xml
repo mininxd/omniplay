@@ -1031,7 +1031,7 @@
                         android:layout_marginTop="2dp"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp"
-                        tools:text="0 songs • Show in queue" />
+                        tools:text="0 songs" />
                 </LinearLayout>
 
                 <ImageView

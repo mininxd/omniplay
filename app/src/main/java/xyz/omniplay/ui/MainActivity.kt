@@ -1955,7 +1955,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.drawerFilterRecyclerView.adapter = drawerFilterAdapter
 
         binding.cardAllTracks.setOnClickListener {
-            clearFilter()
+            selectedFilterValue = null
+            currentFilterMode = LibraryFilterMode.TRACK
+            if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
+                isFilterPreviewActive = true
+            } else {
+                isFilterPreviewActive = false
+            }
+            binding.activeFilterBar.visibility = View.GONE
+            updateFilterSubList()
+            applyCurrentFilter()
             closeLeftMenu()
             if (::bottomSheetBehavior.isInitialized) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
@@ -1971,7 +1980,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         binding.btnClearFilter.setOnClickListener {
-            clearFilter()
+            selectedFilterValue = null
+            currentFilterMode = LibraryFilterMode.TRACK
+            if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
+                isFilterPreviewActive = true
+            } else {
+                isFilterPreviewActive = false
+            }
+            binding.activeFilterBar.visibility = View.GONE
+            val subMode = if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
+            val count = if (subMode == LibraryFilterMode.ALBUM) {
+                allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+            } else {
+                allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+            }
+            binding.drawerFilterInfoText.text = if (subMode == LibraryFilterMode.ALBUM) "Select from $count albums" else "Select from $count artists"
+            updateFilterSubList()
+            applyCurrentFilter()
         }
     }
 
@@ -2266,7 +2291,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             activeOngoingQueue = songs
         }
         binding.drawerSubtitleText.text = "${songs.size} songs"
-        binding.cardAllTracksSubtitle.text = "${songs.size} songs • Show in queue"
+        binding.cardAllTracksSubtitle.text = "${songs.size} songs"
         updateFilterSubList()
         applyCurrentFilter()
         if (isBound && playbackService != null && playbackService?.queue.isNullOrEmpty() && displayedSongs.isNotEmpty()) {
