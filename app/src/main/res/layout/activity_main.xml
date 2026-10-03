@@ -221,7 +221,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/artist_name_text" />
 
-        <!-- Title Gesture Area (Double tap in empty space left/right of titles to seek 5s) -->
+        <!-- Title Gesture Area (Double tap to seek 5s, or slide right to open left menu) -->
         <View
             android:id="@+id/title_gesture_area"
             android:layout_width="0dp"
@@ -229,8 +229,8 @@
             android:background="@android:color/transparent"
             android:clickable="true"
             android:focusable="false"
-            app:layout_constraintTop_toBottomOf="@id/album_art_card"
-            app:layout_constraintBottom_toTopOf="@id/audio_badge_container"
+            app:layout_constraintTop_toTopOf="@id/song_title_text"
+            app:layout_constraintBottom_toBottomOf="@id/album_name_text"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 

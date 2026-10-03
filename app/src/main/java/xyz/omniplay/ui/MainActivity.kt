@@ -31,6 +31,7 @@ import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.WindowCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -1167,6 +1168,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupLeftDrawerMenu() {
+        // Lock drawer so sliding/swiping from edge or anywhere else on screen will NOT open it.
+        // Opening only works via gestures/clicks directly on the titles.
+        binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
+        binding.drawerLayout.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
+            override fun onDrawerOpened(drawerView: View) {
+                // When opened, unlock so user can drag it back closed or tap outside to dismiss
+                binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
+            }
+
+            override fun onDrawerClosed(drawerView: View) {
+                // When closed, re-lock so swiping elsewhere does not open the drawer
+                binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
+            }
+        })
+
         binding.btnCloseDrawer.setOnClickListener {
             closeLeftMenu()
         }
