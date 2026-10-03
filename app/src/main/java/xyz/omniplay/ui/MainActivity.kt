@@ -102,6 +102,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var displayedSongs = listOf<Song>()
     private var currentFilterMode = LibraryFilterMode.TRACK
     private var selectedFilterValue: String? = null
+    private var isFilterPreviewActive = false
+    private var activeOngoingQueueTitle: String? = null
+    private var activeOngoingFilterMode = LibraryFilterMode.TRACK
+    private var activeOngoingQueue = listOf<Song>()
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
 
@@ -337,8 +341,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     BottomSheetBehavior.STATE_EXPANDED -> binding.ivChevron.rotation = 180f
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
-                        if (selectedFilterValue != null || currentFilterMode != LibraryFilterMode.TRACK) {
-                            clearFilter()
+                        if (isFilterPreviewActive) {
+                            revertToOngoingQueue()
                         }
                     }
                     else -> {}
@@ -375,23 +379,34 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
                 return@SongAdapter
             }
+
+            val wasPreview = isFilterPreviewActive
+            isFilterPreviewActive = false
+            activeOngoingQueueTitle = selectedFilterValue
+            activeOngoingFilterMode = currentFilterMode
+
             if (::bottomSheetBehavior.isInitialized) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             }
             playbackService?.let { service ->
-                if (service.queue.any { it.id == song.id }) {
-                    // Song is in current playing queue -> play it directly without disrupting the ongoing queue
+                val fullList = if (displayedSongs.isNotEmpty()) {
+                    displayedSongs
+                } else if (allScannedSongs.isNotEmpty()) {
+                    sortSongs(allScannedSongs, currentSortField, isSortAscending)
+                } else {
+                    listOf(song)
+                }
+                activeOngoingQueue = fullList
+
+                val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+
+                val queueMatches = !wasPreview &&
+                        service.queue.size == fullList.size &&
+                        service.queue.any { it.id == song.id }
+
+                if (queueMatches) {
                     service.playSongFromPlaylist(song, startPlaying = true)
                 } else {
-                    // If not currently in queue, initialize queue from all scanned songs to maintain full library
-                    val fullList = if (displayedSongs.isNotEmpty() && currentFilterMode == LibraryFilterMode.TRACK) {
-                        displayedSongs
-                    } else if (allScannedSongs.isNotEmpty()) {
-                        sortSongs(allScannedSongs, currentSortField, isSortAscending)
-                    } else {
-                        listOf(song)
-                    }
-                    val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
                     service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
                 }
             }
@@ -1897,6 +1912,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         when (mode) {
             LibraryFilterMode.TRACK -> {
                 selectedFilterValue = null
+                if (activeOngoingQueueTitle != null) {
+                    isFilterPreviewActive = true
+                }
                 binding.activeFilterBar.visibility = View.GONE
                 binding.drawerFilterRecyclerView.visibility = View.GONE
                 binding.drawerFilterInfoText.text = "Showing all tracks (${allScannedSongs.size})"
@@ -1972,6 +1990,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun onFilterItemSelected(item: FilterItem) {
         selectedFilterValue = item.title
+        currentFilterMode = if (item.isAlbum) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
+        isFilterPreviewActive = true
         binding.activeFilterBar.visibility = View.VISIBLE
         binding.activeFilterText.text = if (item.isAlbum) "Album: ${item.title}" else "Artist: ${item.title}"
         binding.drawerFilterInfoText.text = if (item.isAlbum) "Filtered by album: ${item.title}" else "Filtered by artist: ${item.title}"
@@ -1983,11 +2003,41 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private fun revertToOngoingQueue() {
+        isFilterPreviewActive = false
+        selectedFilterValue = activeOngoingQueueTitle
+        currentFilterMode = activeOngoingFilterMode
+        if (selectedFilterValue != null) {
+            binding.activeFilterBar.visibility = View.VISIBLE
+            binding.activeFilterText.text = if (activeOngoingFilterMode == LibraryFilterMode.ALBUM) "Album: $selectedFilterValue" else "Artist: $selectedFilterValue"
+            binding.drawerFilterInfoText.text = if (activeOngoingFilterMode == LibraryFilterMode.ALBUM) "Filtered by album: $selectedFilterValue" else "Filtered by artist: $selectedFilterValue"
+            if (activeOngoingFilterMode == LibraryFilterMode.ALBUM) {
+                binding.filterToggleGroup.check(R.id.btn_filter_albums)
+            } else {
+                binding.filterToggleGroup.check(R.id.btn_filter_artists)
+            }
+        } else {
+            binding.activeFilterBar.visibility = View.GONE
+            binding.drawerFilterInfoText.text = "Showing all tracks (${allScannedSongs.size})"
+            binding.filterToggleGroup.check(R.id.btn_filter_tracks)
+        }
+        updateFilterSubList()
+        applyCurrentFilter()
+    }
+
     private fun clearFilter() {
+        isFilterPreviewActive = false
+        activeOngoingQueueTitle = null
+        activeOngoingFilterMode = LibraryFilterMode.TRACK
         selectedFilterValue = null
         binding.activeFilterBar.visibility = View.GONE
         binding.filterToggleGroup.check(R.id.btn_filter_tracks)
         setFilterMode(LibraryFilterMode.TRACK)
+        if (playbackService != null && allScannedSongs.isNotEmpty()) {
+            val sortedAll = sortSongs(allScannedSongs, currentSortField, isSortAscending)
+            activeOngoingQueue = sortedAll
+            playbackService?.refreshQueue(sortedAll)
+        }
     }
 
     private fun sortSongs(songs: List<Song>, field: SortField, ascending: Boolean): List<Song> {
@@ -2070,7 +2120,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
                 applyCurrentFilter()
 
-                if (currentFilterMode == LibraryFilterMode.TRACK && playbackService != null && displayedSongs.isNotEmpty()) {
+                if (!isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
                     playbackService?.refreshQueue(displayedSongs)
                 }
 
@@ -2125,6 +2175,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun updateSongList(songs: List<Song>) {
         allScannedSongs = songs
         scannedSongs = songs
+        if (activeOngoingQueue.isEmpty() || activeOngoingQueueTitle == null) {
+            activeOngoingQueue = songs
+        }
         binding.drawerSubtitleText.text = "${songs.size} songs"
         updateFilterSubList()
         applyCurrentFilter()
