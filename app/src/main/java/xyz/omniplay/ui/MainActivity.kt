@@ -1135,6 +1135,39 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showTrackDetailsDialog() {
+        val syncManager = xyz.omniplay.sync.OmniSyncManager.getInstance(this)
+        if (syncManager.currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            val format = syncManager.currentTrackFormat.ifEmpty { "Audio" }
+            val quality = syncManager.currentTrackQuality
+            val isHiRes = syncManager.currentTrackIsHiRes
+            val latency = syncManager.currentLatencyMs
+            val hostName = syncManager.currentHostRoomName ?: syncManager.currentHost?.name ?: "Host"
+            val streamQualityStr = if (syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW) "Low (32-bit Float Direct)" else "High (Native)"
+
+            val details = """
+                AUDIO INPUT
+                Source Format: $format
+                Resolution: ${quality.ifEmpty { if (isHiRes) "24-bit PCM" else "16-bit PCM" }}
+                Stream Quality: $streamQualityStr
+                Broadcast Host: $hostName
+
+                PROCESSING PIPELINE
+                Audio Engine: OmniSync Ultra-Low-Latency Audio Engine
+                Latency: ${latency}ms
+                Pipeline: ${if (syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW) "Direct 32-bit Float Pipeline" else "Native Bitstream Pipeline"}
+
+                AUDIO OUTPUT
+                Output Mode: Android AudioTrack (${if (syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW) "32-bit Float Engine" else "Native Engine"})
+            """.trimIndent()
+
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.track_details)
+                .setMessage(details)
+                .setPositiveButton("OK", null)
+                .show()
+            return
+        }
+
         val song = playbackService?.currentSong
         if (song == null) {
             Toast.makeText(this, "No track currently playing", Toast.LENGTH_SHORT).show()
@@ -1362,7 +1395,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             val format = syncManager.currentTrackFormat
             val quality = syncManager.currentTrackQuality
             val isHiRes = syncManager.currentTrackIsHiRes
-            val isFloat = syncManager.streamQuality == xyz.omniplay.sync.OmniSyncQuality.LOW
 
             var hasAnyBadge = false
             if (format.isNotEmpty()) {
@@ -1381,14 +1413,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.badgeQuality.visibility = View.GONE
             }
 
-            if (isFloat) {
-                binding.badgeFloat.visibility = View.VISIBLE
-                hasAnyBadge = true
-            } else {
-                binding.badgeFloat.visibility = View.GONE
-            }
-
-            if (isHiRes && !isFloat) {
+            if (isHiRes) {
                 binding.badgeHires.visibility = View.VISIBLE
                 hasAnyBadge = true
             } else {
@@ -1410,7 +1435,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             return
         }
 
-        binding.badgeFloat.visibility = View.GONE
         binding.badgeLatency.visibility = View.GONE
         if (song == null) {
             binding.audioBadgeContainer.visibility = View.GONE
@@ -1554,7 +1578,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isSeekable = true
                     binding.playbackSlider.setNeutralMode(false)
                     binding.badgeLatency.visibility = View.GONE
-                    binding.badgeFloat.visibility = View.GONE
                     playbackService?.currentSong?.let {
                         binding.playbackSlider.isEnabled = true
                         onTrackChanged(it)

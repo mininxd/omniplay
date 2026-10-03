@@ -64,10 +64,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         if (_binding == null) return
         when (quality) {
             OmniSyncQuality.HIGH -> {
-                binding.streamQualityDescText.text = "Native from host"
+                binding.streamQualityDescText.text = "High Quality"
             }
             OmniSyncQuality.LOW -> {
-                binding.streamQualityDescText.text = "32-bit float direct"
+                binding.streamQualityDescText.text = "Low Quality"
             }
         }
     }

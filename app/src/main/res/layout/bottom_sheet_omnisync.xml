@@ -282,7 +282,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="Native from host"
+                        android:text="High Quality"
                         android:textColor="@color/text_tertiary"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -308,7 +308,7 @@
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="Native"
+                        android:text="High"
                         android:textSize="11sp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -324,7 +324,7 @@
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:fontFamily="sans-serif-medium"
-                        android:text="32float"
+                        android:text="Low"
                         android:textSize="11sp" />
                 </com.google.android.material.button.MaterialButtonToggleGroup>
             </LinearLayout>

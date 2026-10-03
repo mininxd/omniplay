@@ -157,6 +157,28 @@ class OmniSyncManager private constructor(private val context: Context) {
     var currentTrackIsHiRes: Boolean = false
         private set
 
+    @Volatile
+    private var listenerSampleRate: Int = 44100
+
+    @Volatile
+    private var listenerNativeBitDepth: Int = 16
+
+    fun updateListenerAudioResolution() {
+        if (currentRole != OmniSyncRole.LISTENER) return
+        val sr = if (listenerSampleRate > 0) listenerSampleRate else 44100
+        val srText = if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
+        val isLowFloat = streamQuality == OmniSyncQuality.LOW
+        val bitDepth = if (isLowFloat) 32 else listenerNativeBitDepth
+        val resolution = "${bitDepth}bit/$srText"
+        val isHiRes = (bitDepth > 16 || sr > 48000) && !isLowFloat
+
+        currentTrackQuality = resolution
+        currentTrackIsHiRes = isHiRes
+        mainHandler.post {
+            listeners.forEach { it.onTrackAudioInfoChanged(currentTrackFormat, resolution, isHiRes) }
+        }
+    }
+
     private val prefs = context.getSharedPreferences("omnisync_prefs", Context.MODE_PRIVATE)
 
     var streamQuality: OmniSyncQuality = try {
@@ -170,10 +192,11 @@ class OmniSyncManager private constructor(private val context: Context) {
         if (streamQuality == quality) return
         streamQuality = quality
         prefs.edit().putString("stream_quality", quality.name).apply()
-        mainHandler.post { listeners.forEach { it.onStreamQualityChanged(quality) } }
         if (currentRole == OmniSyncRole.LISTENER) {
+            updateListenerAudioResolution()
             recreateListenerPlayerForQuality()
         }
+        mainHandler.post { listeners.forEach { it.onStreamQualityChanged(quality) } }
     }
 
     private fun recreateListenerPlayerForQuality() {
@@ -799,15 +822,13 @@ class OmniSyncManager private constructor(private val context: Context) {
             val songId = initialStatus.optLong("songId", 0L)
             val pos = initialStatus.optLong("position", 0L)
             val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
-            val rName = initialStatus.optString("hostName", host.name)
             val format = initialStatus.optString("format", "").ifEmpty { initialStatus.optString("songFormat", "") }
-            val quality = initialStatus.optString("quality", "").ifEmpty { initialStatus.optString("songQuality", "") }
-            val isHiRes = initialStatus.optBoolean("isHiRes", false)
             currentHostRoomName = rName
 
-            if (format.isNotEmpty() || quality.isNotEmpty()) {
-                notifyTrackAudioInfo(format, quality, isHiRes)
+            if (format.isNotEmpty()) {
+                currentTrackFormat = format
             }
+            updateListenerAudioResolution()
 
             if (title.isNotEmpty()) {
                 val streamUrl = "$baseUrl/stream?id=$songId"
@@ -904,17 +925,16 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val title = json.optString("title")
                 val artist = json.optString("artist")
                 val format = json.optString("format").ifEmpty { json.optString("songFormat") }
-                val quality = json.optString("quality").ifEmpty { json.optString("songQuality") }
-                val isHiRes = json.optBoolean("isHiRes", false)
                 val songId = json.optLong("songId", 0L)
                 val pos = json.optLong("positionMs", 0L)
                 val dur = json.optLong("durationMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
                 val hostTimestamp = json.optLong("timestamp", 0L)
                 if (dur > 0L) currentStreamDurationMs = dur
-                if (format.isNotEmpty() || quality.isNotEmpty()) {
-                    notifyTrackAudioInfo(format, quality, isHiRes)
+                if (format.isNotEmpty()) {
+                    currentTrackFormat = format
                 }
+                updateListenerAudioResolution()
                 if (title.isNotEmpty()) {
                     val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
                     playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur, hostTimestamp = hostTimestamp)
@@ -929,15 +949,14 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val songTitle = json.optString("songTitle", json.optString("title", "OmniSync Track"))
                 val songArtist = json.optString("songArtist", json.optString("artist", "Host Broadcast"))
                 val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
-                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
-                val isHiRes = json.optBoolean("isHiRes", false)
                 val songDuration = json.optLong("songDuration", json.optLong("durationMs", 0L))
                 val isHostPlaying = json.optBoolean("isPlaying", true)
                 val hostTimestamp = json.optLong("timestamp", 0L)
                 if (songDuration > 0L) currentStreamDurationMs = songDuration
-                if (songFormat.isNotEmpty() || songQuality.isNotEmpty()) {
-                    notifyTrackAudioInfo(songFormat, songQuality, isHiRes)
+                if (songFormat.isNotEmpty()) {
+                    currentTrackFormat = songFormat
                 }
+                updateListenerAudioResolution()
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
                 val streamUrl = "http://$formattedHost:$port/stream?id=$songId"
@@ -969,11 +988,10 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
             "AUDIO_INFO" -> {
                 val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
-                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
-                val isHiRes = json.optBoolean("isHiRes", false)
-                if (songFormat.isNotEmpty() || songQuality.isNotEmpty()) {
-                    notifyTrackAudioInfo(songFormat, songQuality, isHiRes)
+                if (songFormat.isNotEmpty()) {
+                    currentTrackFormat = songFormat
                 }
+                updateListenerAudioResolution()
             }
             "STOP" -> {
                 disconnectListener("Host stopped broadcasting")
@@ -1086,24 +1104,29 @@ class OmniSyncManager private constructor(private val context: Context) {
                         for (i in 0 until group.length) {
                             if (group.isTrackSelected(i)) {
                                 val exoFormat = group.getTrackFormat(i)
-                                val detected = xyz.omniplay.util.AudioInfoExtractor.fromExoFormat(exoFormat, currentTrackFormat)
-                                val detectedQuality = detected.formatQualityString()
-                                val resolvedFormat = if (currentTrackFormat.equals("M4A", ignoreCase = true) && (detected.format == "AAC" || detected.format == "AUDIO")) {
-                                    "M4A"
-                                } else if (detected.format.isNotEmpty() && detected.format != "AUDIO") {
-                                    detected.format
+                                if (exoFormat.sampleRate > 0) {
+                                    listenerSampleRate = exoFormat.sampleRate
+                                }
+                                val pcm = when (exoFormat.pcmEncoding) {
+                                    C.ENCODING_PCM_16BIT -> 16
+                                    C.ENCODING_PCM_24BIT -> 24
+                                    C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT -> 32
+                                    else -> 0
+                                }
+                                if (pcm > 0) {
+                                    listenerNativeBitDepth = pcm
+                                } else if (listenerSampleRate > 48000) {
+                                    listenerNativeBitDepth = 24
                                 } else {
-                                    currentTrackFormat
+                                    listenerNativeBitDepth = 16
                                 }
-                                val resolvedQuality = when {
-                                    detectedQuality.isEmpty() -> currentTrackQuality
-                                    currentTrackQuality.contains("bit") && !detectedQuality.contains("bit") -> currentTrackQuality
-                                    else -> detectedQuality
+                                if (currentTrackFormat.isEmpty()) {
+                                    val detected = xyz.omniplay.util.AudioInfoExtractor.fromExoFormat(exoFormat, "")
+                                    if (detected.format.isNotEmpty() && detected.format != "AUDIO") {
+                                        currentTrackFormat = detected.format
+                                    }
                                 }
-                                val resolvedHiRes = detected.checkHiRes() || currentTrackIsHiRes
-                                if (resolvedFormat.isNotEmpty() || resolvedQuality.isNotEmpty()) {
-                                    notifyTrackAudioInfo(resolvedFormat, resolvedQuality, resolvedHiRes)
-                                }
+                                updateListenerAudioResolution()
                                 break
                             }
                         }
@@ -1283,6 +1306,8 @@ class OmniSyncManager private constructor(private val context: Context) {
             notifyRoleChanged(OmniSyncRole.IDLE)
             notifyPlaybackState(false)
             notifyTrackInfo("", "")
+            listenerSampleRate = 44100
+            listenerNativeBitDepth = 16
             notifyTrackAudioInfo("", "", false)
             if (!reason.isNullOrEmpty()) {
                 notifyError(reason)
