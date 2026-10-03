@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -59,9 +60,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var isBound = false
     private var isUserTrackingSlider = false
 
+    enum class LibraryFilterMode {
+        TRACK, ARTIST, ALBUM
+    }
+
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private val musicScanner by lazy { MusicScanner(this) }
     private var scannedSongs = listOf<Song>()
+    private var allScannedSongs = listOf<Song>()
+    private var displayedSongs = listOf<Song>()
+    private var currentFilterMode = LibraryFilterMode.TRACK
+    private var selectedFilterValue: String? = null
+    private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
 
     private var pendingExternalUri: Uri? = null
@@ -153,6 +163,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setupBackPressHandler()
         setupDefaultView()
         setupInWindowPlaylistPanel()
+        setupLeftDrawerMenu()
         setupBottomSwipeGesture()
         setupAlbumArtSwipeGesture()
         setupTitleDoubleTapGestures()
@@ -206,12 +217,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Closes playlist panel when pressing back button instead of exiting the app.
+     * Closes left drawer or playlist panel when pressing back button instead of exiting the app.
      */
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+                if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    binding.drawerLayout.closeDrawer(GravityCompat.START)
+                } else if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
                     bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                 } else {
                     isEnabled = false
@@ -224,6 +237,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+            return
+        }
         if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_EXPANDED) {
             bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             return
@@ -824,10 +841,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Handles double tap in the empty space left and right of the song titles to seek 5 seconds.
-     * Double-tap on the left side seeks backward -5s, and double-tap on the right side seeks forward +5s.
+     * Handles double tap in the empty space left and right of the song titles to seek 5 seconds,
+     * and horizontal slide/swipe to the right in the titles area to open the left side menu.
      */
     private fun setupTitleDoubleTapGestures() {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var startX = 0f
+        var startY = 0f
+        var isSwipedRight = false
+
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
 
@@ -842,10 +864,65 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 return true
             }
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 != null) {
+                    val dx = e2.x - e1.x
+                    val dy = e2.y - e1.y
+                    if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.2f && velocityX > 150) {
+                        openLeftMenu()
+                        return true
+                    }
+                }
+                return false
+            }
         })
 
         binding.titleGestureArea.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.rawX
+                    startY = event.rawY
+                    isSwipedRight = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - startX
+                    val dy = event.rawY - startY
+                    if (!isSwipedRight && dx > touchSlop * 2 && Math.abs(dx) > Math.abs(dy) * 1.3f) {
+                        isSwipedRight = true
+                        openLeftMenu()
+                    }
+                }
+            }
             gestureDetector.onTouchEvent(event)
+            true
+        }
+
+        // Slide to right in the top Omniplay title bar
+        var titleStartX = 0f
+        var titleStartY = 0f
+        var titleSwipedRight = false
+        binding.appTitleText.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    titleStartX = event.rawX
+                    titleStartY = event.rawY
+                    titleSwipedRight = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - titleStartX
+                    val dy = event.rawY - titleStartY
+                    if (!titleSwipedRight && dx > touchSlop * 1.5f && Math.abs(dx) > Math.abs(dy) * 1.2f) {
+                        titleSwipedRight = true
+                        openLeftMenu()
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!titleSwipedRight) {
+                        v.performClick()
+                    }
+                }
+            }
             true
         }
     }
@@ -881,9 +958,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupListeners() {
-        // Menu button (Hamburger)
-        binding.btnMenu.setOnClickListener { view ->
-            showOptionsMenu(view)
+        // Menu button (Hamburger) -> open left side menu
+        binding.btnMenu.setOnClickListener {
+            openLeftMenu()
+        }
+
+        // Omniplay Title -> press to open left side menu
+        binding.appTitleText.setOnClickListener {
+            openLeftMenu()
         }
 
         // Material You Audio Info Badges -> tap to inspect track and audio details
@@ -1069,17 +1151,227 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
-    private fun updateSongList(songs: List<Song>) {
-        scannedSongs = songs
-        songAdapter?.setSongs(songs)
+    private fun openLeftMenu() {
+        if (!binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            binding.drawerLayout.openDrawer(GravityCompat.START)
+            try {
+                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (ignored: Exception) {}
+        }
+    }
 
-        if (songs.isNotEmpty()) {
-            binding.songCountText.text = "${songs.size} songs"
+    private fun closeLeftMenu() {
+        if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            binding.drawerLayout.closeDrawer(GravityCompat.START)
+        }
+    }
+
+    private fun setupLeftDrawerMenu() {
+        binding.btnCloseDrawer.setOnClickListener {
+            closeLeftMenu()
+        }
+
+        drawerFilterAdapter = DrawerFilterAdapter { item ->
+            onFilterItemSelected(item)
+        }
+        binding.drawerFilterRecyclerView.layoutManager = LinearLayoutManager(this)
+        binding.drawerFilterRecyclerView.adapter = drawerFilterAdapter
+
+        binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            when (checkedId) {
+                R.id.btn_filter_tracks -> setFilterMode(LibraryFilterMode.TRACK)
+                R.id.btn_filter_artists -> setFilterMode(LibraryFilterMode.ARTIST)
+                R.id.btn_filter_albums -> setFilterMode(LibraryFilterMode.ALBUM)
+            }
+        }
+
+        binding.btnClearFilter.setOnClickListener {
+            clearFilter()
+        }
+
+        binding.settingMusicFolder.setOnClickListener {
+            closeLeftMenu()
+            openFolderPicker()
+        }
+        updateFolderDisplay()
+
+        binding.settingRescan.setOnClickListener {
+            closeLeftMenu()
+            rescanMusic()
+        }
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
+        binding.switchShowAlbumArt.isChecked = isShowArt
+        binding.settingAlbumArt.setOnClickListener {
+            val newState = !binding.switchShowAlbumArt.isChecked
+            binding.switchShowAlbumArt.isChecked = newState
+            prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
+            songAdapter?.setShowAlbumArt(newState)
+        }
+
+        binding.settingOmnisync.setOnClickListener {
+            closeLeftMenu()
+            xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
+                .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
+        }
+
+        binding.settingAbout.setOnClickListener {
+            closeLeftMenu()
+            showAboutDialog()
+        }
+    }
+
+    private fun updateFolderDisplay() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val uriStr = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
+        if (uriStr != null) {
+            try {
+                val uri = Uri.parse(uriStr)
+                val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(this, uri)
+                val name = docFile?.name ?: uri.lastPathSegment ?: "Selected Folder"
+                binding.tvFolderPath.text = name
+            } catch (e: Exception) {
+                binding.tvFolderPath.text = "Folder Selected"
+            }
+        } else {
+            binding.tvFolderPath.text = getString(R.string.music_folder_desc)
+        }
+    }
+
+    private fun setFilterMode(mode: LibraryFilterMode) {
+        currentFilterMode = mode
+        when (mode) {
+            LibraryFilterMode.TRACK -> {
+                selectedFilterValue = null
+                binding.activeFilterBar.visibility = View.GONE
+                binding.drawerFilterRecyclerView.visibility = View.GONE
+                binding.drawerFilterInfoText.text = "Showing all tracks (${allScannedSongs.size})"
+                applyCurrentFilter()
+            }
+            LibraryFilterMode.ARTIST -> {
+                binding.drawerFilterRecyclerView.visibility = View.VISIBLE
+                updateFilterSubList()
+                if (selectedFilterValue != null) {
+                    binding.activeFilterBar.visibility = View.VISIBLE
+                    binding.activeFilterText.text = "Artist: $selectedFilterValue"
+                    binding.drawerFilterInfoText.text = "Filtered by artist: $selectedFilterValue"
+                } else {
+                    binding.activeFilterBar.visibility = View.GONE
+                    val count = allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+                    binding.drawerFilterInfoText.text = "Select from $count artists"
+                    applyCurrentFilter()
+                }
+            }
+            LibraryFilterMode.ALBUM -> {
+                binding.drawerFilterRecyclerView.visibility = View.VISIBLE
+                updateFilterSubList()
+                if (selectedFilterValue != null) {
+                    binding.activeFilterBar.visibility = View.VISIBLE
+                    binding.activeFilterText.text = "Album: $selectedFilterValue"
+                    binding.drawerFilterInfoText.text = "Filtered by album: $selectedFilterValue"
+                } else {
+                    binding.activeFilterBar.visibility = View.GONE
+                    val count = allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+                    binding.drawerFilterInfoText.text = "Select from $count albums"
+                    applyCurrentFilter()
+                }
+            }
+        }
+    }
+
+    private fun updateFilterSubList() {
+        if (allScannedSongs.isEmpty()) {
+            drawerFilterAdapter?.setItems(emptyList())
+            return
+        }
+        val items = when (currentFilterMode) {
+            LibraryFilterMode.ARTIST -> {
+                allScannedSongs
+                    .groupBy { it.artist.ifEmpty { "Unknown Artist" } }
+                    .map { (artist, songs) ->
+                        FilterItem(
+                            title = artist,
+                            count = songs.size,
+                            isAlbum = false,
+                            isSelected = artist.equals(selectedFilterValue, ignoreCase = true)
+                        )
+                    }
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+            }
+            LibraryFilterMode.ALBUM -> {
+                allScannedSongs
+                    .groupBy { it.album.ifEmpty { "Unknown Album" } }
+                    .map { (album, songs) ->
+                        FilterItem(
+                            title = album,
+                            count = songs.size,
+                            isAlbum = true,
+                            isSelected = album.equals(selectedFilterValue, ignoreCase = true)
+                        )
+                    }
+                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+            }
+            LibraryFilterMode.TRACK -> emptyList()
+        }
+        drawerFilterAdapter?.setItems(items)
+    }
+
+    private fun onFilterItemSelected(item: FilterItem) {
+        selectedFilterValue = item.title
+        binding.activeFilterBar.visibility = View.VISIBLE
+        binding.activeFilterText.text = if (item.isAlbum) "Album: ${item.title}" else "Artist: ${item.title}"
+        binding.drawerFilterInfoText.text = if (item.isAlbum) "Filtered by album: ${item.title}" else "Filtered by artist: ${item.title}"
+        updateFilterSubList()
+        applyCurrentFilter()
+        closeLeftMenu()
+    }
+
+    private fun clearFilter() {
+        selectedFilterValue = null
+        binding.activeFilterBar.visibility = View.GONE
+        binding.filterToggleGroup.check(R.id.btn_filter_tracks)
+        setFilterMode(LibraryFilterMode.TRACK)
+    }
+
+    private fun applyCurrentFilter() {
+        val filtered = when (currentFilterMode) {
+            LibraryFilterMode.TRACK -> allScannedSongs
+            LibraryFilterMode.ARTIST -> {
+                if (selectedFilterValue.isNullOrEmpty()) {
+                    allScannedSongs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.artist })
+                } else {
+                    allScannedSongs.filter { it.artist.equals(selectedFilterValue, ignoreCase = true) }
+                }
+            }
+            LibraryFilterMode.ALBUM -> {
+                if (selectedFilterValue.isNullOrEmpty()) {
+                    allScannedSongs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.album })
+                } else {
+                    allScannedSongs.filter { it.album.equals(selectedFilterValue, ignoreCase = true) }
+                }
+            }
+        }
+
+        displayedSongs = filtered
+        scannedSongs = filtered
+        songAdapter?.setSongs(filtered)
+
+        if (filtered.isNotEmpty()) {
+            binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
             binding.songsRecyclerView.visibility = View.VISIBLE
 
+            val filterVal = selectedFilterValue
+            if (!filterVal.isNullOrEmpty()) {
+                binding.sheetTitleText.text = "Queue • $filterVal"
+            } else {
+                binding.sheetTitleText.text = getString(R.string.queue_title)
+            }
+
             if (isBound && playbackService != null) {
-                playbackService?.refreshQueue(songs)
+                playbackService?.refreshQueue(filtered)
             }
         } else {
             binding.songCountText.text = "0 songs"
@@ -1092,6 +1384,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 setupDefaultView()
             }
         }
+    }
+
+    private fun updateSongList(songs: List<Song>) {
+        allScannedSongs = songs
+        binding.drawerSubtitleText.text = "${songs.size} songs"
+        updateFolderDisplay()
+        updateFilterSubList()
+        applyCurrentFilter()
     }
 
     private fun showOptionsMenu(anchor: View) {
@@ -1113,6 +1413,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val newState = !item.isChecked
                     item.isChecked = newState
                     prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
+                    binding.switchShowAlbumArt.isChecked = newState
                     songAdapter?.setShowAlbumArt(newState)
                     true
                 }
@@ -1602,7 +1903,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
                     if (title.isNotEmpty()) {
                         binding.songTitleText.text = title
-                        binding.artistNameText.text = if (artist.isNotEmpty()) "$artist (OmniSync)" else "OmniSync Stream"
+                        binding.artistNameText.text = if (artist.isNotEmpty()) artist else "OmniSync Stream"
                         val dur = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
                         if (dur > 0L) {
                             binding.playbackSlider.updateDuration(dur)

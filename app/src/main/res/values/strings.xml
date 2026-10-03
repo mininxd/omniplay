@@ -33,5 +33,16 @@
     <string name="omnisync_no_hosts">No OmniSync hosts found nearby. Ensure Host has started broadcasting on the same Wi-Fi or Hotspot.</string>
     <string name="omnisync_connect">Listen</string>
     <string name="omnisync_disconnect">Disconnect</string>
+
+    <!-- Side Menu & Filters -->
+    <string name="filter_library">Filter Library</string>
+    <string name="filter_tracks">Tracks</string>
+    <string name="filter_artists">Artists</string>
+    <string name="filter_albums">Albums</string>
+    <string name="clear_filter">Clear Filter</string>
+    <string name="all_tracks">All Tracks</string>
+    <string name="settings_title">Settings</string>
+    <string name="music_folder">Music Folder</string>
+    <string name="music_folder_desc">Directory containing audio files</string>
 </resources>
 
