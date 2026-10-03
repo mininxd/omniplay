@@ -39,6 +39,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.abs
@@ -822,6 +823,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             val songId = initialStatus.optLong("songId", 0L)
             val pos = initialStatus.optLong("position", 0L)
             val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
+            val rName = initialStatus.optString("hostName", host.name)
             val format = initialStatus.optString("format", "").ifEmpty { initialStatus.optString("songFormat", "") }
             currentHostRoomName = rName
 
