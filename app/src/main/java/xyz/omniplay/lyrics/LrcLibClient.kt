@@ -19,7 +19,7 @@ import java.util.Locale
 object LrcLibClient {
     private const val TAG = "LrcLibClient"
     private const val BASE_URL = "https://lrclib.net/api"
-    private const val USER_AGENT = "Omniplay/0.3.1 (https://github.com/mininxd/omniplay)"
+    private const val USER_AGENT = "Omniplay/0.4 (https://github.com/mininxd/omniplay)"
     private const val TIMEOUT_MS = 8000
 
     // In-memory cache for the current session
