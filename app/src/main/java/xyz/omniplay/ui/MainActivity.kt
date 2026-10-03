@@ -895,10 +895,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val deltaY = event.rawY - startY
 
                     if (!isDraggingDrawer) {
-                        // Slide trigger is on titles area to center UI maybe 60%
+                        // Slide trigger has generous space across titles area
                         val titleAreaWidth = v.width.toFloat().coerceAtLeast(1f)
                         val touchXInView = event.x - deltaX
-                        val inTriggerZone = touchXInView <= titleAreaWidth * 0.70f
+                        val inTriggerZone = touchXInView <= titleAreaWidth * 0.85f
 
                         if (inTriggerZone && deltaX > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
                             isDraggingDrawer = true

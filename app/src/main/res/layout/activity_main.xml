@@ -22,17 +22,20 @@
             <!-- Top Bar -->
             <TextView
                 android:id="@+id/app_title_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="24dp"
-                android:layout_marginTop="16dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
                 android:fontFamily="sans-serif-medium"
+                android:gravity="center_vertical|start"
+                android:paddingStart="24dp"
+                android:paddingEnd="16dp"
                 android:text="@string/app_name"
                 android:textColor="@color/text_primary"
                 android:textSize="23sp"
+                app:layout_constraintEnd_toStartOf="@id/btn_menu"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
@@ -220,10 +223,11 @@
             android:id="@+id/title_gesture_area"
             android:layout_width="0dp"
             android:layout_height="0dp"
+            android:layout_marginBottom="-12dp"
             android:background="@android:color/transparent"
             android:clickable="true"
             android:focusable="false"
-            app:layout_constraintTop_toTopOf="@id/song_title_text"
+            app:layout_constraintTop_toBottomOf="@id/album_art_card"
             app:layout_constraintBottom_toBottomOf="@id/album_name_text"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
@@ -704,9 +708,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
-                    android:text="@string/filter_library"
+                    android:text="@string/app_name"
                     android:textColor="@color/text_primary"
-                    android:textSize="18sp" />
+                    android:textSize="20sp" />
 
                 <TextView
                     android:id="@+id/drawer_subtitle_text"
