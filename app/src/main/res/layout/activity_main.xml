@@ -280,9 +280,23 @@
                         android:layout_marginTop="12dp"
                         android:text="Loading lyrics..."
                         android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
+                        android:textSize="14sp"
                         android:fontFamily="sans-serif-medium"
                         android:gravity="center" />
+
+                    <TextView
+                        android:id="@+id/lyrics_status_subtext"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:paddingStart="24dp"
+                        android:paddingEnd="24dp"
+                        android:text=""
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif"
+                        android:gravity="center"
+                        android:visibility="gone" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_lyrics_retry"

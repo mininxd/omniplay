@@ -46,6 +46,7 @@ import xyz.omniplay.data.MusicScanner
 import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.lyrics.LyricLine
 import xyz.omniplay.lyrics.Lyrics
+import xyz.omniplay.lyrics.LyricsResult
 import xyz.omniplay.lyrics.LrcLibClient
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
@@ -342,8 +343,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
             }
             playbackService?.let { service ->
-                val listToPlay = if (displayedSongs.isNotEmpty()) displayedSongs else scannedSongs
-                service.setSongQueue(listToPlay, startIndex = index, startPlaying = true)
+                if (service.queue.any { it.id == song.id }) {
+                    // Song is in current playing queue -> play it directly without disrupting the ongoing queue
+                    service.playSongFromPlaylist(song, startPlaying = true)
+                } else {
+                    // If not currently in queue, initialize queue from all scanned songs to maintain full library
+                    val fullList = if (allScannedSongs.isNotEmpty()) allScannedSongs else listOf(song)
+                    val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+                    service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
+                }
             }
         }
 
@@ -593,7 +601,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             binding.lyricsCard.scaleX = 0.92f
                             binding.lyricsCard.scaleY = 0.92f
                             binding.lyricsCard.alpha = 0.5f
-                            loadLyricsForCurrentSong()
+                            prepareLyricsForDisplay()
                         } else if (deltaY > 35f && Math.abs(deltaY) > Math.abs(deltaX) * 2f) {
                             v.parent?.requestDisallowInterceptTouchEvent(false)
                         }
@@ -842,6 +850,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         binding.lyricsCard.scaleX = 1f
                                         binding.lyricsCard.scaleY = 1f
                                         binding.lyricsCard.alpha = 1f
+                                        prepareLyricsForDisplay()
                                         playbackService?.let { service ->
                                             updateLyricsProgress(service.getCurrentPosition().toLong())
                                         }
@@ -949,7 +958,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.lyricsCard.scaleY = 0.94f
         binding.lyricsCard.alpha = 0.6f
 
-        loadLyricsForCurrentSong()
+        prepareLyricsForDisplay()
 
         binding.lyricsCard.animate()
             .scaleX(1f).scaleY(1f).alpha(1f)
@@ -1008,6 +1017,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             .start()
     }
 
+    private fun prepareLyricsForDisplay() {
+        val song = playbackService?.currentSong ?: return
+        if (currentLyrics != null && currentLyrics?.songId == song.id) {
+            renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
+        } else {
+            showLyricsLoading()
+            loadLyricsForSong(song, forceRefresh = false)
+        }
+    }
+
     private fun loadLyricsForCurrentSong(forceRefresh: Boolean = false) {
         val song = playbackService?.currentSong ?: return
         loadLyricsForSong(song, forceRefresh)
@@ -1017,7 +1036,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         lyricsFetchJob?.cancel()
         if (currentLyrics?.songId == song.id && !forceRefresh) {
             if (isLyricsShowing) {
-                renderLyrics(currentLyrics)
+                renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
             }
             return
         }
@@ -1027,11 +1046,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         lyricsFetchJob = lifecycleScope.launch {
-            val lyrics = LrcLibClient.getLyrics(this@MainActivity, song)
+            val result = LrcLibClient.getLyrics(this@MainActivity, song, forceRefresh)
             if (playbackService?.currentSong?.id == song.id) {
-                currentLyrics = lyrics
-                if (isLyricsShowing) {
-                    renderLyrics(lyrics)
+                when (result) {
+                    is LyricsResult.Success -> {
+                        currentLyrics = result.lyrics
+                        if (isLyricsShowing) {
+                            renderLyricsResult(result)
+                        }
+                    }
+                    is LyricsResult.NotFound, is LyricsResult.Error -> {
+                        currentLyrics = null
+                        if (isLyricsShowing) {
+                            renderLyricsResult(result)
+                        }
+                    }
+                    is LyricsResult.Loading -> {}
                 }
             }
         }
@@ -1045,61 +1075,107 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.lyricsProgressBar.visibility = View.VISIBLE
         binding.lyricsStatusIcon.visibility = View.GONE
         binding.lyricsStatusText.text = "Loading lyrics..."
+        binding.lyricsStatusSubtext.visibility = View.GONE
         binding.btnLyricsRetry.visibility = View.GONE
     }
 
-    private fun renderLyrics(lyrics: Lyrics?) {
+    private fun renderLyricsResult(result: LyricsResult) {
         if (!::binding.isInitialized) return
-        if (lyrics == null) {
-            binding.lyricsRecyclerView.visibility = View.GONE
-            binding.lyricsPlainScroll.visibility = View.GONE
-            binding.lyricsStatusLayout.visibility = View.VISIBLE
-            binding.lyricsProgressBar.visibility = View.GONE
-            binding.lyricsStatusIcon.visibility = View.VISIBLE
-            binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
-            binding.lyricsStatusText.text = "No lyrics found"
-            binding.btnLyricsRetry.visibility = View.VISIBLE
-            return
-        }
-
-        if (lyrics.isInstrumental) {
-            binding.lyricsRecyclerView.visibility = View.GONE
-            binding.lyricsPlainScroll.visibility = View.GONE
-            binding.lyricsStatusLayout.visibility = View.VISIBLE
-            binding.lyricsProgressBar.visibility = View.GONE
-            binding.lyricsStatusIcon.visibility = View.VISIBLE
-            binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
-            binding.lyricsStatusText.text = "Instrumental Track"
-            binding.btnLyricsRetry.visibility = View.GONE
-            return
-        }
-
-        if (lyrics.hasSynced) {
-            binding.lyricsStatusLayout.visibility = View.GONE
-            binding.lyricsPlainScroll.visibility = View.GONE
-            binding.lyricsRecyclerView.visibility = View.VISIBLE
-            lyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
-            playbackService?.let { service ->
-                updateLyricsProgress(service.getCurrentPosition().toLong())
+        when (result) {
+            is LyricsResult.Loading -> {
+                showLyricsLoading()
             }
-            return
-        }
+            is LyricsResult.Success -> {
+                val lyrics = result.lyrics
+                if (lyrics.isInstrumental) {
+                    binding.lyricsRecyclerView.visibility = View.GONE
+                    binding.lyricsPlainScroll.visibility = View.GONE
+                    binding.lyricsStatusLayout.visibility = View.VISIBLE
+                    binding.lyricsProgressBar.visibility = View.GONE
+                    binding.lyricsStatusIcon.visibility = View.VISIBLE
+                    binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                    binding.lyricsStatusText.text = "Instrumental Track"
+                    binding.lyricsStatusSubtext.text = "This track contains no vocal lyrics"
+                    binding.lyricsStatusSubtext.visibility = View.VISIBLE
+                    binding.btnLyricsRetry.visibility = View.GONE
+                    updateLyricsSourceBadge(lyrics.source, result.isOffline)
+                    return
+                }
 
-        if (lyrics.hasPlain) {
-            binding.lyricsStatusLayout.visibility = View.GONE
-            binding.lyricsRecyclerView.visibility = View.GONE
-            binding.lyricsPlainScroll.visibility = View.VISIBLE
-            binding.lyricsPlainText.text = lyrics.plainLyrics
-            return
-        }
+                if (lyrics.hasSynced) {
+                    binding.lyricsStatusLayout.visibility = View.GONE
+                    binding.lyricsPlainScroll.visibility = View.GONE
+                    binding.lyricsRecyclerView.visibility = View.VISIBLE
+                    lyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
+                    playbackService?.let { service ->
+                        updateLyricsProgress(service.getCurrentPosition().toLong())
+                    }
+                    updateLyricsSourceBadge(lyrics.source, result.isOffline)
+                    return
+                }
 
-        binding.lyricsRecyclerView.visibility = View.GONE
-        binding.lyricsPlainScroll.visibility = View.GONE
-        binding.lyricsStatusLayout.visibility = View.VISIBLE
-        binding.lyricsProgressBar.visibility = View.GONE
-        binding.lyricsStatusIcon.visibility = View.VISIBLE
-        binding.lyricsStatusText.text = "No lyrics available"
-        binding.btnLyricsRetry.visibility = View.VISIBLE
+                if (lyrics.hasPlain) {
+                    binding.lyricsStatusLayout.visibility = View.GONE
+                    binding.lyricsRecyclerView.visibility = View.GONE
+                    binding.lyricsPlainScroll.visibility = View.VISIBLE
+                    binding.lyricsPlainText.text = lyrics.plainLyrics
+                    updateLyricsSourceBadge(lyrics.source, result.isOffline)
+                    return
+                }
+
+                binding.lyricsRecyclerView.visibility = View.GONE
+                binding.lyricsPlainScroll.visibility = View.GONE
+                binding.lyricsStatusLayout.visibility = View.VISIBLE
+                binding.lyricsProgressBar.visibility = View.GONE
+                binding.lyricsStatusIcon.visibility = View.VISIBLE
+                binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                binding.lyricsStatusText.text = "No lyrics available"
+                binding.lyricsStatusSubtext.text = "No lyric lines available for this song"
+                binding.lyricsStatusSubtext.visibility = View.VISIBLE
+                binding.btnLyricsRetry.visibility = View.VISIBLE
+                binding.btnLyricsRetry.text = "Search Again"
+            }
+            is LyricsResult.NotFound -> {
+                binding.lyricsRecyclerView.visibility = View.GONE
+                binding.lyricsPlainScroll.visibility = View.GONE
+                binding.lyricsStatusLayout.visibility = View.VISIBLE
+                binding.lyricsProgressBar.visibility = View.GONE
+                binding.lyricsStatusIcon.visibility = View.VISIBLE
+                binding.lyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                binding.lyricsStatusText.text = "No lyrics found"
+                binding.lyricsStatusSubtext.text = result.message
+                binding.lyricsStatusSubtext.visibility = View.VISIBLE
+                binding.btnLyricsRetry.visibility = View.VISIBLE
+                binding.btnLyricsRetry.text = "Search Again"
+            }
+            is LyricsResult.Error -> {
+                binding.lyricsRecyclerView.visibility = View.GONE
+                binding.lyricsPlainScroll.visibility = View.GONE
+                binding.lyricsStatusLayout.visibility = View.VISIBLE
+                binding.lyricsProgressBar.visibility = View.GONE
+                binding.lyricsStatusIcon.visibility = View.VISIBLE
+                binding.lyricsStatusIcon.setImageResource(R.drawable.ic_info)
+                if (result.isRateLimited) {
+                    binding.lyricsStatusText.text = "Too many requests"
+                } else {
+                    binding.lyricsStatusText.text = "Could not load lyrics"
+                }
+                binding.lyricsStatusSubtext.text = result.message
+                binding.lyricsStatusSubtext.visibility = View.VISIBLE
+                binding.btnLyricsRetry.visibility = View.VISIBLE
+                binding.btnLyricsRetry.text = "Retry"
+            }
+        }
+    }
+
+    private fun updateLyricsSourceBadge(source: String, isOffline: Boolean) {
+        val badge = when {
+            source.startsWith("EMBEDDED") -> source.removePrefix("EMBEDDED (").removeSuffix(")")
+            source == "LOCAL FILE" -> "LOCAL"
+            isOffline -> "OFFLINE"
+            else -> "LRCLIB"
+        }
+        binding.lyricsSourceBadge.text = badge
     }
 
     private fun updateLyricsProgress(currentPositionMs: Long) {
@@ -1892,7 +1968,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
 
         displayedSongs = filtered
-        scannedSongs = filtered
         songAdapter?.setSongs(filtered)
 
         if (filtered.isNotEmpty()) {
@@ -1902,7 +1977,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             val filterVal = selectedFilterValue
             if (!filterVal.isNullOrEmpty()) {
-                binding.sheetTitleText.text = "Queue • $filterVal"
+                binding.sheetTitleText.text = "Music List • $filterVal"
             } else {
                 binding.sheetTitleText.text = getString(R.string.queue_title)
             }
@@ -1915,6 +1990,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun updateSongList(songs: List<Song>) {
         allScannedSongs = songs
+        scannedSongs = songs
         binding.drawerSubtitleText.text = "${songs.size} songs"
         updateFilterSubList()
         applyCurrentFilter()
@@ -2117,11 +2193,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     override fun onTrackChanged(song: Song?) {
         runOnUiThread {
             if (!::binding.isInitialized) return@runOnUiThread
+            // Immediately reset lyrics state and clear UI so previous song's lyrics NEVER persist
+            lyricsFetchJob?.cancel()
+            currentLyrics = null
+            lyricAdapter?.submitLines(emptyList())
+            binding.lyricsPlainText.text = ""
+
             if (song == null) {
                 setupDefaultView()
                 songAdapter?.setCurrentPlayingSongId(-1L)
-                currentLyrics = null
-                renderLyrics(null)
+                renderLyricsResult(LyricsResult.NotFound("No song is currently playing"))
                 return@runOnUiThread
             }
 
@@ -2151,7 +2232,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.lyricsCard.visibility = View.INVISIBLE
             }
 
-            loadLyricsForSong(song)
+            if (isLyricsShowing) {
+                showLyricsLoading()
+                loadLyricsForSong(song, forceRefresh = false)
+            } else {
+                // If lyrics card is hidden, check embedded/offline lyrics immediately without making any network requests
+                LrcLibClient.getCachedLyrics(this@MainActivity, song)?.let { cached ->
+                    currentLyrics = cached
+                }
+            }
 
             val cachedArt = AlbumArtLoader.getCachedAlbumArt(song.id)
             if (cachedArt != null) {

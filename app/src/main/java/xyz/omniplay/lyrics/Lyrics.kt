@@ -15,7 +15,8 @@ data class Lyrics(
     val plainLyrics: String?,
     val isInstrumental: Boolean = false,
     val syncedRaw: String? = null,
-    val source: String = "LRCLIB"
+    val source: String = "LRCLIB",
+    val isOffline: Boolean = false
 ) : Serializable {
 
     val hasSynced: Boolean
@@ -26,4 +27,11 @@ data class Lyrics(
 
     val hasAnyLyrics: Boolean
         get() = isInstrumental || hasSynced || hasPlain
+}
+
+sealed class LyricsResult {
+    data class Success(val lyrics: Lyrics, val isOffline: Boolean) : LyricsResult()
+    data class NotFound(val message: String = "No lyrics found for this song") : LyricsResult()
+    data class Error(val message: String, val isRateLimited: Boolean = false) : LyricsResult()
+    object Loading : LyricsResult()
 }
