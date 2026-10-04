@@ -19,6 +19,7 @@ import xyz.omniplay.R
 import xyz.omniplay.databinding.ItemSongBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
+import xyz.omniplay.util.ThemeColors
 
 class SongAdapter(
     private var showAlbumArt: Boolean = true,
@@ -92,8 +93,8 @@ class SongAdapter(
             binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
             binding.itemDurationText.text = Song.formatTime(song.duration)
 
-            val primaryColor = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
-            val onSurfaceColor = MaterialColors.getColor(context, R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
+            val primaryColor = ThemeColors.getPrimary(context)
+            val onSurfaceColor = ThemeColors.getOnSurface(context)
 
             if (isPlaying) {
                 binding.itemTitleText.setTextColor(primaryColor)
@@ -105,7 +106,7 @@ class SongAdapter(
             }
 
             fun showDefaultAlbumArt() {
-                val surfaceContainerHigh = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
+                val surfaceContainerHigh = ThemeColors.getSurfaceContainerHigh(context)
                 binding.thumbnailCard.setCardBackgroundColor(surfaceContainerHigh)
                 binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()
@@ -115,7 +116,7 @@ class SongAdapter(
             }
 
             fun showAlbumArt(bitmap: Bitmap) {
-                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.surface_container_high))
+                binding.thumbnailCard.setCardBackgroundColor(ThemeColors.getSurfaceContainerHigh(context))
                 binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()
                 binding.itemThumbnailImage.setPadding(0, 0, 0, 0)

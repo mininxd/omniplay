@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.color.MaterialColors
 import xyz.omniplay.R
 import xyz.omniplay.lyrics.LyricLine
+import xyz.omniplay.util.ThemeColors
 
 class LyricAdapter(
     private var lines: List<LyricLine> = emptyList(),
@@ -65,8 +66,8 @@ class LyricAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
-            val onSurface = MaterialColors.getColor(ctx, R.attr.colorOnSurface, ContextCompat.getColor(ctx, R.color.text_primary))
-            val onSurfaceVariant = MaterialColors.getColor(ctx, R.attr.colorOnSurfaceVariant, ContextCompat.getColor(ctx, R.color.text_secondary))
+            val onSurface = ThemeColors.getOnSurface(ctx)
+            val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(ctx)
 
             if (isActive) {
                 lyricText.setTextColor(onSurface)

@@ -17,6 +17,7 @@ import xyz.omniplay.R
 import xyz.omniplay.databinding.ItemDrawerFilterBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
+import xyz.omniplay.util.ThemeColors
 
 data class FilterItem(
     val title: String,
@@ -88,7 +89,7 @@ class DrawerFilterAdapter(
                     if (item.isAlbum) R.drawable.ic_album else R.drawable.ic_person
                 )
                 val tintColor = if (item.isSelected) {
-                    MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+                    ThemeColors.getPrimary(context)
                 } else {
                     ContextCompat.getColor(context, R.color.control_tint_inactive)
                 }
@@ -121,7 +122,7 @@ class DrawerFilterAdapter(
                 }
             }
 
-            val primaryColor = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val primaryColor = ThemeColors.getPrimary(context)
             if (item.isSelected) {
                 binding.filterItemTitle.setTextColor(primaryColor)
                 binding.filterItemCount.setTextColor(primaryColor)

@@ -56,6 +56,7 @@ import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioTrackInfo
+import xyz.omniplay.util.ThemeColors
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
@@ -2815,11 +2816,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun getActiveControlTint(): Int {
-        return MaterialColors.getColor(
-            this,
-            R.attr.colorPrimary,
-            ContextCompat.getColor(this, R.color.control_tint_active)
-        )
+        return ThemeColors.getPrimary(this)
     }
 
     private fun getInactiveControlTint(): Int {

@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.color.MaterialColors
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
+import xyz.omniplay.util.ThemeColors
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.max
@@ -152,23 +153,23 @@ class SquigglySeekBar @JvmOverloads constructor(
 
     fun refreshThemeColors() {
         if (!isNeutralMode) {
-            val primary = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val primary = ThemeColors.getPrimary(context)
             activeTrackPaint.color = primary
             thumbPaint.color = primary
             thumbHaloPaint.color = primary
             thumbHaloPaint.alpha = 50
         } else {
-            val neutral = MaterialColors.getColor(context, R.attr.colorOnSurfaceVariant, ContextCompat.getColor(context, R.color.text_secondary))
+            val neutral = ThemeColors.getOnSurfaceVariant(context)
             activeTrackPaint.color = neutral
             thumbPaint.color = neutral
             thumbHaloPaint.color = neutral
             thumbHaloPaint.alpha = 40
         }
-        inactiveTrackPaint.color = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHighest, ContextCompat.getColor(context, R.color.slider_track_inactive))
-        bubblePaint.color = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
-        bubbleStrokePaint.color = MaterialColors.getColor(context, R.attr.colorOutlineVariant, ContextCompat.getColor(context, R.color.badge_stroke))
-        bubbleCancelStrokePaint.color = MaterialColors.getColor(context, R.attr.colorError, ContextCompat.getColor(context, R.color.slider_cancel_accent))
-        bubbleTextPaint.color = MaterialColors.getColor(context, R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
+        inactiveTrackPaint.color = ThemeColors.getSurfaceContainerHighest(context)
+        bubblePaint.color = ThemeColors.getSurfaceContainerHigh(context)
+        bubbleStrokePaint.color = ThemeColors.getOutlineVariant(context)
+        bubbleCancelStrokePaint.color = ThemeColors.getError(context)
+        bubbleTextPaint.color = ThemeColors.getOnSurface(context)
         invalidate()
     }
 
