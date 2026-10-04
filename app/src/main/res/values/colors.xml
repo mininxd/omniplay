@@ -31,4 +31,8 @@
 
     <!-- Seek cancel indicator (muted terracotta/rose red) -->
     <color name="slider_cancel_accent">#BA7272</color>
+
+    <!-- Badges & Popup borders (muted) -->
+    <color name="badge_stroke">#3A4052</color>
+    <color name="badge_cancel_stroke">#6E3D3D</color>
 </resources>

@@ -373,9 +373,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
-                    BottomSheetBehavior.STATE_EXPANDED,
-                    BottomSheetBehavior.STATE_HALF_EXPANDED -> {
+                    BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
+                    }
+                    BottomSheetBehavior.STATE_HALF_EXPANDED -> {
+                        binding.ivChevron.rotation = 90f
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
@@ -389,7 +391,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
                 if (slideOffset >= 0f) {
-                    binding.ivChevron.rotation = slideOffset.coerceIn(0f, 1f) * 180f
+                    val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: binding.root.height
+                    val collapsedOffset = (parentH - bottomSheetBehavior.peekHeight).toFloat()
+                    val halfExpandedOffset = parentH * (1f - bottomSheetBehavior.halfExpandedRatio)
+                    val expandedOffset = bottomSheetBehavior.expandedOffset.toFloat()
+
+                    val travelToHalf = (collapsedOffset - halfExpandedOffset).coerceAtLeast(1f)
+                    val totalTravel = (collapsedOffset - expandedOffset).coerceAtLeast(travelToHalf + 1f)
+                    val halfSlideOffset = (travelToHalf / totalTravel).coerceIn(0.1f, 0.9f)
+
+                    val rotation = if (slideOffset <= halfSlideOffset) {
+                        (slideOffset / halfSlideOffset).coerceIn(0f, 1f) * 90f
+                    } else {
+                        90f + ((slideOffset - halfSlideOffset) / (1f - halfSlideOffset)).coerceIn(0f, 1f) * 90f
+                    }
+                    binding.ivChevron.rotation = rotation
                 }
             }
         })
@@ -530,7 +546,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
                         binding.playlistSlidingPanel.translationY = targetTranslation
                         val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
-                        binding.ivChevron.rotation = progress * 180f
+                        binding.ivChevron.rotation = progress * 90f
                     }
                     true
                 }
@@ -558,7 +574,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             addUpdateListener { anim ->
                                 val v = anim.animatedValue as Float
                                 binding.playlistSlidingPanel.translationY = v
-                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 180f
+                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 90f
                             }
                             addListener(object : AnimatorListenerAdapter() {
                                 override fun onAnimationEnd(animation: Animator) {
@@ -568,7 +584,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                                         panel.offsetTopAndBottom(offset)
                                         panel.translationY = 0f
                                         bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
-                                        binding.ivChevron.rotation = 180f
+                                        binding.ivChevron.rotation = 90f
                                     } else {
                                         panel.translationY = 0f
                                         bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED

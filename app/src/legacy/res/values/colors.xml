@@ -27,4 +27,11 @@
     <!-- System & Window -->
     <color name="status_bar_color">#121212</color>
     <color name="navigation_bar_color">#121212</color>
+
+    <!-- Seek cancel indicator -->
+    <color name="slider_cancel_accent">#BA7272</color>
+
+    <!-- Badges & Popup borders (muted) -->
+    <color name="badge_stroke">#3E3E3E</color>
+    <color name="badge_cancel_stroke">#6E3D3D</color>
 </resources>

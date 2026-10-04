@@ -98,6 +98,11 @@ class SquigglySeekBar @JvmOverloads constructor(
     private var phaseAnimator: ValueAnimator? = null
     private var smoothProgressAnimator: ValueAnimator? = null
 
+    // Message popup tooltip animations
+    private var bubbleAlpha: Float = 0f
+    private var bubbleScale: Float = 0.85f
+    private var bubbleAnimator: ValueAnimator? = null
+
     private val squigglyPath = Path()
 
     private val activeTrackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -131,15 +136,15 @@ class SquigglySeekBar @JvmOverloads constructor(
     }
 
     private val bubbleStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.primary_accent)
+        color = ContextCompat.getColor(context, R.color.badge_stroke)
         style = Paint.Style.STROKE
-        strokeWidth = 1.5f * density
+        strokeWidth = 1f * density
     }
 
     private val bubbleCancelStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.slider_cancel_accent)
         style = Paint.Style.STROKE
-        strokeWidth = 1.5f * density
+        strokeWidth = 1f * density
     }
 
     private val bubbleTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -222,6 +227,29 @@ class SquigglySeekBar @JvmOverloads constructor(
         }
     }
 
+    private fun animateBubbleVisibility(show: Boolean) {
+        bubbleAnimator?.cancel()
+        val targetAlpha = if (show) 1f else 0f
+        val targetScale = if (show) 1f else 0.85f
+        val startAlpha = bubbleAlpha
+        val startScale = bubbleScale
+
+        if (show && bubbleAlpha == 1f && bubbleScale == 1f) return
+        if (!show && bubbleAlpha == 0f) return
+
+        bubbleAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = if (show) 140L else 120L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { anim ->
+                val fraction = anim.animatedValue as Float
+                bubbleAlpha = startAlpha + (targetAlpha - startAlpha) * fraction
+                bubbleScale = startScale + (targetScale - startScale) * fraction
+                invalidate()
+            }
+            start()
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (isPlaying) {
@@ -234,6 +262,7 @@ class SquigglySeekBar @JvmOverloads constructor(
         stopPhaseAnimation()
         smoothProgressAnimator?.cancel()
         amplitudeAnimator?.cancel()
+        bubbleAnimator?.cancel()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -290,13 +319,13 @@ class SquigglySeekBar @JvmOverloads constructor(
         }
 
         // 4. Draw Floating Time Bubble Tooltip above finger during scrubbing
-        if (isUserDragging && isEnabled && maxDurationMs > 0) {
+        if (bubbleAlpha > 0f && isEnabled && maxDurationMs > 0) {
             val displayText = if (isSeekCancelled) cancelMessage else Song.formatTime(currentProgressMs)
             val textWidth = bubbleTextPaint.measureText(displayText)
-            val bubbleWidth = textWidth + 18f * density
-            val bubbleHeight = 22f * density
-            val bubbleRadius = 11f * density
-            val bubbleBottom = centerY - thumbHaloRadiusPx - 4f * density
+            val bubbleWidth = textWidth + 20f * density
+            val bubbleHeight = 24f * density
+            val bubbleRadius = 8f * density
+            val bubbleBottom = centerY - thumbHaloRadiusPx - 6f * density
             val bubbleTop = bubbleBottom - bubbleHeight
 
             val halfWidth = bubbleWidth / 2f
@@ -312,6 +341,14 @@ class SquigglySeekBar @JvmOverloads constructor(
                 bubbleBottom
             )
 
+            canvas.save()
+            canvas.scale(bubbleScale, bubbleScale, bubbleCenterX, bubbleRect.centerY())
+
+            bubblePaint.alpha = (255 * bubbleAlpha).toInt()
+            bubbleStrokePaint.alpha = (255 * bubbleAlpha).toInt()
+            bubbleCancelStrokePaint.alpha = (255 * bubbleAlpha).toInt()
+            bubbleTextPaint.alpha = (255 * bubbleAlpha).toInt()
+
             canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubblePaint)
             if (isSeekCancelled) {
                 canvas.drawRoundRect(bubbleRect, bubbleRadius, bubbleRadius, bubbleCancelStrokePaint)
@@ -321,6 +358,7 @@ class SquigglySeekBar @JvmOverloads constructor(
 
             val textY = bubbleRect.centerY() - (bubbleTextPaint.descent() + bubbleTextPaint.ascent()) / 2f
             canvas.drawText(displayText, bubbleCenterX, textY, bubbleTextPaint)
+            canvas.restore()
         }
     }
 
@@ -334,6 +372,7 @@ class SquigglySeekBar @JvmOverloads constructor(
                 hasSlidAway = false
                 isSeekCancelled = false
                 animateAmplitude(0f) // Smoothly flatten wave into straight line during scrubbing
+                animateBubbleVisibility(true)
                 parent?.requestDisallowInterceptTouchEvent(true)
                 seekListener?.onStartTracking()
                 smoothProgressAnimator?.cancel()
@@ -351,6 +390,7 @@ class SquigglySeekBar @JvmOverloads constructor(
                     val wasCancelled = isSeekCancelled
                     isUserDragging = false
                     animateAmplitude(1f) // Smoothly bounce back to squiggly wave on release
+                    animateBubbleVisibility(false)
                     if (wasCancelled) {
                         currentProgressMs = initialPlayingProgressMs
                         displayedProgressMs = initialPlayingProgressMs.toFloat()
