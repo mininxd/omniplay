@@ -2817,7 +2817,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun getActiveControlTint(): Int {
         return MaterialColors.getColor(
             this,
-            com.google.android.material.R.attr.colorPrimary,
+            R.attr.colorPrimary,
             ContextCompat.getColor(this, R.color.control_tint_active)
         )
     }

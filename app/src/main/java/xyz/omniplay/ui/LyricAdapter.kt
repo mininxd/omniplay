@@ -65,8 +65,8 @@ class LyricAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
-            val onSurface = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurface, ContextCompat.getColor(ctx, R.color.text_primary))
-            val onSurfaceVariant = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, ContextCompat.getColor(ctx, R.color.text_secondary))
+            val onSurface = MaterialColors.getColor(ctx, R.attr.colorOnSurface, ContextCompat.getColor(ctx, R.color.text_primary))
+            val onSurfaceVariant = MaterialColors.getColor(ctx, R.attr.colorOnSurfaceVariant, ContextCompat.getColor(ctx, R.color.text_secondary))
 
             if (isActive) {
                 lyricText.setTextColor(onSurface)

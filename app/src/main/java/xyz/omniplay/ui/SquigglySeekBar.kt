@@ -152,23 +152,23 @@ class SquigglySeekBar @JvmOverloads constructor(
 
     fun refreshThemeColors() {
         if (!isNeutralMode) {
-            val primary = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val primary = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
             activeTrackPaint.color = primary
             thumbPaint.color = primary
             thumbHaloPaint.color = primary
             thumbHaloPaint.alpha = 50
         } else {
-            val neutral = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurfaceVariant, ContextCompat.getColor(context, R.color.text_secondary))
+            val neutral = MaterialColors.getColor(context, R.attr.colorOnSurfaceVariant, ContextCompat.getColor(context, R.color.text_secondary))
             activeTrackPaint.color = neutral
             thumbPaint.color = neutral
             thumbHaloPaint.color = neutral
             thumbHaloPaint.alpha = 40
         }
-        inactiveTrackPaint.color = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceContainerHighest, ContextCompat.getColor(context, R.color.slider_track_inactive))
-        bubblePaint.color = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
-        bubbleStrokePaint.color = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOutlineVariant, ContextCompat.getColor(context, R.color.badge_stroke))
-        bubbleCancelStrokePaint.color = MaterialColors.getColor(context, com.google.android.material.R.attr.colorError, ContextCompat.getColor(context, R.color.slider_cancel_accent))
-        bubbleTextPaint.color = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
+        inactiveTrackPaint.color = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHighest, ContextCompat.getColor(context, R.color.slider_track_inactive))
+        bubblePaint.color = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
+        bubbleStrokePaint.color = MaterialColors.getColor(context, R.attr.colorOutlineVariant, ContextCompat.getColor(context, R.color.badge_stroke))
+        bubbleCancelStrokePaint.color = MaterialColors.getColor(context, R.attr.colorError, ContextCompat.getColor(context, R.color.slider_cancel_accent))
+        bubbleTextPaint.color = MaterialColors.getColor(context, R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
         invalidate()
     }
 

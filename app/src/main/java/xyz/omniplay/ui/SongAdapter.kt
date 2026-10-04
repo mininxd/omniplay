@@ -92,8 +92,8 @@ class SongAdapter(
             binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
             binding.itemDurationText.text = Song.formatTime(song.duration)
 
-            val primaryColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
-            val onSurfaceColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
+            val primaryColor = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val onSurfaceColor = MaterialColors.getColor(context, R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
 
             if (isPlaying) {
                 binding.itemTitleText.setTextColor(primaryColor)
@@ -105,7 +105,7 @@ class SongAdapter(
             }
 
             fun showDefaultAlbumArt() {
-                val surfaceContainerHigh = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
+                val surfaceContainerHigh = MaterialColors.getColor(context, R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
                 binding.thumbnailCard.setCardBackgroundColor(surfaceContainerHigh)
                 binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()

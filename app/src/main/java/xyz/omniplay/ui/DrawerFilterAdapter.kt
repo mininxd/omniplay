@@ -88,7 +88,7 @@ class DrawerFilterAdapter(
                     if (item.isAlbum) R.drawable.ic_album else R.drawable.ic_person
                 )
                 val tintColor = if (item.isSelected) {
-                    MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+                    MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
                 } else {
                     ContextCompat.getColor(context, R.color.control_tint_inactive)
                 }
@@ -121,7 +121,7 @@ class DrawerFilterAdapter(
                 }
             }
 
-            val primaryColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val primaryColor = MaterialColors.getColor(context, R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
             if (item.isSelected) {
                 binding.filterItemTitle.setTextColor(primaryColor)
                 binding.filterItemCount.setTextColor(primaryColor)
