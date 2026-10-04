@@ -2494,13 +2494,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun showAboutDialog() {
         val message = """
-            Omniplay 0.3
-            Open Source Material You Music Player
+            Omniplay 0.5
+            Open Source Material 3 Expressive Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
             Architectures: armv7, armv8, x86, x86_64, Universal
             
-            Built with pure Android & Material You Design.
+            Built with pure Android & Material 3 Expressive Design.
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)

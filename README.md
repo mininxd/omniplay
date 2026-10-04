@@ -8,7 +8,7 @@
   <strong>Fast, lightweight, and modern local music player for Android.</strong>
 </p>
 
-Omniplay is designed with Material 3 (Material You) styling, offering smooth gesture navigation, a lively Android 13/14 native squiggly waveform scrubber, and great compatibility across all Android versions from Android 5.0 to Android 14.
+Omniplay is designed with Material 3 Expressive (Material You) styling, offering smooth gesture navigation, a lively Android 13/14 native squiggly waveform scrubber, and great compatibility across all Android versions from Android 5.0 to Android 14.
 
 ---
 
@@ -54,7 +54,7 @@ Omniplay is designed with Material 3 (Material You) styling, offering smooth ges
 | :--- | :--- |
 | **Language** | Kotlin |
 | **Target Version** | Android 14 (API 34) |
-| **Modern Build** | Android 8.0+ (API 26+) • Material You |
+| **Modern Build** | Android 8.0+ (API 26+) • Material 3 Expressive |
 | **Legacy Build** | Android 5.0–7.1 (API 21–25) • Classic Material 2 |
 | **Supported Devices** | ARM phones and tablets (`arm64-v8a`, `armeabi-v7a`) |
 | **Core Libraries** | AndroidX, Material Components, Kotlin Coroutines |
