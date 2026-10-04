@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -77,6 +78,7 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.clearColorFilter()
                 binding.filterItemIcon.scaleType = ImageView.ScaleType.CENTER_CROP
                 binding.filterItemIcon.setImageBitmap(bitmap)
+                binding.filterItemIcon.alpha = 1.0f
             }
 
             fun showDefaultIcon() {
@@ -86,11 +88,12 @@ class DrawerFilterAdapter(
                     if (item.isAlbum) R.drawable.ic_album else R.drawable.ic_person
                 )
                 val tintColor = if (item.isSelected) {
-                    ContextCompat.getColor(context, R.color.primary_accent)
+                    MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
                 } else {
-                    ContextCompat.getColor(context, R.color.control_tint)
+                    ContextCompat.getColor(context, R.color.control_tint_inactive)
                 }
                 binding.filterItemIcon.setColorFilter(tintColor)
+                binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.5f
             }
 
             val albumArt = if (item.isAlbum) {
@@ -118,9 +121,10 @@ class DrawerFilterAdapter(
                 }
             }
 
+            val primaryColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
             if (item.isSelected) {
-                binding.filterItemTitle.setTextColor(ContextCompat.getColor(context, R.color.primary_accent))
-                binding.filterItemCount.setTextColor(ContextCompat.getColor(context, R.color.primary_accent))
+                binding.filterItemTitle.setTextColor(primaryColor)
+                binding.filterItemCount.setTextColor(primaryColor)
             } else {
                 binding.filterItemTitle.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
                 binding.filterItemCount.setTextColor(ContextCompat.getColor(context, R.color.text_tertiary))

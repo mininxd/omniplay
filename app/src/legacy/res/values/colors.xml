@@ -19,6 +19,7 @@
     <!-- Controls & SeekBar -->
     <color name="control_tint">#B3FFFFFF</color>
     <color name="control_tint_active">#03DAC6</color>
+    <color name="control_tint_inactive">#4A4F60</color>
     <color name="slider_track_inactive">#3E3E3E</color>
     <color name="slider_track_active">#03DAC6</color>
     <color name="slider_thumb">#03DAC6</color>

@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.color.MaterialColors
 import xyz.omniplay.R
 import xyz.omniplay.lyrics.LyricLine
 
@@ -64,15 +65,18 @@ class LyricAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
+            val onSurface = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurface, ContextCompat.getColor(ctx, R.color.text_primary))
+            val onSurfaceVariant = MaterialColors.getColor(ctx, com.google.android.material.R.attr.colorOnSurfaceVariant, ContextCompat.getColor(ctx, R.color.text_secondary))
+
             if (isActive) {
-                lyricText.setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+                lyricText.setTextColor(onSurface)
                 lyricText.alpha = 1.0f
                 lyricText.textSize = 17f
                 lyricText.setTypeface(Typeface.SANS_SERIF, Typeface.BOLD)
                 itemView.scaleX = 1.02f
                 itemView.scaleY = 1.02f
             } else {
-                lyricText.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
+                lyricText.setTextColor(onSurfaceVariant)
                 lyricText.alpha = 0.40f
                 lyricText.textSize = 15f
                 lyricText.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL)

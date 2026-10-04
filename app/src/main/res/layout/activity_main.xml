@@ -633,6 +633,7 @@
                 android:id="@+id/btn_shuffle"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
+                android:alpha="0.45"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/shuffle"
                 android:padding="10dp"
@@ -642,7 +643,7 @@
                 app:layout_constraintHorizontal_chainStyle="spread_inside"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/control_tint" />
+                app:tint="@color/control_tint_inactive" />
 
             <!-- Previous -->
             <ImageButton
@@ -703,6 +704,7 @@
                 android:id="@+id/btn_repeat"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
+                android:alpha="0.45"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/repeat"
                 android:padding="10dp"
@@ -711,7 +713,7 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/btn_next"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/control_tint" />
+                app:tint="@color/control_tint_inactive" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- Bottom section after playback controls to capture swipe-up gesture to open playlist -->

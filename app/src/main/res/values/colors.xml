@@ -20,6 +20,7 @@
     <!-- Controls & Material You Slider -->
     <color name="control_tint">#A0A6BA</color>
     <color name="control_tint_active">#B4C8EB</color>
+    <color name="control_tint_inactive">#4A4F60</color>
     <color name="slider_track_inactive">#282C3A</color>
     <color name="slider_track_active">#B4C8EB</color>
     <color name="slider_thumb">#B4C8EB</color>

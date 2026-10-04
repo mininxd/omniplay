@@ -38,6 +38,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -196,6 +198,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        DynamicColors.applyIfAvailable(this)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -2811,28 +2814,48 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnPlayPauseIcon.setImageResource(iconRes)
     }
 
+    private fun getActiveControlTint(): Int {
+        return MaterialColors.getColor(
+            this,
+            com.google.android.material.R.attr.colorPrimary,
+            ContextCompat.getColor(this, R.color.control_tint_active)
+        )
+    }
+
+    private fun getInactiveControlTint(): Int {
+        return ContextCompat.getColor(this, R.color.control_tint_inactive)
+    }
+
+    private fun getStandardControlTint(): Int {
+        return ContextCompat.getColor(this, R.color.control_tint)
+    }
+
     private fun updateShuffleButton(enabled: Boolean) {
         val tintColor = if (enabled) {
-            ContextCompat.getColor(this, R.color.control_tint_active)
+            getActiveControlTint()
         } else {
-            ContextCompat.getColor(this, R.color.control_tint)
+            getInactiveControlTint()
         }
         binding.btnShuffle.setColorFilter(tintColor)
+        binding.btnShuffle.alpha = if (enabled) 1.0f else 0.45f
     }
 
     private fun updateRepeatButton(mode: Int) {
         when (mode) {
             PlaybackService.REPEAT_ALL -> {
                 binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
-                binding.btnRepeat.setColorFilter(ContextCompat.getColor(this, R.color.control_tint_active))
+                binding.btnRepeat.setColorFilter(getActiveControlTint())
+                binding.btnRepeat.alpha = 1.0f
             }
             PlaybackService.REPEAT_ONE -> {
                 binding.btnRepeat.setImageResource(R.drawable.ic_repeat_one)
-                binding.btnRepeat.setColorFilter(ContextCompat.getColor(this, R.color.control_tint_active))
+                binding.btnRepeat.setColorFilter(getActiveControlTint())
+                binding.btnRepeat.alpha = 1.0f
             }
             else -> {
                 binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
-                binding.btnRepeat.setColorFilter(ContextCompat.getColor(this, R.color.control_tint))
+                binding.btnRepeat.setColorFilter(getInactiveControlTint())
+                binding.btnRepeat.alpha = 0.45f
             }
         }
     }
@@ -2845,6 +2868,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isEnabled = true
                     binding.playbackSlider.isSeekable = false
                     binding.playbackSlider.setNeutralMode(true)
+                    binding.btnShuffle.isEnabled = false
+                    binding.btnRepeat.isEnabled = false
+                    binding.btnPrevious.isEnabled = false
+                    binding.btnNext.isEnabled = false
+                    binding.btnShuffle.alpha = 0.45f
+                    binding.btnRepeat.alpha = 0.45f
+                    binding.btnPrevious.alpha = 0.45f
+                    binding.btnNext.alpha = 0.45f
+                    binding.btnShuffle.setColorFilter(getInactiveControlTint())
+                    binding.btnRepeat.setColorFilter(getInactiveControlTint())
+                    binding.btnPrevious.setColorFilter(getInactiveControlTint())
+                    binding.btnNext.setColorFilter(getInactiveControlTint())
                     updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
                     val dur = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
                     if (dur > 0L) {
@@ -2856,6 +2891,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isSeekable = true
                     binding.playbackSlider.setNeutralMode(false)
                     binding.badgeLatency.visibility = View.GONE
+                    binding.btnShuffle.isEnabled = true
+                    binding.btnRepeat.isEnabled = true
+                    binding.btnPrevious.isEnabled = true
+                    binding.btnNext.isEnabled = true
+                    binding.btnPrevious.alpha = 1.0f
+                    binding.btnNext.alpha = 1.0f
+                    binding.btnPrevious.setColorFilter(getStandardControlTint())
+                    binding.btnNext.setColorFilter(getStandardControlTint())
+                    updateShuffleButton(playbackService?.isShuffleEnabled == true)
+                    updateRepeatButton(playbackService?.repeatMode ?: PlaybackService.REPEAT_OFF)
                     playbackService?.currentSong?.let {
                         binding.playbackSlider.isEnabled = true
                         onTrackChanged(it)

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,17 +92,21 @@ class SongAdapter(
             binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
             binding.itemDurationText.text = Song.formatTime(song.duration)
 
+            val primaryColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorPrimary, ContextCompat.getColor(context, R.color.primary_accent))
+            val onSurfaceColor = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnSurface, ContextCompat.getColor(context, R.color.text_primary))
+
             if (isPlaying) {
-                binding.itemTitleText.setTextColor(ContextCompat.getColor(context, R.color.primary_accent))
+                binding.itemTitleText.setTextColor(primaryColor)
                 binding.thumbnailCard.strokeWidth = (2 * context.resources.displayMetrics.density).toInt()
-                binding.thumbnailCard.strokeColor = ContextCompat.getColor(context, R.color.primary_accent)
+                binding.thumbnailCard.strokeColor = primaryColor
             } else {
-                binding.itemTitleText.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
+                binding.itemTitleText.setTextColor(onSurfaceColor)
                 binding.thumbnailCard.strokeWidth = 0
             }
 
             fun showDefaultAlbumArt() {
-                binding.thumbnailCard.setCardBackgroundColor(ContextCompat.getColor(context, R.color.surface_container_high))
+                val surfaceContainerHigh = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceContainerHigh, ContextCompat.getColor(context, R.color.surface_container_high))
+                binding.thumbnailCard.setCardBackgroundColor(surfaceContainerHigh)
                 binding.itemThumbnailImage.imageTintList = null
                 binding.itemThumbnailImage.clearColorFilter()
                 binding.itemThumbnailImage.setPadding(0, 0, 0, 0)
