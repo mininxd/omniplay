@@ -409,19 +409,73 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             updateSheetDimensions(0)
         }
 
+        // Outer Scrim: Close queue when pressing / tapping / dragging down on the area outside the half-expanded queue
+        val queueScrimGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                    return true
+                }
+                return false
+            }
+
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (velocityY > 200f && bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                    return true
+                }
+                return false
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                if (distanceY < -20f && bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                    return true
+                }
+                return false
+            }
+        })
+        binding.queueScrimOverlay.setOnTouchListener { v, event ->
+            if (queueScrimGestureDetector.onTouchEvent(event)) {
+                true
+            } else {
+                if (event.action == MotionEvent.ACTION_UP) {
+                    v.performClick()
+                }
+                true
+            }
+        }
+        binding.queueScrimOverlay.setOnClickListener {
+            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            }
+        }
+
         bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
                     BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
+                        binding.queueScrimOverlay.visibility = View.VISIBLE
+                        binding.queueScrimOverlay.alpha = 0.5f
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
+                        binding.queueScrimOverlay.visibility = View.VISIBLE
+                        binding.queueScrimOverlay.alpha = 0.4f
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
+                        binding.queueScrimOverlay.visibility = View.GONE
+                        binding.queueScrimOverlay.alpha = 0f
                         if (isFilterPreviewActive) {
                             revertToOngoingQueue()
+                        }
+                    }
+                    BottomSheetBehavior.STATE_DRAGGING,
+                    BottomSheetBehavior.STATE_SETTLING -> {
+                        if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
+                            binding.queueScrimOverlay.visibility = View.VISIBLE
                         }
                     }
                     else -> {}
@@ -429,6 +483,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                if (slideOffset > 0.01f) {
+                    binding.queueScrimOverlay.visibility = View.VISIBLE
+                    binding.queueScrimOverlay.alpha = (slideOffset * 0.45f).coerceIn(0f, 0.5f)
+                } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                    binding.queueScrimOverlay.visibility = View.GONE
+                    binding.queueScrimOverlay.alpha = 0f
+                }
+
                 if (slideOffset >= 0f) {
                     val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: binding.root.height
                     val collapsedOffset = (parentH - bottomSheetBehavior.peekHeight).toFloat()
@@ -1674,6 +1736,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupListeners() {
+        // OmniSync button (left of gear button) -> open OmniSync bottom sheet
+        binding.btnOmnisync.setOnClickListener {
+            xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
+                .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
+        }
+
         // Settings button (Gear) -> open settings bottom sheet
         binding.btnMenu.setOnClickListener {
             openSettingsMenu()

@@ -59,4 +59,21 @@
         <item name="colorPrimaryContainer">@color/theme_vibrant_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_vibrant_on_primary_container</item>
     </style>
+
+    <!-- Split Button Shapes for Settings and Switches -->
+    <style name="ShapeAppearance.Omniplay.SplitLeft" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeBottomLeft">24dp</item>
+        <item name="cornerSizeTopRight">6dp</item>
+        <item name="cornerSizeBottomRight">6dp</item>
+    </style>
+
+    <style name="ShapeAppearance.Omniplay.SplitRight" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">6dp</item>
+        <item name="cornerSizeBottomLeft">6dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomRight">24dp</item>
+    </style>
 </resources>

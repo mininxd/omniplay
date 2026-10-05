@@ -45,30 +45,19 @@
         android:strokeColor="#1FFFFFFF"
         android:strokeWidth="1.5" />
 
-    <!-- Vinyl Center Label Glow -->
+    <!-- Vinyl Center Label (Dynamic Theme Primary Token) -->
     <path
-        android:pathData="M200,200m-72,0a72,72 0 1,0 144,0a72,72 0 1,0 -144,0">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="128"
-                android:startY="128"
-                android:endX="272"
-                android:endY="272"
-                android:type="linear">
-                <item android:color="#FFB4C8EB" android:offset="0.0" />
-                <item android:color="#FF758AA8" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:pathData="M200,200m-72,0a72,72 0 1,0 144,0a72,72 0 1,0 -144,0"
+        android:fillColor="?attr/colorPrimary" />
 
-    <!-- Center Music Symbol -->
+    <!-- Center Music Symbol (Dynamic Theme OnPrimary Token) -->
     <group
         android:scaleX="4.0"
         android:scaleY="4.0"
         android:translateX="152"
         android:translateY="152">
         <path
-            android:fillColor="#FF101B2E"
+            android:fillColor="?attr/colorOnPrimary"
             android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4c0.55,0 1,-0.45 1,-1s-0.45,-1 -1,-1h-5c-0.55,0 -1,0.45 -1,1z"/>
     </group>
 
