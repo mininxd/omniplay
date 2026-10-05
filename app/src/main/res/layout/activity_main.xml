@@ -877,7 +877,7 @@
             <ImageView
                 android:layout_width="56dp"
                 android:layout_height="56dp"
-                android:src="@drawable/ic_music_note"
+                android:src="@drawable/ic_library_music"
                 app:tint="?attr/colorOnSurfaceVariant" />
 
             <TextView
@@ -952,7 +952,7 @@
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:layout_gravity="center"
-                    android:src="@drawable/ic_music_note"
+                    android:src="@drawable/ic_library_music"
                     app:tint="?attr/colorPrimary" />
             </com.google.android.material.card.MaterialCardView>
 

@@ -13,8 +13,11 @@ import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivitySettingsBinding
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import xyz.omniplay.util.ThemeHelper
 import xyz.omniplay.util.ThemeStyle
+import xyz.omniplay.util.UpdateChecker
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -71,19 +74,13 @@ class SettingsActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
 
-        // 1. OmniSync
-        binding.settingOmnisync.setOnClickListener {
-            xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
-                .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
-        }
-
-        // 2. Theme Style Selector
+        // 1. Theme Style Selector
         updateThemeSubtitle()
         binding.settingTheme.setOnClickListener {
             showThemeStyleDialog()
         }
 
-        // 3. Select Music Folder
+        // 2. Select Music Folder
         val currentFolder = prefs.getString(MainActivity.KEY_MUSIC_FOLDER_URI, null)
         updateFolderSubtitle(currentFolder)
 
@@ -95,7 +92,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Show Album Art Switch & Row Click (Compact Split Button)
+        // 3. Show Album Art Switch & Row Click (Compact Split Button)
         binding.titleAlbumArt.isSelected = true
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
@@ -112,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
             binding.switchShowAlbumArt.toggle()
         }
 
-        // 5. Rescan Music
+        // 4. Rescan Music
         binding.settingRescanMusic.setOnClickListener {
             isRescanRequested = true
             prepareResult()
@@ -120,12 +117,43 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
-        // 6. About Omniplay
+        // 5. About Omniplay
         binding.settingAbout.setOnClickListener {
             showAboutDialog()
         }
 
+        // 6. Check for Updates
+        binding.settingCheckUpdate.setOnClickListener {
+            checkAppUpdate(isManual = true)
+        }
+
         prepareResult()
+    }
+
+    private fun checkAppUpdate(isManual: Boolean) {
+        binding.settingCheckUpdateSubtitle.setText(R.string.checking_updates)
+        lifecycleScope.launch {
+            val release = UpdateChecker.checkLatestRelease()
+            if (isFinishing || isDestroyed) return@launch
+
+            if (release != null) {
+                if (release.isNewer) {
+                    binding.settingCheckUpdateSubtitle.text = getString(R.string.update_available_format, release.tagName)
+                    UpdateChecker.showUpdateDialog(this@SettingsActivity, release)
+                } else {
+                    val displayTag = if (release.tagName.startsWith("v", ignoreCase = true)) release.tagName.drop(1) else release.tagName
+                    binding.settingCheckUpdateSubtitle.text = getString(R.string.up_to_date_format, displayTag)
+                    if (isManual) {
+                        Toast.makeText(this@SettingsActivity, R.string.latest_version_installed, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                binding.settingCheckUpdateSubtitle.setText(R.string.check_for_updates_desc)
+                if (isManual) {
+                    Toast.makeText(this@SettingsActivity, R.string.check_update_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

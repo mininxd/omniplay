@@ -255,6 +255,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         checkAndRequestPermissions()
         xyz.omniplay.sync.OmniSyncManager.getInstance(this).addListener(omniSyncListener)
         handleIncomingIntent(intent)
+        checkForUpdatesOnStart()
+    }
+
+    private fun checkForUpdatesOnStart() {
+        lifecycleScope.launch {
+            val release = xyz.omniplay.util.UpdateChecker.checkLatestRelease()
+            if (isFinishing || isDestroyed) return@launch
+
+            if (release != null && release.isNewer) {
+                xyz.omniplay.util.UpdateChecker.showUpdateDialog(this@MainActivity, release)
+            }
+        }
     }
 
     override fun onResume() {
