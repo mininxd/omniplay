@@ -51,7 +51,7 @@
     <string name="show_album_art_desc">Display artwork in queue</string>
     <string name="rescan_library_desc">Check for new or updated tracks</string>
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
-    <string name="about_app_desc">Version 0.5 • Local Audio Player</string>
+    <string name="about_app_desc">Version 0.5</string>
     <string name="close">Close</string>
 </resources>
 

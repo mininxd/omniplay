@@ -59,7 +59,7 @@ import xyz.omniplay.util.AudioTrackInfo
 import xyz.omniplay.util.ThemeColors
 import java.util.Locale
 
-class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, SettingsBottomSheet.SettingsListener {
+class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     companion object {
         const val PREFS_NAME = "omniplay_prefs"
@@ -154,6 +154,27 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, Sett
         }
     }
 
+    // Settings launcher for Activity-based settings window
+    private val settingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
+        songAdapter?.setShowAlbumArt(isShowArt)
+
+        val rescanRequested = result.data?.getBooleanExtra(SettingsActivity.EXTRA_RESCAN, false) == true
+        val folderChanged = result.data?.getBooleanExtra(SettingsActivity.EXTRA_FOLDER_CHANGED, false) == true
+
+        if (rescanRequested) {
+            rescanMusic()
+        } else if (folderChanged) {
+            val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
+            if (savedFolderUri != null) {
+                loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = true)
+            }
+        }
+    }
+
     // Storage Access Framework Folder Picker for directory selection
     private val folderPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -227,6 +248,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, Sett
         checkAndRequestPermissions()
         xyz.omniplay.sync.OmniSyncManager.getInstance(this).addListener(omniSyncListener)
         handleIncomingIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
+        songAdapter?.setShowAlbumArt(isShowArt)
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -2341,36 +2369,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, Sett
     }
 
     private fun openSettingsMenu() {
-        SettingsBottomSheet.newInstance()
-            .show(supportFragmentManager, SettingsBottomSheet.TAG)
+        val intent = Intent(this, SettingsActivity::class.java)
+        settingsLauncher.launch(intent)
     }
 
     private fun showOptionsMenu(anchor: View? = null) {
         openSettingsMenu()
-    }
-
-    // SettingsBottomSheet.SettingsListener implementation
-    override fun onOpenFolderPicker() {
-        openFolderPicker()
-    }
-
-    override fun onRescanMusic() {
-        rescanMusic()
-    }
-
-    override fun onShowAbout() {
-        showAboutDialog()
-    }
-
-    override fun onToggleShowAlbumArt(show: Boolean) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, show).apply()
-        songAdapter?.setShowAlbumArt(show)
-    }
-
-    override fun onOpenOmniSync() {
-        xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
-            .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
     }
 
     private fun showTrackDetailsDialog() {
