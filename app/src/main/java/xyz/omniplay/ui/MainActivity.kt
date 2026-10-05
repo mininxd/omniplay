@@ -2156,6 +2156,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 R.id.btn_filter_folders -> setFilterMode(LibraryFilterMode.FOLDER)
             }
         }
+        applyToggleGroupShapes()
 
         binding.btnClearFilter.setOnClickListener {
             selectedFilterValue = null
@@ -2184,6 +2185,110 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
             updateFilterSubList()
             applyCurrentFilter()
+            applyToggleGroupShapes()
+        }
+    }
+
+    private fun applyToggleGroupShapes() {
+        val radius = 19f * resources.displayMetrics.density
+        val zero = 0f
+        val strokeWidth = (1 * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+
+        val isFoldersVisible = binding.btnFilterFolders.visibility == View.VISIBLE
+
+        binding.btnFilterArtists.shapeAppearanceModel = binding.btnFilterArtists.shapeAppearanceModel.toBuilder()
+            .setTopLeftCornerSize(radius)
+            .setBottomLeftCornerSize(radius)
+            .setTopRightCornerSize(zero)
+            .setBottomRightCornerSize(zero)
+            .build()
+        (binding.btnFilterArtists.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+            it.marginStart = 0
+            it.marginEnd = 0
+            binding.btnFilterArtists.layoutParams = it
+        }
+
+        if (isFoldersVisible) {
+            binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(zero)
+                .setBottomLeftCornerSize(zero)
+                .setTopRightCornerSize(zero)
+                .setBottomRightCornerSize(zero)
+                .build()
+            (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                it.marginStart = -strokeWidth
+                it.marginEnd = 0
+                binding.btnFilterAlbums.layoutParams = it
+            }
+
+            binding.btnFilterFolders.shapeAppearanceModel = binding.btnFilterFolders.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(zero)
+                .setBottomLeftCornerSize(zero)
+                .setTopRightCornerSize(radius)
+                .setBottomRightCornerSize(radius)
+                .build()
+            (binding.btnFilterFolders.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                it.marginStart = -strokeWidth
+                it.marginEnd = 0
+                binding.btnFilterFolders.layoutParams = it
+            }
+        } else {
+            binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(zero)
+                .setBottomLeftCornerSize(zero)
+                .setTopRightCornerSize(radius)
+                .setBottomRightCornerSize(radius)
+                .build()
+            (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                it.marginStart = -strokeWidth
+                it.marginEnd = 0
+                binding.btnFilterAlbums.layoutParams = it
+            }
+        }
+
+        binding.filterToggleGroup.post {
+            val postFoldersVisible = binding.btnFilterFolders.visibility == View.VISIBLE
+            binding.btnFilterArtists.shapeAppearanceModel = binding.btnFilterArtists.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(radius)
+                .setBottomLeftCornerSize(radius)
+                .setTopRightCornerSize(zero)
+                .setBottomRightCornerSize(zero)
+                .build()
+
+            if (postFoldersVisible) {
+                binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
+                    .setTopLeftCornerSize(zero)
+                    .setBottomLeftCornerSize(zero)
+                    .setTopRightCornerSize(zero)
+                    .setBottomRightCornerSize(zero)
+                    .build()
+                (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                    it.marginStart = -strokeWidth
+                    binding.btnFilterAlbums.layoutParams = it
+                }
+
+                binding.btnFilterFolders.shapeAppearanceModel = binding.btnFilterFolders.shapeAppearanceModel.toBuilder()
+                    .setTopLeftCornerSize(zero)
+                    .setBottomLeftCornerSize(zero)
+                    .setTopRightCornerSize(radius)
+                    .setBottomRightCornerSize(radius)
+                    .build()
+                (binding.btnFilterFolders.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                    it.marginStart = -strokeWidth
+                    binding.btnFilterFolders.layoutParams = it
+                }
+            } else {
+                binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
+                    .setTopLeftCornerSize(zero)
+                    .setBottomLeftCornerSize(zero)
+                    .setTopRightCornerSize(radius)
+                    .setBottomRightCornerSize(radius)
+                    .build()
+                (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
+                    it.marginStart = -strokeWidth
+                    binding.btnFilterAlbums.layoutParams = it
+                }
+            }
         }
     }
 
@@ -2191,9 +2296,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         currentFilterMode = mode
         binding.drawerFilterRecyclerView.visibility = View.VISIBLE
         updateFilterSubList()
+        val matchesCurrentFilter = (activeOngoingFilterMode == mode && !selectedFilterValue.isNullOrEmpty())
         when (mode) {
             LibraryFilterMode.ARTIST -> {
-                if (selectedFilterValue != null) {
+                if (matchesCurrentFilter) {
                     binding.activeFilterBar.visibility = View.VISIBLE
                     binding.activeFilterText.text = "Artist: $selectedFilterValue"
                     binding.drawerFilterInfoText.text = "Filtered by artist: $selectedFilterValue"
@@ -2201,11 +2307,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.activeFilterBar.visibility = View.GONE
                     val count = allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
                     binding.drawerFilterInfoText.text = "Select from $count artists"
-                    applyCurrentFilter()
+                    if (activeOngoingFilterMode == LibraryFilterMode.TRACK) {
+                        applyCurrentFilter()
+                    }
                 }
             }
             LibraryFilterMode.ALBUM -> {
-                if (selectedFilterValue != null) {
+                if (matchesCurrentFilter) {
                     binding.activeFilterBar.visibility = View.VISIBLE
                     binding.activeFilterText.text = "Album: $selectedFilterValue"
                     binding.drawerFilterInfoText.text = "Filtered by album: $selectedFilterValue"
@@ -2213,11 +2321,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.activeFilterBar.visibility = View.GONE
                     val count = allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
                     binding.drawerFilterInfoText.text = "Select from $count albums"
-                    applyCurrentFilter()
+                    if (activeOngoingFilterMode == LibraryFilterMode.TRACK) {
+                        applyCurrentFilter()
+                    }
                 }
             }
             LibraryFilterMode.FOLDER -> {
-                if (selectedFilterValue != null) {
+                if (matchesCurrentFilter) {
                     binding.activeFilterBar.visibility = View.VISIBLE
                     binding.activeFilterText.text = "Folder: $selectedFilterValue"
                     binding.drawerFilterInfoText.text = "Filtered by folder: $selectedFilterValue"
@@ -2225,7 +2335,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.activeFilterBar.visibility = View.GONE
                     val count = allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
                     binding.drawerFilterInfoText.text = "Select from $count folders"
-                    applyCurrentFilter()
+                    if (activeOngoingFilterMode == LibraryFilterMode.TRACK) {
+                        applyCurrentFilter()
+                    }
                 }
             }
             LibraryFilterMode.TRACK -> {
@@ -2248,6 +2360,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 applyCurrentFilter()
             }
         }
+        applyToggleGroupShapes()
     }
 
     private fun updateFilterSubList() {
@@ -2583,6 +2696,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 setFilterMode(LibraryFilterMode.ARTIST)
             }
         }
+        applyToggleGroupShapes()
     }
 
     private fun updateSongList(songs: List<Song>) {
