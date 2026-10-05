@@ -1639,7 +1639,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, Sett
     }
 
     private fun setupListeners() {
-        // Settings button (Gear) -> open Material 3 Expressive settings bottom sheet
+        // Settings button (Gear) -> open settings bottom sheet
         binding.btnMenu.setOnClickListener {
             openSettingsMenu()
         }
@@ -2508,12 +2508,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, Sett
     private fun showAboutDialog() {
         val message = """
             Omniplay 0.5
-            Open Source Material 3 Expressive Music Player
+            Open Source Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
             Architectures: armv7, armv8, x86, x86_64, Universal
             
-            Built with pure Android & Material 3 Expressive Design.
+            Built with pure Android.
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)

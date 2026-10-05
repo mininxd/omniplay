@@ -38,7 +38,12 @@ class SettingsBottomSheet : BottomSheetDialogFragment() {
         val context = requireContext()
         val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
 
-        // OmniSync Quick Card
+        // Close Button
+        binding.btnCloseSettings.setOnClickListener {
+            dismiss()
+        }
+
+        // OmniSync Option
         binding.cardSettingOmnisync.setOnClickListener {
             dismiss()
             (activity as? SettingsListener)?.onOpenOmniSync()
@@ -72,22 +77,15 @@ class SettingsBottomSheet : BottomSheetDialogFragment() {
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
 
-        val toggleArt = {
-            val newState = !binding.switchShowAlbumArt.isChecked
-            binding.switchShowAlbumArt.isChecked = newState
-            prefs.edit().putBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
-            (activity as? SettingsListener)?.onToggleShowAlbumArt(newState)
-        }
-
-        binding.settingAlbumArtCard.setOnClickListener {
-            toggleArt()
-        }
-
         binding.switchShowAlbumArt.setOnCheckedChangeListener { _, isChecked ->
             if (prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true) != isChecked) {
                 prefs.edit().putBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, isChecked).apply()
                 (activity as? SettingsListener)?.onToggleShowAlbumArt(isChecked)
             }
+        }
+
+        binding.settingAlbumArtLayout.setOnClickListener {
+            binding.switchShowAlbumArt.toggle()
         }
 
         // About Omniplay Click

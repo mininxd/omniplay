@@ -46,15 +46,12 @@
     <string name="settings">Settings</string>
     <string name="settings_title">Settings</string>
     <string name="settings_subtitle">Preferences &amp; Library</string>
-    <string name="library_section">LIBRARY</string>
-    <string name="appearance_section">PLAYBACK &amp; DISPLAY</string>
-    <string name="features_section">FEATURES</string>
-    <string name="about_section">ABOUT</string>
     <string name="music_folder">Music Folder</string>
-    <string name="music_folder_desc">Directory containing audio files</string>
-    <string name="show_album_art_desc">Display album artwork thumbnails in queue</string>
-    <string name="rescan_library_desc">Scan storage for new audio tracks</string>
-    <string name="omnisync_feature_desc">Wireless multi-device playback sync</string>
-    <string name="about_app_desc">Version 0.5 • M3 Expressive Audio Player</string>
+    <string name="music_folder_desc">Select directory to scan songs</string>
+    <string name="show_album_art_desc">Display artwork in queue</string>
+    <string name="rescan_library_desc">Check for new or updated tracks</string>
+    <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
+    <string name="about_app_desc">Version 0.5 • Local Audio Player</string>
+    <string name="close">Close</string>
 </resources>
 
