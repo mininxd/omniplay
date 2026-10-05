@@ -260,7 +260,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun checkForUpdatesOnStart() {
         lifecycleScope.launch {
-            val release = xyz.omniplay.util.UpdateChecker.checkLatestRelease()
+            val release = xyz.omniplay.util.UpdateChecker.checkLatestRelease(this@MainActivity)
             if (isFinishing || isDestroyed) return@launch
 
             if (release != null && release.isNewer) {

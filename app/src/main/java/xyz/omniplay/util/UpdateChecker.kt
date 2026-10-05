@@ -7,7 +7,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import xyz.omniplay.BuildConfig
 import xyz.omniplay.R
 import java.io.BufferedReader
 import java.net.HttpURLConnection
@@ -26,7 +25,18 @@ object UpdateChecker {
         val isNewer: Boolean
     )
 
-    suspend fun checkLatestRelease(currentVersion: String = BuildConfig.VERSION_NAME): ReleaseInfo? = withContext(Dispatchers.IO) {
+    fun getAppVersion(context: Context?): String {
+        if (context == null) return "0.5"
+        return try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            packageInfo.versionName ?: "0.5"
+        } catch (e: Exception) {
+            "0.5"
+        }
+    }
+
+    suspend fun checkLatestRelease(context: Context? = null): ReleaseInfo? = withContext(Dispatchers.IO) {
+        val currentVersion = getAppVersion(context)
         var connection: HttpURLConnection? = null
         try {
             val url = URL(GITHUB_API_URL)

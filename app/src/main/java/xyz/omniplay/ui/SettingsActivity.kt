@@ -133,7 +133,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun checkAppUpdate(isManual: Boolean) {
         binding.settingCheckUpdateSubtitle.setText(R.string.checking_updates)
         lifecycleScope.launch {
-            val release = UpdateChecker.checkLatestRelease()
+            val release = UpdateChecker.checkLatestRelease(this@SettingsActivity)
             if (isFinishing || isDestroyed) return@launch
 
             if (release != null) {
