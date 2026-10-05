@@ -1,153 +1,22 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="400dp"
     android:height="400dp"
-    android:viewportWidth="400"
-    android:viewportHeight="400">
+    android:viewportWidth="960"
+    android:viewportHeight="960">
 
-    <!-- Card Background with Dark Audiophile Gradient -->
+    <!-- Clean Neutral Background -->
     <path
-        android:pathData="M0,0h400v400h-400z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="0"
-                android:startY="0"
-                android:endX="400"
-                android:endY="400"
-                android:type="linear">
-                <item android:color="#FF181A22" android:offset="0.0" />
-                <item android:color="#FF12131A" android:offset="0.5" />
-                <item android:color="#FF0A0B0F" android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:fillColor="#FF14161F"
+        android:pathData="M0,0h960v960h-960z" />
 
-    <!-- Vinyl Disc Outer Ring -->
+    <!-- Center Icon Circle -->
     <path
-        android:pathData="M200,200m-182,0a182,182 0 1,0 364,0a182,182 0 1,0 -364,0"
-        android:fillColor="#990D0E13" />
-    <path
-        android:pathData="M200,200m-180,0a180,180 0 1,0 360,0a180,180 0 1,0 -360,0"
-        android:fillColor="#FF14151C"
-        android:strokeColor="#FF252733"
-        android:strokeWidth="1.5" />
-    <path
-        android:pathData="M200,200m-177,0a177,177 0 1,0 354,0a177,177 0 1,0 -354,0"
-        android:fillColor="#FF111218" />
+        android:fillColor="#FF1E202B"
+        android:pathData="M480,480m-200,0a200,200 0 1,0 400,0a200,200 0 1,0 -400,0" />
 
-    <!-- Vinyl Grooves - Track 1 (Outer) -->
+    <!-- Clean Centered Music Icon (Dynamic Theme Primary Token) -->
     <path
-        android:pathData="M200,200m-174,0a174,174 0 1,0 348,0a174,174 0 1,0 -348,0 M200,200m-170,0a170,170 0 1,0 340,0a170,170 0 1,0 -340,0 M200,200m-166,0a166,166 0 1,0 332,0a166,166 0 1,0 -332,0 M200,200m-162,0a162,162 0 1,0 324,0a162,162 0 1,0 -324,0 M200,200m-158,0a158,158 0 1,0 316,0a158,158 0 1,0 -316,0"
-        android:strokeColor="#14FFFFFF"
-        android:strokeWidth="0.8" />
-    <!-- Track Gap 1 -->
-    <path
-        android:pathData="M200,200m-154,0a154,154 0 1,0 308,0a154,154 0 1,0 -308,0"
-        android:strokeColor="#22FFFFFF"
-        android:strokeWidth="1.2" />
-
-    <!-- Vinyl Grooves - Track 2 (Middle) -->
-    <path
-        android:pathData="M200,200m-150,0a150,150 0 1,0 300,0a150,150 0 1,0 -300,0 M200,200m-146,0a146,146 0 1,0 292,0a146,146 0 1,0 -292,0 M200,200m-142,0a142,142 0 1,0 284,0a142,142 0 1,0 -284,0 M200,200m-138,0a138,138 0 1,0 276,0a138,138 0 1,0 -276,0 M200,200m-134,0a134,134 0 1,0 268,0a134,134 0 1,0 -268,0 M200,200m-130,0a130,130 0 1,0 260,0a130,130 0 1,0 -260,0"
-        android:strokeColor="#12FFFFFF"
-        android:strokeWidth="0.8" />
-    <!-- Track Gap 2 -->
-    <path
-        android:pathData="M200,200m-126,0a126,126 0 1,0 252,0a126,126 0 1,0 -252,0"
-        android:strokeColor="#22FFFFFF"
-        android:strokeWidth="1.2" />
-
-    <!-- Vinyl Grooves - Track 3 (Inner) -->
-    <path
-        android:pathData="M200,200m-122,0a122,122 0 1,0 244,0a122,122 0 1,0 -244,0 M200,200m-118,0a118,118 0 1,0 236,0a118,118 0 1,0 -236,0 M200,200m-114,0a114,114 0 1,0 228,0a114,114 0 1,0 -228,0 M200,200m-110,0a110,110 0 1,0 220,0a110,110 0 1,0 -220,0 M200,200m-106,0a106,106 0 1,0 212,0a106,106 0 1,0 -212,0 M200,200m-102,0a102,102 0 1,0 204,0a102,102 0 1,0 -204,0"
-        android:strokeColor="#14FFFFFF"
-        android:strokeWidth="0.8" />
-
-    <!-- Dead Wax / Run-out Spirals -->
-    <path
-        android:pathData="M200,200m-96,0a96,96 0 1,0 192,0a96,96 0 1,0 -192,0"
-        android:strokeColor="#26FFFFFF"
-        android:strokeWidth="1.0" />
-    <path
-        android:pathData="M200,200m-88,0a88,88 0 1,0 176,0a88,88 0 1,0 -176,0"
-        android:strokeColor="#18FFFFFF"
-        android:strokeWidth="0.8" />
-    <path
-        android:pathData="M200,200m-82,0a82,82 0 1,0 164,0a82,82 0 1,0 -164,0"
-        android:strokeColor="#14FFFFFF"
-        android:strokeWidth="0.8" />
-
-    <!-- Vinyl Radial Light Reflection Sheen -->
-    <path
-        android:pathData="M200,200 L80,0 L140,0 Z M200,200 L260,400 L320,400 Z"
-        android:fillColor="#0FFFFFFF" />
-    <path
-        android:pathData="M200,200 L0,100 L0,160 Z M200,200 L400,240 L400,300 Z"
-        android:fillColor="#0DFFFFFF" />
-
-    <!-- Center Record Label Outer Rim -->
-    <path
-        android:pathData="M200,200m-76,0a76,76 0 1,0 152,0a76,76 0 1,0 -152,0"
-        android:fillColor="#660A0B0E" />
-
-    <!-- Center Record Label (Dynamic Theme Primary Token) -->
-    <path
-        android:pathData="M200,200m-74,0a74,74 0 1,0 148,0a74,74 0 1,0 -148,0"
         android:fillColor="?attr/colorPrimary"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.35"
-        android:strokeWidth="1.2" />
-
-    <!-- Decorative Concentric Label Rings -->
-    <path
-        android:pathData="M200,200m-66,0a66,66 0 1,0 132,0a66,66 0 1,0 -132,0"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.25"
-        android:strokeWidth="0.8" />
-    <path
-        android:pathData="M200,200m-56,0a56,56 0 1,0 112,0a56,56 0 1,0 -112,0"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.20"
-        android:strokeWidth="0.6" />
-
-    <!-- Center Bespoke Audiophile Soundwave Graphic (Dynamic Theme OnPrimary) -->
-    <!-- Upper Frequency Bars -->
-    <path
-        android:fillColor="?attr/colorOnPrimary"
-        android:fillAlpha="0.9"
-        android:pathData="M173,172a2.5,2.5 0 0,1 5,0v12a2.5,2.5 0 0,1 -5,0z M185,168a2.5,2.5 0 0,1 5,0v20a2.5,2.5 0 0,1 -5,0z M197,164a2.5,2.5 0 0,1 5,0v28a2.5,2.5 0 0,1 -5,0z M209,168a2.5,2.5 0 0,1 5,0v20a2.5,2.5 0 0,1 -5,0z M221,172a2.5,2.5 0 0,1 5,0v12a2.5,2.5 0 0,1 -5,0z" />
-
-    <!-- Upper Acoustic Waveform Arc -->
-    <path
-        android:pathData="M164,178 Q200,154 236,178"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.75"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round" />
-
-    <!-- Lower Inverted Rhythm Bars -->
-    <path
-        android:fillColor="?attr/colorOnPrimary"
-        android:fillAlpha="0.7"
-        android:pathData="M174,224a2,2 0 0,1 4,0v8a2,2 0 0,1 -4,0z M186,221a2,2 0 0,1 4,0v14a2,2 0 0,1 -4,0z M198,218a2,2 0 0,1 4,0v20a2,2 0 0,1 -4,0z M210,221a2,2 0 0,1 4,0v14a2,2 0 0,1 -4,0z M222,224a2,2 0 0,1 4,0v8a2,2 0 0,1 -4,0z" />
-
-    <!-- Lower Acoustic Waveform Arc -->
-    <path
-        android:pathData="M168,222 Q200,240 232,222"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.6"
-        android:strokeWidth="1.2"
-        android:strokeLineCap="round" />
-
-    <!-- Center Spindle Hole & Silver Ring -->
-    <path
-        android:pathData="M200,200m-15,0a15,15 0 1,0 30,0a15,15 0 1,0 -30,0"
-        android:fillColor="#FF14151C"
-        android:strokeColor="?attr/colorOnPrimary"
-        android:strokeAlpha="0.5"
-        android:strokeWidth="1.2" />
-    <path
-        android:pathData="M200,200m-11,0a11,11 0 1,0 22,0a11,11 0 1,0 -22,0"
-        android:fillColor="#FF0A0B0E" />
+        android:pathData="M420,680Q370,680 335,645Q300,610 300,560Q300,510 335,475Q370,440 420,440Q437,440 452,444Q467,448 480,457L480,280L620,280L620,380L540,380L540,560Q540,610 505,645Q470,680 420,680Z" />
 
 </vector>
