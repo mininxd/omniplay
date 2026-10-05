@@ -1,22 +1,52 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="400dp"
     android:height="400dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
+    android:viewportWidth="400"
+    android:viewportHeight="400">
 
-    <!-- Clean Neutral Background -->
+    <!-- Dynamic Surface Container Background -->
     <path
-        android:fillColor="#FF14161F"
-        android:pathData="M0,0h960v960h-960z" />
+        android:fillColor="?attr/colorSurfaceContainer"
+        android:pathData="M0,0h400v400h-400z" />
 
-    <!-- Center Icon Circle -->
+    <!-- Dynamic Primary Container Disc -->
     <path
-        android:fillColor="#FF1E202B"
-        android:pathData="M480,480m-200,0a200,200 0 1,0 400,0a200,200 0 1,0 -400,0" />
+        android:fillColor="?attr/colorPrimaryContainer"
+        android:pathData="M200,200m-130,0a130,130 0 1,0 260,0a130,130 0 1,0 -260,0" />
 
-    <!-- Clean Centered Music Icon (Dynamic Theme Primary Token) -->
+    <!-- Dynamic Outer Groove Accent -->
+    <path
+        android:pathData="M200,200m-112,0a112,112 0 1,0 224,0a112,112 0 1,0 -224,0"
+        android:strokeColor="?attr/colorOnPrimaryContainer"
+        android:strokeAlpha="0.25"
+        android:strokeWidth="2" />
+
+    <!-- Dynamic Acoustic Resonance Arcs (Left and Right) -->
+    <path
+        android:pathData="M125,170A82,82 0 0,0 125,230 M275,170A82,82 0 0,1 275,230"
+        android:strokeColor="?attr/colorOnPrimaryContainer"
+        android:strokeAlpha="0.4"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+
+    <!-- Dynamic Soundwave Frequency Pulse (Top) -->
+    <path
+        android:fillColor="?attr/colorOnPrimaryContainer"
+        android:pathData="M169,122a2.5,2.5 0 0,1 5,0v12a2.5,2.5 0 0,1 -5,0z M183,116a2.5,2.5 0 0,1 5,0v24a2.5,2.5 0 0,1 -5,0z M197,110a2.5,2.5 0 0,1 5,0v36a2.5,2.5 0 0,1 -5,0z M211,116a2.5,2.5 0 0,1 5,0v24a2.5,2.5 0 0,1 -5,0z M225,122a2.5,2.5 0 0,1 5,0v12a2.5,2.5 0 0,1 -5,0z" />
+
+    <!-- Dynamic Center Label Hub -->
     <path
         android:fillColor="?attr/colorPrimary"
-        android:pathData="M420,680Q370,680 335,645Q300,610 300,560Q300,510 335,475Q370,440 420,440Q437,440 452,444Q467,448 480,457L480,280L620,280L620,380L540,380L540,560Q540,610 505,645Q470,680 420,680Z" />
+        android:pathData="M200,200m-54,0a54,54 0 1,0 108,0a54,54 0 1,0 -108,0" />
+
+    <!-- Dynamic Center Beamed Modern Notes -->
+    <path
+        android:fillColor="?attr/colorOnPrimary"
+        android:pathData="M184,212m-8,0a8,8 0 1,0 16,0a8,8 0 1,0 -16,0 M216,204m-8,0a8,8 0 1,0 16,0a8,8 0 1,0 -16,0 M190,178h4v34h-4z M222,170h4v34h-4z M190,174l36,-8v6l-36,8z" />
+
+    <!-- Center Spindle Opening (Reveals Background Tone) -->
+    <path
+        android:fillColor="?attr/colorSurfaceContainer"
+        android:pathData="M200,200m-10,0a10,10 0 1,0 20,0a10,10 0 1,0 -20,0" />
 
 </vector>
