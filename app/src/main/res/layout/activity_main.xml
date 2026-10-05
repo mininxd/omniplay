@@ -964,10 +964,11 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/drawer_title_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
-                    android:text="@string/app_name"
+                    android:text="@string/music_library"
                     android:textColor="?attr/colorOnSurface"
                     android:textSize="20sp" />
 

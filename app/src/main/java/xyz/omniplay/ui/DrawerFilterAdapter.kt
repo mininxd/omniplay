@@ -71,12 +71,16 @@ class DrawerFilterAdapter(
 
         fun bind(item: FilterItem) {
             val context = binding.root.context
-            binding.filterItemTitle.text = item.title
+            val displayTitle = item.title.trim().ifEmpty {
+                if (item.isAlbum) context.getString(R.string.unknown_album) else context.getString(R.string.unknown_artist)
+            }
+            binding.filterItemTitle.text = displayTitle
             binding.filterItemCount.text = "${item.count}"
 
             fun showAlbumArt(bitmap: Bitmap) {
                 binding.filterItemIcon.imageTintList = null
                 binding.filterItemIcon.clearColorFilter()
+                binding.filterItemIcon.setPadding(0, 0, 0, 0)
                 binding.filterItemIcon.scaleType = ImageView.ScaleType.CENTER_CROP
                 binding.filterItemIcon.setImageBitmap(bitmap)
                 binding.filterItemIcon.alpha = 1.0f
@@ -84,7 +88,9 @@ class DrawerFilterAdapter(
 
             fun showDefaultIcon() {
                 binding.filterItemIcon.imageTintList = null
-                binding.filterItemIcon.scaleType = ImageView.ScaleType.FIT_CENTER
+                binding.filterItemIcon.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                val pad = (8 * context.resources.displayMetrics.density).toInt()
+                binding.filterItemIcon.setPadding(pad, pad, pad, pad)
                 binding.filterItemIcon.setImageResource(
                     if (item.isAlbum) R.drawable.ic_album else R.drawable.ic_person
                 )
@@ -94,7 +100,7 @@ class DrawerFilterAdapter(
                     ThemeColors.getOnSurfaceVariant(context)
                 }
                 binding.filterItemIcon.setColorFilter(tintColor)
-                binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.5f
+                binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.7f
             }
 
             val albumArt = if (item.isAlbum) {
@@ -126,9 +132,12 @@ class DrawerFilterAdapter(
             if (item.isSelected) {
                 binding.filterItemTitle.setTextColor(primaryColor)
                 binding.filterItemCount.setTextColor(primaryColor)
+                binding.filterItemCard.strokeWidth = (1.5f * context.resources.displayMetrics.density).toInt()
+                binding.filterItemCard.strokeColor = primaryColor
             } else {
                 binding.filterItemTitle.setTextColor(ThemeColors.getOnSurface(context))
                 binding.filterItemCount.setTextColor(ThemeColors.getOutline(context))
+                binding.filterItemCard.strokeWidth = 0
             }
 
             binding.root.setOnClickListener {

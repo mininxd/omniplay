@@ -379,6 +379,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         updateShuffleButton(false)
         updateRepeatButton(PlaybackService.REPEAT_OFF)
         updatePlayPauseButton(isPlaying = false)
+        updateAppTitle()
     }
 
     /**
@@ -780,7 +781,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                     binding.peekArtistText.gravity = gravity
                     binding.peekArtistText.textAlignment = textAlignment
-                    binding.peekArtistText.text = peekSong.artist
+                    binding.peekArtistText.text = peekSong.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
 
                     val cached = AlbumArtLoader.getCachedAlbumArt(peekSong)
                     if (cached != null) {
@@ -1952,8 +1953,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             ?: (320f * resources.displayMetrics.density)
     }
 
+    private fun updateAppTitle() {
+        if (isFilterMenuOpen || isFilterPreviewActive) {
+            binding.appTitleText.text = getString(R.string.music_library)
+        } else {
+            binding.appTitleText.text = getString(R.string.app_name)
+        }
+    }
+
     private fun openLeftMenu() {
         if (isFilterMenuOpen) return
+        binding.appTitleText.text = getString(R.string.music_library)
         val drawer = binding.leftDrawerMenu
         val scrim = binding.filterDrawerScrim
         drawer.visibility = View.VISIBLE
@@ -1979,6 +1989,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val remaining = if (toOpen) (1f - progress) else progress
         val duration = (260L * remaining).toLong().coerceIn(120L, 280L)
 
+        if (toOpen) {
+            binding.appTitleText.text = getString(R.string.music_library)
+        }
+
         binding.leftDrawerMenu.visibility = View.VISIBLE
         binding.filterDrawerScrim.visibility = View.VISIBLE
 
@@ -1997,12 +2011,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         binding.leftDrawerMenu.translationX = 0f
                         binding.filterDrawerScrim.alpha = 0.6f
                         isFilterMenuOpen = true
+                        updateAppTitle()
                     } else {
                         binding.leftDrawerMenu.translationX = -drawerWidth
                         binding.leftDrawerMenu.visibility = View.GONE
                         binding.filterDrawerScrim.alpha = 0f
                         binding.filterDrawerScrim.visibility = View.GONE
                         isFilterMenuOpen = false
+                        updateAppTitle()
                     }
                     filterDrawerAnimator = null
                 }
@@ -2115,6 +2131,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 isFilterPreviewActive = false
             }
+            updateAppTitle()
             binding.activeFilterBar.visibility = View.GONE
             updateFilterSubList()
             applyCurrentFilter()
@@ -2140,12 +2157,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 isFilterPreviewActive = false
             }
+            updateAppTitle()
             binding.activeFilterBar.visibility = View.GONE
             val subMode = if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
             val count = if (subMode == LibraryFilterMode.ALBUM) {
-                allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+                allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
             } else {
-                allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+                allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
             }
             binding.drawerFilterInfoText.text = if (subMode == LibraryFilterMode.ALBUM) "Select from $count albums" else "Select from $count artists"
             updateFilterSubList()
@@ -2165,7 +2183,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.drawerFilterInfoText.text = "Filtered by artist: $selectedFilterValue"
                 } else {
                     binding.activeFilterBar.visibility = View.GONE
-                    val count = allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+                    val count = allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
                     binding.drawerFilterInfoText.text = "Select from $count artists"
                     applyCurrentFilter()
                 }
@@ -2177,7 +2195,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.drawerFilterInfoText.text = "Filtered by album: $selectedFilterValue"
                 } else {
                     binding.activeFilterBar.visibility = View.GONE
-                    val count = allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+                    val count = allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
                     binding.drawerFilterInfoText.text = "Select from $count albums"
                     applyCurrentFilter()
                 }
@@ -2186,9 +2204,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.activeFilterBar.visibility = View.GONE
                 val subMode = if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
                 val count = if (subMode == LibraryFilterMode.ALBUM) {
-                    allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+                    allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
                 } else {
-                    allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+                    allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
                 }
                 binding.drawerFilterInfoText.text = if (subMode == LibraryFilterMode.ALBUM) "Select from $count albums" else "Select from $count artists"
                 applyCurrentFilter()
@@ -2206,10 +2224,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         } else {
             LibraryFilterMode.ARTIST
         }
+        val unknownAlbumStr = getString(R.string.unknown_album)
+        val unknownArtistStr = getString(R.string.unknown_artist)
         val items = when (browseMode) {
             LibraryFilterMode.ARTIST -> {
                 allScannedSongs
-                    .groupBy { it.artist.ifEmpty { "Unknown Artist" } }
+                    .groupBy { it.artist.trim().ifEmpty { unknownArtistStr } }
                     .map { (artist, songs) ->
                         FilterItem(
                             title = artist,
@@ -2222,7 +2242,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
             LibraryFilterMode.ALBUM -> {
                 allScannedSongs
-                    .groupBy { it.album.ifEmpty { "Unknown Album" } }
+                    .groupBy { it.album.trim().ifEmpty { unknownAlbumStr } }
                     .map { (album, songs) ->
                         FilterItem(
                             title = album,
@@ -2243,6 +2263,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         selectedFilterValue = item.title
         currentFilterMode = if (item.isAlbum) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
         isFilterPreviewActive = true
+        updateAppTitle()
         binding.activeFilterBar.visibility = View.VISIBLE
         binding.activeFilterText.text = if (item.isAlbum) "Album: ${item.title}" else "Artist: ${item.title}"
         binding.drawerFilterInfoText.text = if (item.isAlbum) "Filtered by album: ${item.title}" else "Filtered by artist: ${item.title}"
@@ -2256,6 +2277,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun revertToOngoingQueue() {
         isFilterPreviewActive = false
+        updateAppTitle()
         selectedFilterValue = activeOngoingQueueTitle
         currentFilterMode = activeOngoingFilterMode
         if (selectedFilterValue != null) {
@@ -2271,9 +2293,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.activeFilterBar.visibility = View.GONE
             val subMode = if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
             val count = if (subMode == LibraryFilterMode.ALBUM) {
-                allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+                allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
             } else {
-                allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+                allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
             }
             binding.drawerFilterInfoText.text = if (subMode == LibraryFilterMode.ALBUM) "Select from $count albums" else "Select from $count artists"
         }
@@ -2283,6 +2305,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun clearFilter() {
         isFilterPreviewActive = false
+        updateAppTitle()
         activeOngoingQueueTitle = null
         activeOngoingFilterMode = LibraryFilterMode.TRACK
         selectedFilterValue = null
@@ -2290,9 +2313,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.activeFilterBar.visibility = View.GONE
         val subMode = if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums) LibraryFilterMode.ALBUM else LibraryFilterMode.ARTIST
         val count = if (subMode == LibraryFilterMode.ALBUM) {
-            allScannedSongs.map { it.album.ifEmpty { "Unknown Album" } }.distinct().size
+            allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
         } else {
-            allScannedSongs.map { it.artist.ifEmpty { "Unknown Artist" } }.distinct().size
+            allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
         }
         binding.drawerFilterInfoText.text = if (subMode == LibraryFilterMode.ALBUM) "Select from $count albums" else "Select from $count artists"
         updateFilterSubList()
@@ -2320,7 +2343,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                 }
                 SortField.ARTIST -> {
-                    val res = a.artist.compareTo(b.artist, ignoreCase = true)
+                    val aArtist = a.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
+                    val bArtist = b.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
+                    val res = aArtist.compareTo(bArtist, ignoreCase = true)
                     if (res != 0) {
                         if (ascending) res else -res
                     } else {
@@ -2328,7 +2353,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                 }
                 SortField.ALBUM -> {
-                    val res = a.album.compareTo(b.album, ignoreCase = true)
+                    val aAlbum = a.album.trim().ifEmpty { getString(R.string.unknown_album) }
+                    val bAlbum = b.album.trim().ifEmpty { getString(R.string.unknown_album) }
+                    val res = aAlbum.compareTo(bAlbum, ignoreCase = true)
                     if (res != 0) {
                         if (ascending) res else -res
                     } else {
@@ -2401,14 +2428,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (selectedFilterValue.isNullOrEmpty()) {
                     allScannedSongs
                 } else {
-                    allScannedSongs.filter { it.artist.equals(selectedFilterValue, ignoreCase = true) }
+                    allScannedSongs.filter {
+                        val artistName = it.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
+                        artistName.equals(selectedFilterValue, ignoreCase = true)
+                    }
                 }
             }
             LibraryFilterMode.ALBUM -> {
                 if (selectedFilterValue.isNullOrEmpty()) {
                     allScannedSongs
                 } else {
-                    allScannedSongs.filter { it.album.equals(selectedFilterValue, ignoreCase = true) }
+                    allScannedSongs.filter {
+                        val albumName = it.album.trim().ifEmpty { getString(R.string.unknown_album) }
+                        albumName.equals(selectedFilterValue, ignoreCase = true)
+                    }
                 }
             }
         }
@@ -2427,6 +2460,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.sheetTitleText.text = getString(R.string.queue_title)
         }
         binding.sheetTitleText.isSelected = true
+        updateAppTitle()
 
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
@@ -2634,9 +2668,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             binding.songTitleText.text = song.title
             binding.songTitleText.isSelected = true
-            binding.artistNameText.text = song.artist
+            val displayArtist = song.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
+            val displayAlbum = song.album.trim().ifEmpty { getString(R.string.unknown_album) }
+            binding.artistNameText.text = displayArtist
             binding.artistNameText.isSelected = true
-            binding.albumNameText.text = song.album
+            binding.albumNameText.text = displayAlbum
             binding.totalTimeText.text = Song.formatTime(song.duration)
 
             updateAudioBadges(song, playbackService?.currentAudioInfo)

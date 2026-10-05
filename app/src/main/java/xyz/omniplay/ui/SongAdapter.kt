@@ -90,7 +90,8 @@ class SongAdapter(
             val context = binding.root.context
 
             binding.itemTitleText.text = song.title
-            binding.itemSubtitleText.text = "${song.artist} • ${song.format}"
+            val displayArtist = song.artist.trim().ifEmpty { context.getString(R.string.unknown_artist) }
+            binding.itemSubtitleText.text = "$displayArtist • ${song.format}"
             binding.itemDurationText.text = Song.formatTime(song.duration)
 
             val primaryColor = ThemeColors.getPrimary(context)
