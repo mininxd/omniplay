@@ -95,7 +95,8 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Show Album Art Switch & Row Click (Material 3 Split Button)
+        // 4. Show Album Art Switch & Row Click (Compact Split Button)
+        binding.titleAlbumArt.isSelected = true
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
 
