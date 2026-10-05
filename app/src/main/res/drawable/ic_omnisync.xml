@@ -3,21 +3,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Center Audio Wave / Signal Node -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,12m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
-    <!-- Outer Broadcast / Sync Ring Segments -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="@android:color/white"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:pathData="M4.93,4.93 C8.84,1.02 15.16,1.02 19.07,4.93 M19.07,19.07 C15.16,22.98 8.84,22.98 4.93,19.07" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="@android:color/white"
-        android:strokeWidth="1.8"
-        android:strokeLineCap="round"
-        android:pathData="M7.76,7.76 C10.1,5.41 13.9,5.41 16.24,7.76 M16.24,16.24 C13.9,18.59 10.1,18.59 7.76,16.24" />
+        android:pathData="M1.88,20.13Q1,19.25 1,18T1.88,15.88T4,15q0.23,0 0.44,0.04t0.41,0.09L8.9,9.55Q8.48,9.02 8.24,8.38Q8,7.72 8,7Q8,5.35 9.18,4.17T12,3t2.83,1.17T16,7q0,0.72 -0.25,1.38Q15.5,9.02 15.08,9.55l4.08,5.58q0.2,-0.05 0.41,-0.09Q19.78,15 20,15q1.25,0 2.13,0.88T23,18t-0.88,2.13T20,21T17.88,20.13T17,18q0,-0.48 0.14,-0.91q0.14,-0.44 0.39,-0.79L13.48,10.73q-0.13,0.05 -0.24,0.07T13,10.88v4.3q0.88,0.3 1.44,1.08T15,18q0,1.25 -0.88,2.13T12,21T9.88,20.13T9,18Q9,17.02 9.56,16.26T11,15.18v-4.3Q10.88,10.83 10.76,10.8T10.53,10.73L6.48,16.3q0.25,0.35 0.39,0.79T7,18q0,1.25 -0.88,2.13T4,21T1.88,20.13ZM4.71,18.71Q5,18.43 5,18T4.71,17.29T4,17T3.29,17.29T3,18t0.29,0.71T4,19T4.71,18.71ZM12,7Zm0.71,11.71Q13,18.43 13,18T12.71,17.29T12,17t-0.71,0.29T11,18t0.29,0.71T12,19t0.71,-0.29Zm8,0Q21,18.43 21,18T20.71,17.29T20,17t-0.71,0.29T19,18t0.29,0.71T20,19q0.43,0 0.71,-0.29ZM4,18Zm8,0Zm8,0ZM13.41,8.41Q14,7.82 14,7T13.41,5.59T12,5T10.59,5.59Q10,6.18 10,7t0.59,1.41T12,9T13.41,8.41Z" />
 </vector>
