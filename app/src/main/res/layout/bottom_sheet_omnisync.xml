@@ -35,7 +35,7 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:src="@drawable/ic_omnisync"
-                app:tint="@color/primary_accent" />
+                app:tint="?attr/colorPrimary" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -49,14 +49,14 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
                     android:text="@string/omnisync_title"
-                    android:textColor="@color/text_primary"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="20sp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/omnisync_subtitle"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
             </LinearLayout>
 
@@ -71,7 +71,7 @@
                 android:paddingEnd="10dp"
                 android:paddingBottom="4dp"
                 android:text="Offline P2P"
-                android:textColor="@color/primary_accent"
+                android:textColor="?attr/colorPrimary"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -93,7 +93,7 @@
                 android:layout_weight="1"
                 android:fontFamily="sans-serif-medium"
                 android:text="@string/omnisync_host_tab"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/colorOnSurface" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_tab_listener"
@@ -103,7 +103,7 @@
                 android:layout_weight="1"
                 android:fontFamily="sans-serif-medium"
                 android:text="@string/omnisync_listen_tab"
-                android:textColor="@color/text_primary" />
+                android:textColor="?attr/colorOnSurface" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <!-- ============================================================= -->
@@ -120,10 +120,10 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                app:cardBackgroundColor="@color/surface_container"
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/surface_container_high"
+                app:strokeColor="?attr/colorSurfaceContainerHigh"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -150,7 +150,7 @@
                                 android:layout_height="wrap_content"
                                 android:fontFamily="sans-serif-medium"
                                 android:text="Host Room"
-                                android:textColor="@color/text_primary"
+                                android:textColor="?attr/colorOnSurface"
                                 android:textSize="16sp" />
 
                             <TextView
@@ -159,7 +159,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
                                 android:text="Wi-Fi / Hotspot"
-                                android:textColor="@color/text_tertiary"
+                                android:textColor="?attr/colorOutline"
                                 android:textSize="12sp" />
                         </LinearLayout>
 
@@ -174,7 +174,7 @@
                             android:paddingEnd="8dp"
                             android:paddingBottom="3dp"
                             android:text="IDLE"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="11sp" />
                     </LinearLayout>
 
@@ -183,7 +183,7 @@
                         android:layout_height="1dp"
                         android:layout_marginTop="14dp"
                         android:layout_marginBottom="14dp"
-                        android:background="@color/surface_container_high" />
+                        android:background="?attr/colorSurfaceContainerHigh" />
 
                     <!-- Now Playing -->
                     <TextView
@@ -191,7 +191,7 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
                         android:text="NOW STREAMING"
-                        android:textColor="@color/text_tertiary"
+                        android:textColor="?attr/colorOutline"
                         android:textSize="11sp" />
 
                     <TextView
@@ -201,7 +201,7 @@
                         android:layout_marginTop="4dp"
                         android:fontFamily="sans-serif-medium"
                         android:text="No track playing in Omniplay"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:textSize="14sp" />
 
                     <View
@@ -209,7 +209,7 @@
                         android:layout_height="1dp"
                         android:layout_marginTop="14dp"
                         android:layout_marginBottom="14dp"
-                        android:background="@color/surface_container_high" />
+                        android:background="?attr/colorSurfaceContainerHigh" />
 
                     <!-- Connected Listeners -->
                     <TextView
@@ -217,7 +217,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0 listeners connected"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="13sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -239,7 +239,7 @@
                 android:layout_marginTop="12dp"
                 android:gravity="center"
                 android:text="@string/omnisync_host_idle"
-                android:textColor="@color/text_tertiary"
+                android:textColor="?attr/colorOutline"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -274,7 +274,7 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
                         android:text="Stream Quality"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:textSize="13sp" />
 
                     <TextView
@@ -283,7 +283,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
                         android:text="High Quality"
-                        android:textColor="@color/text_tertiary"
+                        android:textColor="?attr/colorOutline"
                         android:textSize="11sp" />
                 </LinearLayout>
 
@@ -348,7 +348,7 @@
                         android:layout_weight="1"
                         android:fontFamily="sans-serif-medium"
                         android:text="Available Hosts"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="14sp" />
 
                     <TextView
@@ -356,7 +356,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/omnisync_searching_hosts"
-                        android:textColor="@color/text_tertiary"
+                        android:textColor="?attr/colorOutline"
                         android:textSize="12sp" />
                 </LinearLayout>
 
@@ -369,7 +369,7 @@
                     android:gravity="center"
                     android:padding="20dp"
                     android:text="@string/omnisync_no_hosts"
-                    android:textColor="@color/text_tertiary"
+                    android:textColor="?attr/colorOutline"
                     android:textSize="12sp" />
 
                 <LinearLayout
@@ -383,10 +383,10 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    app:cardBackgroundColor="@color/surface_container"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/surface_container_high"
+                    app:strokeColor="?attr/colorSurfaceContainerHigh"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -400,7 +400,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif-medium"
                             android:text="Connect Manually"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="13sp" />
 
                         <LinearLayout
@@ -422,8 +422,8 @@
                                 android:maxLines="1"
                                 android:paddingStart="12dp"
                                 android:paddingEnd="12dp"
-                                android:textColor="@color/text_primary"
-                                android:textColorHint="@color/text_tertiary"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textColorHint="?attr/colorOutline"
                                 android:textSize="13sp" />
 
                             <com.google.android.material.button.MaterialButton
@@ -450,10 +450,10 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/surface_container"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
-                    app:strokeColor="@color/surface_container_high"
+                    app:strokeColor="?attr/colorSurfaceContainerHigh"
                     app:strokeWidth="1dp">
 
                     <LinearLayout
@@ -480,7 +480,7 @@
                                     android:layout_height="wrap_content"
                                     android:fontFamily="sans-serif-medium"
                                     android:text="Connected Host"
-                                    android:textColor="@color/text_primary"
+                                    android:textColor="?attr/colorOnSurface"
                                     android:textSize="16sp" />
 
                                 <TextView
@@ -489,7 +489,7 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginTop="2dp"
                                     android:text="192.168.1.100"
-                                    android:textColor="@color/text_tertiary"
+                                    android:textColor="?attr/colorOutline"
                                     android:textSize="12sp" />
                             </LinearLayout>
 
@@ -504,7 +504,7 @@
                                 android:paddingEnd="8dp"
                                 android:paddingBottom="3dp"
                                 android:text="STREAMING"
-                                android:textColor="@color/primary_accent"
+                                android:textColor="?attr/colorPrimary"
                                 android:textSize="11sp" />
 
                             <TextView
@@ -519,7 +519,7 @@
                                 android:paddingEnd="6dp"
                                 android:paddingBottom="3dp"
                                 android:text="10ms"
-                                android:textColor="@color/text_tertiary"
+                                android:textColor="?attr/colorOutline"
                                 android:textSize="11sp"
                                 android:visibility="gone" />
                         </LinearLayout>
@@ -529,7 +529,7 @@
                             android:layout_height="1dp"
                             android:layout_marginTop="14dp"
                             android:layout_marginBottom="14dp"
-                            android:background="@color/surface_container_high" />
+                            android:background="?attr/colorSurfaceContainerHigh" />
 
                         <!-- Now Streaming -->
                         <TextView
@@ -537,7 +537,7 @@
                             android:layout_height="wrap_content"
                             android:fontFamily="sans-serif-medium"
                             android:text="NOW STREAMING"
-                            android:textColor="@color/text_tertiary"
+                            android:textColor="?attr/colorOutline"
                             android:textSize="11sp" />
 
                         <TextView
@@ -547,7 +547,7 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="sans-serif-medium"
                             android:text="Waiting for stream…"
-                            android:textColor="@color/text_primary"
+                            android:textColor="?attr/colorOnSurface"
                             android:textSize="15sp" />
 
                         <TextView
@@ -556,7 +556,7 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
                             android:text="Host Broadcast"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurfaceVariant"
                             android:textSize="13sp" />
 
                         <View
@@ -564,7 +564,7 @@
                             android:layout_height="1dp"
                             android:layout_marginTop="14dp"
                             android:layout_marginBottom="14dp"
-                            android:background="@color/surface_container_high" />
+                            android:background="?attr/colorSurfaceContainerHigh" />
 
                         <!-- Volume Controls -->
                         <LinearLayout
@@ -577,7 +577,7 @@
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
                                 android:src="@drawable/ic_volume_up"
-                                app:tint="@color/primary_accent" />
+                                app:tint="?attr/colorPrimary" />
 
                             <SeekBar
                                 android:id="@+id/listener_volume_slider"
@@ -585,8 +585,8 @@
                                 android:layout_height="wrap_content"
                                 android:max="100"
                                 android:progress="100"
-                                android:progressTint="@color/primary_accent"
-                                android:thumbTint="@color/primary_accent" />
+                                android:progressTint="?attr/colorPrimary"
+                                android:thumbTint="?attr/colorPrimary" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>

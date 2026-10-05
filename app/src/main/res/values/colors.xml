@@ -1,39 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Background & Surface - Deep AMOLED aesthetic -->
-    <color name="background_dark">#101116</color>
-    <color name="surface_dark">#161820</color>
-    <color name="surface_container">#1E212B</color>
-    <color name="surface_container_high">#282C3A</color>
-    <color name="surface_container_highest">#333748</color>
+    <!-- Background & Surface - Material 3 Expressive Baseline -->
+    <color name="background_dark">#141218</color>
+    <color name="surface_dark">#141218</color>
+    <color name="surface_container">#211F26</color>
+    <color name="surface_container_high">#2B2930</color>
+    <color name="surface_container_highest">#36343B</color>
 
-    <!-- Material You Primary & Accent -->
-    <color name="primary_accent">#B4C8EB</color>
-    <color name="primary_variant">#8EA8D6</color>
-    <color name="on_primary">#101A2C</color>
+    <!-- Material You Primary & Accent (Default M3 Expressive Baseline fallback) -->
+    <color name="primary_accent">#D0BCFF</color>
+    <color name="primary_variant">#CCC2DC</color>
+    <color name="on_primary">#381E72</color>
 
     <!-- Text colors -->
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#A2A8BC</color>
-    <color name="text_tertiary">#72788E</color>
+    <color name="text_primary">#E6E0E9</color>
+    <color name="text_secondary">#CAC4D0</color>
+    <color name="text_tertiary">#938F99</color>
 
     <!-- Controls & Material You Slider -->
-    <color name="control_tint">#A0A6BA</color>
-    <color name="control_tint_active">#B4C8EB</color>
-    <color name="control_tint_inactive">#4A4F60</color>
-    <color name="slider_track_inactive">#282C3A</color>
-    <color name="slider_track_active">#B4C8EB</color>
-    <color name="slider_thumb">#B4C8EB</color>
-    <color name="slider_halo">#33B4C8EB</color>
+    <color name="control_tint">#CAC4D0</color>
+    <color name="control_tint_active">#D0BCFF</color>
+    <color name="control_tint_inactive">#49454F</color>
+    <color name="slider_track_inactive">#49454F</color>
+    <color name="slider_track_active">#D0BCFF</color>
+    <color name="slider_thumb">#D0BCFF</color>
+    <color name="slider_halo">#33D0BCFF</color>
 
     <!-- System & Window -->
-    <color name="status_bar_color">#101116</color>
-    <color name="navigation_bar_color">#101116</color>
+    <color name="status_bar_color">#141218</color>
+    <color name="navigation_bar_color">#141218</color>
 
-    <!-- Seek cancel indicator (muted terracotta/rose red) -->
-    <color name="slider_cancel_accent">#BA7272</color>
+    <!-- Seek cancel indicator -->
+    <color name="slider_cancel_accent">#F2B8B5</color>
 
-    <!-- Badges & Popup borders (muted) -->
-    <color name="badge_stroke">#3A4052</color>
-    <color name="badge_cancel_stroke">#6E3D3D</color>
+    <!-- Badges & Popup borders -->
+    <color name="badge_stroke">#49454F</color>
+    <color name="badge_cancel_stroke">#8C1D18</color>
 </resources>

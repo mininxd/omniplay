@@ -91,7 +91,7 @@ class DrawerFilterAdapter(
                 val tintColor = if (item.isSelected) {
                     ThemeColors.getPrimary(context)
                 } else {
-                    ContextCompat.getColor(context, R.color.control_tint_inactive)
+                    ThemeColors.getOnSurfaceVariant(context)
                 }
                 binding.filterItemIcon.setColorFilter(tintColor)
                 binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.5f
@@ -127,8 +127,8 @@ class DrawerFilterAdapter(
                 binding.filterItemTitle.setTextColor(primaryColor)
                 binding.filterItemCount.setTextColor(primaryColor)
             } else {
-                binding.filterItemTitle.setTextColor(ContextCompat.getColor(context, R.color.text_primary))
-                binding.filterItemCount.setTextColor(ContextCompat.getColor(context, R.color.text_tertiary))
+                binding.filterItemTitle.setTextColor(ThemeColors.getOnSurface(context))
+                binding.filterItemCount.setTextColor(ThemeColors.getOutline(context))
             }
 
             binding.root.setOnClickListener {

@@ -12,6 +12,7 @@ import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.databinding.BottomSheetOmnisyncBinding
 import xyz.omniplay.databinding.ItemOmnisyncHostBinding
+import xyz.omniplay.util.ThemeColors
 
 /**
  * Material You (Material 3) OmniSync Bottom Sheet:
@@ -170,7 +171,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_stop_host)
                 binding.hostStatusBadge.text = "STREAMING"
-                binding.hostStatusBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.primary_accent))
+                binding.hostStatusBadge.setTextColor(ThemeColors.getPrimary(requireContext()))
                 binding.syncBadge.text = "Host Active"
                 binding.btnManualConnect.isEnabled = false
                 onPeersChanged(syncManager.connectedPeers)
@@ -218,7 +219,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_start_host)
                 binding.hostStatusBadge.text = "IDLE"
-                binding.hostStatusBadge.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary))
+                binding.hostStatusBadge.setTextColor(ThemeColors.getOnSurfaceVariant(requireContext()))
                 binding.listenerDiscoveryContainer.visibility = View.VISIBLE
                 binding.listenerConnectedContainer.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true

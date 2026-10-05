@@ -16,6 +16,6 @@
         android:fontFamily="sans-serif"
         android:gravity="center"
         android:lineSpacingExtra="4dp"
-        android:textColor="@color/text_secondary"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="15sp" />
 </FrameLayout>

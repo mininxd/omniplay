@@ -25,7 +25,7 @@
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_gravity="center"
-        android:indeterminateTint="@color/primary_accent"
+        android:indeterminateTint="?attr/colorPrimary"
         android:visibility="gone" />
 
     <!-- Double Tap Feedback Badges -->

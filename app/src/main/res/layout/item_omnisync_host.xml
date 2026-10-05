@@ -4,10 +4,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginTop="8dp"
-    app:cardBackgroundColor="@color/surface_container"
+    app:cardBackgroundColor="?attr/colorSurfaceContainer"
     app:cardCornerRadius="16dp"
     app:cardElevation="0dp"
-    app:strokeColor="@color/surface_container_high"
+    app:strokeColor="?attr/colorOutlineVariant"
     app:strokeWidth="1dp">
 
     <LinearLayout
@@ -24,7 +24,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:src="@drawable/ic_omnisync"
-            app:tint="@color/primary_accent" />
+            app:tint="?attr/colorPrimary" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -38,14 +38,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-medium"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="15sp" />
 
             <TextView
                 android:id="@+id/host_address_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_tertiary"
+                android:textColor="?attr/colorOutline"
                 android:textSize="11sp" />
         </LinearLayout>
 
@@ -58,7 +58,7 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:text="@string/omnisync_connect"
-            android:textColor="@color/primary_accent"
+            android:textColor="?attr/colorPrimary"
             android:textSize="12sp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

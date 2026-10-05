@@ -5,7 +5,7 @@
     android:id="@+id/coordinator_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_dark"
+    android:background="?attr/colorSurface"
     android:clipChildren="false"
     android:clipToPadding="false"
     android:fitsSystemWindows="true">
@@ -33,7 +33,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="16dp"
                 android:text="@string/app_name"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="23sp"
                 app:layout_constraintEnd_toStartOf="@id/btn_menu"
                 app:layout_constraintStart_toStartOf="parent"
@@ -45,13 +45,13 @@
             android:layout_height="48dp"
             android:layout_marginEnd="16dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Menu"
+            android:contentDescription="@string/settings"
             android:padding="12dp"
-            android:src="@drawable/ic_menu"
+            android:src="@drawable/ic_settings"
             app:layout_constraintBottom_toBottomOf="@id/app_title_text"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="@id/app_title_text"
-            app:tint="@color/text_primary" />
+            app:tint="?attr/colorOnSurface" />
 
         <!-- Peek Album Art Card (Revealed behind during swipe) -->
         <com.google.android.material.card.MaterialCardView
@@ -61,7 +61,7 @@
             android:visibility="invisible"
             app:cardCornerRadius="28dp"
             app:cardElevation="6dp"
-            app:cardBackgroundColor="@color/surface_container"
+            app:cardBackgroundColor="?attr/colorSurfaceContainer"
             app:strokeWidth="0dp"
             app:layout_constraintTop_toTopOf="@id/album_art_card"
             app:layout_constraintBottom_toBottomOf="@id/album_art_card"
@@ -91,7 +91,7 @@
                     android:id="@+id/peek_label_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/primary_accent"
+                    android:textColor="?attr/colorPrimary"
                     android:textSize="11sp"
                     android:fontFamily="sans-serif-medium"
                     android:textAllCaps="true"
@@ -105,7 +105,7 @@
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
                     android:singleLine="true"
-                    android:textColor="@color/text_primary"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="15sp"
                     tools:text="Song Title" />
 
@@ -116,7 +116,7 @@
                     android:layout_marginTop="1dp"
                     android:ellipsize="end"
                     android:singleLine="true"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp"
                     tools:text="Artist Name" />
             </LinearLayout>
@@ -130,7 +130,7 @@
             android:visibility="invisible"
             app:cardCornerRadius="24dp"
             app:cardElevation="7dp"
-            app:cardBackgroundColor="@color/surface_container"
+            app:cardBackgroundColor="?attr/colorSurfaceContainer"
             app:strokeWidth="0dp"
             app:layout_constraintTop_toTopOf="@id/album_art_card"
             app:layout_constraintBottom_toBottomOf="@id/album_art_card"
@@ -160,7 +160,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="LYRICS"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="11sp"
                         android:fontFamily="sans-serif-medium"
                         android:letterSpacing="0.08" />
@@ -176,7 +176,7 @@
                         android:paddingEnd="6dp"
                         android:paddingBottom="2dp"
                         android:text="LRCLIB"
-                        android:textColor="@color/primary_accent"
+                        android:textColor="?attr/colorPrimary"
                         android:textSize="9sp"
                         android:fontFamily="sans-serif-medium" />
 
@@ -193,7 +193,7 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="Close Lyrics"
                         android:src="@drawable/ic_close"
-                        app:tint="@color/text_secondary" />
+                        app:tint="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>
 
                 <!-- Synced Lyrics RecyclerView -->
@@ -238,7 +238,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:textSize="15sp"
                         android:lineSpacingExtra="6dp"
                         android:fontFamily="sans-serif" />
@@ -263,7 +263,7 @@
                         android:layout_width="32dp"
                         android:layout_height="32dp"
                         android:indeterminate="true"
-                        android:indeterminateTint="@color/primary_accent" />
+                        android:indeterminateTint="?attr/colorPrimary" />
 
                     <ImageView
                         android:id="@+id/lyrics_status_icon"
@@ -271,7 +271,7 @@
                         android:layout_height="36dp"
                         android:src="@drawable/ic_music_note"
                         android:visibility="gone"
-                        app:tint="@color/text_secondary" />
+                        app:tint="?attr/colorOnSurfaceVariant" />
 
                     <TextView
                         android:id="@+id/lyrics_status_text"
@@ -279,7 +279,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:text="Loading lyrics..."
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="14sp"
                         android:fontFamily="sans-serif-medium"
                         android:gravity="center" />
@@ -292,7 +292,7 @@
                         android:paddingStart="24dp"
                         android:paddingEnd="24dp"
                         android:text=""
-                        android:textColor="@color/text_tertiary"
+                        android:textColor="?attr/colorOutline"
                         android:textSize="12sp"
                         android:fontFamily="sans-serif"
                         android:gravity="center"
@@ -306,8 +306,8 @@
                         android:text="Retry"
                         android:visibility="gone"
                         android:textSize="12sp"
-                        android:textColor="@color/on_primary"
-                        app:backgroundTint="@color/primary_accent"
+                        android:textColor="?attr/colorOnPrimary"
+                        app:backgroundTint="?attr/colorPrimary"
                         app:cornerRadius="18dp" />
                 </LinearLayout>
 
@@ -325,7 +325,7 @@
             android:layout_marginBottom="@dimen/album_art_margin_bottom"
             app:cardCornerRadius="24dp"
             app:cardElevation="8dp"
-            app:cardBackgroundColor="@color/surface_container"
+            app:cardBackgroundColor="?attr/colorSurfaceContainer"
             app:strokeWidth="0dp"
             app:layout_constrainedHeight="true"
             app:layout_constrainedWidth="true"
@@ -364,7 +364,7 @@
             android:scrollHorizontally="true"
             android:singleLine="true"
             android:text="@string/no_track_selected"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/song_title_text_size"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -386,7 +386,7 @@
             android:scrollHorizontally="true"
             android:singleLine="true"
             android:text=""
-            android:textColor="@color/text_secondary"
+            android:textColor="?attr/colorOnSurfaceVariant"
             android:textSize="@dimen/artist_name_text_size"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -404,7 +404,7 @@
             android:gravity="center"
             android:singleLine="true"
             android:text=""
-            android:textColor="@color/text_tertiary"
+            android:textColor="?attr/colorOutline"
             android:textSize="@dimen/album_name_text_size"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -438,7 +438,7 @@
             android:paddingBottom="6dp"
             android:fontFamily="sans-serif-medium"
             android:text="-5"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="17sp"
             android:visibility="gone"
             app:layout_constraintStart_toStartOf="parent"
@@ -458,7 +458,7 @@
             android:paddingBottom="6dp"
             android:fontFamily="sans-serif-medium"
             android:text="+5"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/colorOnSurface"
             android:textSize="17sp"
             android:visibility="gone"
             app:layout_constraintEnd_toEndOf="parent"
@@ -495,7 +495,7 @@
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="FLAC"
-                android:textColor="@color/primary_accent"
+                android:textColor="?attr/colorPrimary"
                 android:textSize="11sp" />
 
             <TextView
@@ -512,7 +512,7 @@
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="16bit/192khz"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="11sp" />
 
             <TextView
@@ -566,7 +566,7 @@
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="10ms"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="11sp"
                 android:visibility="gone" />
         </LinearLayout>
@@ -594,7 +594,7 @@
             android:singleLine="true"
             android:ellipsize="end"
             android:text="@string/default_time"
-            android:textColor="@color/text_tertiary"
+            android:textColor="?attr/colorOutline"
             android:textSize="12sp"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toStartOf="parent"
@@ -608,7 +608,7 @@
             android:layout_marginEnd="28dp"
             android:layout_marginTop="@dimen/time_margin_top"
             android:text="@string/default_time"
-            android:textColor="@color/text_tertiary"
+            android:textColor="?attr/colorOutline"
             android:textSize="12sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@id/playback_slider" />
@@ -643,7 +643,7 @@
                 app:layout_constraintHorizontal_chainStyle="spread_inside"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/control_tint_inactive" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <!-- Previous -->
             <ImageButton
@@ -658,14 +658,14 @@
                 app:layout_constraintEnd_toStartOf="@id/btn_play_pause_card"
                 app:layout_constraintStart_toEndOf="@id/btn_shuffle"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/text_primary" />
+                app:tint="?attr/colorOnSurface" />
 
             <!-- Play / Pause Circular Card -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/btn_play_pause_card"
                 android:layout_width="66dp"
                 android:layout_height="66dp"
-                app:cardBackgroundColor="@color/primary_accent"
+                app:cardBackgroundColor="?attr/colorPrimary"
                 app:cardCornerRadius="33dp"
                 app:cardElevation="4dp"
                 app:strokeWidth="0dp"
@@ -681,7 +681,7 @@
                     android:layout_gravity="center"
                     android:contentDescription="@string/play"
                     android:src="@drawable/ic_play"
-                    app:tint="@color/on_primary" />
+                    app:tint="?attr/colorOnPrimary" />
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Next -->
@@ -697,7 +697,7 @@
                 app:layout_constraintEnd_toStartOf="@id/btn_repeat"
                 app:layout_constraintStart_toEndOf="@id/btn_play_pause_card"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/text_primary" />
+                app:tint="?attr/colorOnSurface" />
 
             <!-- Repeat -->
             <ImageButton
@@ -713,7 +713,7 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@id/btn_next"
                 app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/control_tint_inactive" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- Bottom section after playback controls to capture swipe-up gesture to open playlist -->
@@ -775,7 +775,7 @@
                 android:layout_gravity="center_vertical"
                 android:contentDescription="@string/expand_queue"
                 android:src="@drawable/ic_expand_less"
-                app:tint="@color/control_tint" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <TextView
                 android:id="@+id/sheet_title_text"
@@ -794,7 +794,7 @@
                 android:scrollHorizontally="true"
                 android:singleLine="true"
                 android:text="@string/queue_title"
-                android:textColor="@color/text_primary"
+                android:textColor="?attr/colorOnSurface"
                 android:textSize="17sp" />
 
             <TextView
@@ -805,7 +805,7 @@
                 android:layout_gravity="center_vertical"
                 android:gravity="center_vertical"
                 android:includeFontPadding="false"
-                android:textColor="@color/text_tertiary"
+                android:textColor="?attr/colorOutline"
                 android:textSize="13sp"
                 tools:text="0 songs" />
 
@@ -818,14 +818,14 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/sort_queue"
                 android:src="@drawable/ic_sort"
-                app:tint="@color/control_tint" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <!-- Divider line -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/surface_container" />
+            android:background="?attr/colorSurfaceContainer" />
 
         <!-- In-Window Playlist Recycler View -->
         <androidx.recyclerview.widget.RecyclerView
@@ -852,7 +852,7 @@
                 android:layout_width="56dp"
                 android:layout_height="56dp"
                 android:src="@drawable/ic_music_note"
-                app:tint="@color/control_tint" />
+                app:tint="?attr/colorOnSurfaceVariant" />
 
             <TextView
                 android:id="@+id/empty_state_text"
@@ -861,7 +861,7 @@
                 android:layout_marginTop="16dp"
                 android:gravity="center"
                 android:text="@string/no_songs_found"
-                android:textColor="@color/text_secondary"
+                android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="14sp" />
 
             <com.google.android.material.button.MaterialButton
@@ -869,9 +869,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:backgroundTint="@color/primary_accent"
+                app:backgroundTint="?attr/colorPrimary"
                 android:text="@string/select_folder"
-                android:textColor="@color/on_primary"
+                android:textColor="?attr/colorOnPrimary"
                 app:cornerRadius="20dp" />
         </LinearLayout>
     </LinearLayout>
@@ -894,7 +894,7 @@
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:background="@color/surface_dark"
+        android:background="?attr/colorSurfaceContainerLow"
         android:clickable="true"
         android:focusable="true"
         android:elevation="20dp"
@@ -916,10 +916,10 @@
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="42dp"
                 android:layout_height="42dp"
-                app:cardBackgroundColor="@color/surface_container"
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="0dp"
-                app:strokeColor="@color/surface_container_high"
+                app:strokeColor="?attr/colorOutlineVariant"
                 app:strokeWidth="1dp">
 
                 <ImageView
@@ -927,7 +927,7 @@
                     android:layout_height="24dp"
                     android:layout_gravity="center"
                     android:src="@drawable/ic_music_note"
-                    app:tint="@color/primary_accent" />
+                    app:tint="?attr/colorPrimary" />
             </com.google.android.material.card.MaterialCardView>
 
             <LinearLayout
@@ -942,7 +942,7 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-medium"
                     android:text="@string/app_name"
-                    android:textColor="@color/text_primary"
+                    android:textColor="?attr/colorOnSurface"
                     android:textSize="20sp" />
 
                 <TextView
@@ -950,7 +950,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="1dp"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp"
                     tools:text="0 songs" />
             </LinearLayout>
@@ -963,14 +963,14 @@
                 android:contentDescription="Close Menu"
                 android:padding="10dp"
                 android:src="@drawable/ic_arrow_back"
-                app:tint="@color/control_tint" />
+                app:tint="?attr/colorOnSurfaceVariant" />
         </LinearLayout>
 
         <!-- Divider line -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/surface_container" />
+            android:background="?attr/colorSurfaceContainer" />
 
         <!-- All Tracks Quick-Action Card -->
         <com.google.android.material.card.MaterialCardView
@@ -982,10 +982,10 @@
             android:layout_marginEnd="16dp"
             android:clickable="true"
             android:focusable="true"
-            app:cardBackgroundColor="@color/surface_container"
+            app:cardBackgroundColor="?attr/colorSurfaceContainer"
             app:cardCornerRadius="14dp"
             app:cardElevation="0dp"
-            app:strokeColor="@color/surface_container_highest"
+            app:strokeColor="?attr/colorOutlineVariant"
             app:strokeWidth="1dp">
 
             <LinearLayout
@@ -1007,7 +1007,7 @@
                         android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:src="@drawable/ic_music_note"
-                        app:tint="@color/primary_accent" />
+                        app:tint="?attr/colorPrimary" />
                 </FrameLayout>
 
                 <LinearLayout
@@ -1023,7 +1023,7 @@
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
                         android:text="@string/all_tracks"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:textSize="15sp" />
 
                     <TextView
@@ -1031,7 +1031,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="12sp"
                         tools:text="0 songs" />
                 </LinearLayout>
@@ -1040,7 +1040,7 @@
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:src="@drawable/ic_chevron_right"
-                    app:tint="@color/text_tertiary" />
+                    app:tint="?attr/colorOutline" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -1054,7 +1054,7 @@
             android:fontFamily="sans-serif-medium"
             android:letterSpacing="0.08"
             android:text="BROWSE BY"
-            android:textColor="@color/text_tertiary"
+            android:textColor="?attr/colorOutline"
             android:textSize="11sp" />
 
         <!-- Filter Toggle Group: Artists vs Albums -->
@@ -1123,7 +1123,7 @@
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
                 android:singleLine="true"
-                android:textColor="@color/primary_accent"
+                android:textColor="?attr/colorPrimary"
                 android:textSize="12sp"
                 tools:text="Filter: Artist • Queen" />
 
@@ -1135,7 +1135,7 @@
                 android:contentDescription="@string/clear_filter"
                 android:padding="6dp"
                 android:src="@drawable/ic_close"
-                app:tint="@color/primary_accent" />
+                app:tint="?attr/colorPrimary" />
         </LinearLayout>
 
         <!-- Filter Mode Description / Stats -->
@@ -1148,7 +1148,7 @@
             android:layout_marginEnd="20dp"
             android:fontFamily="sans-serif"
             android:text="Showing all tracks"
-            android:textColor="@color/text_tertiary"
+            android:textColor="?attr/colorOutline"
             android:textSize="12sp" />
 
         <!-- Dynamic Filter Sub-List (Artists or Albums) -->

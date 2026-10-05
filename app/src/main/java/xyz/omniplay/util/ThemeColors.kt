@@ -17,6 +17,24 @@ object ThemeColors {
     }
 
     @ColorInt
+    fun getOnPrimary(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorOnPrimary,
+            ContextCompat.getColor(context, R.color.on_primary)
+        )
+    }
+
+    @ColorInt
+    fun getSurface(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorSurface,
+            ContextCompat.getColor(context, R.color.surface_dark)
+        )
+    }
+
+    @ColorInt
     fun getOnSurface(context: Context): Int {
         return MaterialColors.getColor(
             context,
@@ -35,6 +53,24 @@ object ThemeColors {
     }
 
     @ColorInt
+    fun getSurfaceContainer(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorSurfaceContainer,
+            ContextCompat.getColor(context, R.color.surface_container)
+        )
+    }
+
+    @ColorInt
+    fun getSurfaceContainerLow(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorSurfaceContainerLow,
+            ContextCompat.getColor(context, R.color.surface_dark)
+        )
+    }
+
+    @ColorInt
     fun getSurfaceContainerHigh(context: Context): Int {
         return MaterialColors.getColor(
             context,
@@ -49,6 +85,15 @@ object ThemeColors {
             context,
             com.google.android.material.R.attr.colorSurfaceContainerHighest,
             ContextCompat.getColor(context, R.color.slider_track_inactive)
+        )
+    }
+
+    @ColorInt
+    fun getOutline(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorOutline,
+            ContextCompat.getColor(context, R.color.text_tertiary)
         )
     }
 

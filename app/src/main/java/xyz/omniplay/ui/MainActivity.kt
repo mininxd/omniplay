@@ -59,12 +59,12 @@ import xyz.omniplay.util.AudioTrackInfo
 import xyz.omniplay.util.ThemeColors
 import java.util.Locale
 
-class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
+class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener, SettingsBottomSheet.SettingsListener {
 
     companion object {
-        private const val PREFS_NAME = "omniplay_prefs"
-        private const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
-        private const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
+        const val PREFS_NAME = "omniplay_prefs"
+        const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
+        const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
         private const val KEY_SORT_FIELD = "key_sort_field"
         private const val KEY_SORT_ASCENDING = "key_sort_ascending"
     }
@@ -1410,7 +1410,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.peekArtistText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#99FFFFFF"))
         } else {
             // Dark album art: use white text
-            binding.peekLabelText.setTextColor(ContextCompat.getColor(this, R.color.primary_accent))
+            binding.peekLabelText.setTextColor(ThemeColors.getPrimary(this))
             binding.peekLabelText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#99000000"))
 
             binding.peekTitleText.setTextColor(Color.parseColor("#FFFFFF"))
@@ -1639,9 +1639,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupListeners() {
-        // Menu button (Hamburger) -> open options popup menu
-        binding.btnMenu.setOnClickListener { view ->
-            showOptionsMenu(view)
+        // Settings button (Gear) -> open Material 3 Expressive settings bottom sheet
+        binding.btnMenu.setOnClickListener {
+            openSettingsMenu()
         }
 
         // Omniplay Title -> press to open left side menu
@@ -2340,44 +2340,37 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         AlbumArtLoader.preloadAll(applicationContext, songs, lifecycleScope)
     }
 
-    private fun showOptionsMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor, Gravity.END)
-        popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
+    private fun openSettingsMenu() {
+        SettingsBottomSheet.newInstance()
+            .show(supportFragmentManager, SettingsBottomSheet.TAG)
+    }
 
+    private fun showOptionsMenu(anchor: View? = null) {
+        openSettingsMenu()
+    }
+
+    // SettingsBottomSheet.SettingsListener implementation
+    override fun onOpenFolderPicker() {
+        openFolderPicker()
+    }
+
+    override fun onRescanMusic() {
+        rescanMusic()
+    }
+
+    override fun onShowAbout() {
+        showAboutDialog()
+    }
+
+    override fun onToggleShowAlbumArt(show: Boolean) {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
-        popup.menu.findItem(R.id.action_show_album_art)?.isChecked = isShowArt
+        prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, show).apply()
+        songAdapter?.setShowAlbumArt(show)
+    }
 
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_omnisync -> {
-                    xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
-                        .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
-                    true
-                }
-                R.id.action_show_album_art -> {
-                    val newState = !item.isChecked
-                    item.isChecked = newState
-                    prefs.edit().putBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, newState).apply()
-                    songAdapter?.setShowAlbumArt(newState)
-                    true
-                }
-                R.id.action_select_folder -> {
-                    openFolderPicker()
-                    true
-                }
-                R.id.action_rescan -> {
-                    rescanMusic()
-                    true
-                }
-                R.id.action_about -> {
-                    showAboutDialog()
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
+    override fun onOpenOmniSync() {
+        xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
+            .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
     }
 
     private fun showTrackDetailsDialog() {
@@ -2820,11 +2813,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun getInactiveControlTint(): Int {
-        return ContextCompat.getColor(this, R.color.control_tint_inactive)
+        return ThemeColors.getOnSurfaceVariant(this)
     }
 
     private fun getStandardControlTint(): Int {
-        return ContextCompat.getColor(this, R.color.control_tint)
+        return ThemeColors.getOnSurfaceVariant(this)
     }
 
     private fun updateShuffleButton(enabled: Boolean) {
