@@ -75,5 +75,16 @@
     <string name="check_update_failed">Could not connect to GitHub</string>
     <string name="download">Download</string>
     <string name="update_available_title">Update Available</string>
+
+    <!-- Music Folders Management -->
+    <string name="music_folders_title">Music Folders</string>
+    <string name="music_folders_desc">Manage folders scanned for audio tracks</string>
+    <string name="add_folder">Add Folder</string>
+    <string name="no_folders_added">No folders added yet. Tap Add Folder to include directories for music scanning.</string>
+    <string name="folders_count_multiple">%1$d folders configured</string>
+    <string name="folder_already_added">Folder is already added</string>
+    <string name="folder_added">Folder added: %1$s</string>
+    <string name="folder_removed">Folder removed: %1$s</string>
+    <string name="done">Done</string>
 </resources>
 

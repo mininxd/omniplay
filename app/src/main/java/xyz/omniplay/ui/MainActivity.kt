@@ -56,6 +56,7 @@ import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioTrackInfo
+import xyz.omniplay.util.MusicFolderManager
 import xyz.omniplay.util.ThemeColors
 import java.util.Locale
 
@@ -64,6 +65,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     companion object {
         const val PREFS_NAME = "omniplay_prefs"
         const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
+        const val KEY_MUSIC_FOLDERS_SET = "key_music_folders_set"
         const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
         private const val KEY_SORT_FIELD = "key_sort_field"
         private const val KEY_SORT_ASCENDING = "key_sort_ascending"
@@ -174,9 +176,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (rescanRequested) {
             rescanMusic()
         } else if (folderChanged) {
-            val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
-            if (savedFolderUri != null) {
-                loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = true)
+            val folders = MusicFolderManager.getFolders(this)
+            if (folders.isNotEmpty()) {
+                loadMusicFromConfiguredFolders(isUserInitiated = true)
+            } else {
+                updateSongList(emptyList())
             }
         }
     }
@@ -186,24 +190,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
         if (treeUri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(
-                    treeUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (ignored: Exception) {}
-
-            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_MUSIC_FOLDER_URI, treeUri.toString())
-                .apply()
-
-            loadMusicFromFolder(treeUri, isUserInitiated = true)
+            MusicFolderManager.addFolder(this, treeUri)
+            loadMusicFromConfiguredFolders(isUserInitiated = true)
         } else {
-            val savedFolderUri = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_MUSIC_FOLDER_URI, null)
-            if (savedFolderUri != null) {
-                loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = false)
+            val folders = MusicFolderManager.getFolders(this)
+            if (folders.isNotEmpty()) {
+                loadMusicFromConfiguredFolders(isUserInitiated = false)
             } else {
                 updateSongList(emptyList())
                 Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
@@ -1881,14 +1873,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     /**
-     * Checks if user already selected a music directory. If not (first run), launches folder picker.
+     * Checks if user already selected music directories. If not (first run), launches folder picker.
      */
     private fun checkFolderOrScan() {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
-
-        if (savedFolderUri != null) {
-            loadMusicFromFolder(Uri.parse(savedFolderUri))
+        val folders = MusicFolderManager.getFolders(this)
+        if (folders.isNotEmpty()) {
+            loadMusicFromConfiguredFolders()
         } else {
             Toast.makeText(this, "Select your music folder to scan songs", Toast.LENGTH_LONG).show()
             openFolderPicker()
@@ -1903,45 +1893,62 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
-    private fun loadMusicFromFolder(treeUri: Uri, isUserInitiated: Boolean = false, isRescan: Boolean = false) {
+    private fun loadMusicFromConfiguredFolders(isUserInitiated: Boolean = false, isRescan: Boolean = false) {
+        val folderUris = MusicFolderManager.getFolders(this).mapNotNull {
+            try { Uri.parse(it) } catch (e: Exception) { null }
+        }
+        if (folderUris.isEmpty()) {
+            updateSongList(emptyList())
+            return
+        }
         lifecycleScope.launch {
             try {
                 if (isUserInitiated) {
                     Toast.makeText(
                         this@MainActivity,
-                        if (isRescan) "Rescanning music folder..." else "Scanning music folder...",
+                        if (isRescan) "Rescanning music..." else "Scanning music...",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
 
-                val songs = try {
-                    musicScanner.scanFolder(treeUri)
-                } catch (e: Exception) {
-                    emptyList()
+                val allSongs = mutableListOf<Song>()
+                for (uri in folderUris) {
+                    try {
+                        val folderSongs = musicScanner.scanFolder(uri)
+                        allSongs.addAll(folderSongs)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
-                updateSongList(songs)
+                val distinctSongs = allSongs.distinctBy {
+                    it.filePath.ifEmpty { it.contentUri.toString() }
+                }
+                updateSongList(distinctSongs)
 
                 if (isUserInitiated) {
-                    val message = if (songs.isNotEmpty()) {
-                        "Scan complete: ${songs.size} songs found"
+                    val message = if (distinctSongs.isNotEmpty()) {
+                        "Scan complete: ${distinctSongs.size} songs found"
                     } else {
-                        "No songs found in selected folder"
+                        "No songs found in selected folders"
                     }
                     Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 updateSongList(emptyList())
-                Toast.makeText(this@MainActivity, "Error scanning folder: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "Error scanning folders: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    private fun rescanMusic() {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val savedFolderUri = prefs.getString(KEY_MUSIC_FOLDER_URI, null)
+    private fun loadMusicFromFolder(treeUri: Uri, isUserInitiated: Boolean = false, isRescan: Boolean = false) {
+        MusicFolderManager.addFolder(this, treeUri)
+        loadMusicFromConfiguredFolders(isUserInitiated, isRescan)
+    }
 
-        if (savedFolderUri != null) {
-            loadMusicFromFolder(Uri.parse(savedFolderUri), isUserInitiated = true, isRescan = true)
+    private fun rescanMusic() {
+        val folders = MusicFolderManager.getFolders(this)
+        if (folders.isNotEmpty()) {
+            loadMusicFromConfiguredFolders(isUserInitiated = true, isRescan = true)
         } else {
             Toast.makeText(this, "Select a music folder to scan", Toast.LENGTH_SHORT).show()
             openFolderPicker()

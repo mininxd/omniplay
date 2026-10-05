@@ -5,16 +5,21 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import android.widget.ImageButton
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.documentfile.provider.DocumentFile
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivitySettingsBinding
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
+import xyz.omniplay.util.MusicFolderManager
 import xyz.omniplay.util.ThemeHelper
 import xyz.omniplay.util.ThemeStyle
 import xyz.omniplay.util.UpdateChecker
@@ -32,26 +37,24 @@ class SettingsActivity : AppCompatActivity() {
     private var isRescanRequested = false
     private var isThemeChanged = false
 
+    private var manageFoldersDialog: AlertDialog? = null
+    private var refreshFoldersCallback: (() -> Unit)? = null
+
     private val folderPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { treeUri: Uri? ->
         if (treeUri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(
-                    treeUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (ignored: Exception) {}
-
-            getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(MainActivity.KEY_MUSIC_FOLDER_URI, treeUri.toString())
-                .apply()
-
+            val folderName = MusicFolderManager.getDisplayName(this, treeUri.toString())
+            val added = MusicFolderManager.addFolder(this, treeUri)
             isFolderChanged = true
             prepareResult()
-            updateFolderSubtitle(treeUri.toString())
-            Toast.makeText(this, "Music folder updated", Toast.LENGTH_SHORT).show()
+            updateFolderSubtitle()
+            if (added) {
+                Toast.makeText(this, getString(R.string.folder_added, folderName), Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, R.string.folder_already_added, Toast.LENGTH_SHORT).show()
+            }
+            refreshFoldersCallback?.invoke()
         }
     }
 
@@ -80,16 +83,11 @@ class SettingsActivity : AppCompatActivity() {
             showThemeStyleDialog()
         }
 
-        // 2. Select Music Folder
-        val currentFolder = prefs.getString(MainActivity.KEY_MUSIC_FOLDER_URI, null)
-        updateFolderSubtitle(currentFolder)
+        // 2. Select Music Folder (Shows Manage Folders Modal)
+        updateFolderSubtitle()
 
         binding.settingSelectFolder.setOnClickListener {
-            try {
-                folderPickerLauncher.launch(null)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Failed to open folder picker: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
+            showManageFoldersDialog()
         }
 
         // 3. Show Album Art Switch & Row Click (Compact Split Button)
@@ -200,18 +198,78 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun updateFolderSubtitle(folderUriString: String?) {
-        if (folderUriString != null) {
-            try {
-                val uri = Uri.parse(folderUriString)
-                val docFile = DocumentFile.fromTreeUri(this, uri)
-                binding.settingFolderSubtitle.text = docFile?.name ?: uri.lastPathSegment ?: folderUriString
-            } catch (e: Exception) {
-                binding.settingFolderSubtitle.text = folderUriString
+    private fun updateFolderSubtitle() {
+        binding.settingFolderSubtitle.text = MusicFolderManager.getFoldersSummary(this)
+    }
+
+    private fun showManageFoldersDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_manage_folders, null)
+        val container = dialogView.findViewById<LinearLayout>(R.id.folders_list_container)
+        val emptyText = dialogView.findViewById<TextView>(R.id.text_empty_folders)
+        val btnAddFolder = dialogView.findViewById<View>(R.id.btn_add_folder)
+        val btnDone = dialogView.findViewById<View>(R.id.btn_done)
+
+        fun refreshFoldersList() {
+            container.removeAllViews()
+            val folders = MusicFolderManager.getFolders(this)
+            if (folders.isEmpty()) {
+                container.addView(emptyText)
+                emptyText.visibility = View.VISIBLE
+            } else {
+                emptyText.visibility = View.GONE
+                for (folderUriString in folders) {
+                    val itemView = layoutInflater.inflate(R.layout.item_manage_folder, container, false)
+                    val nameText = itemView.findViewById<TextView>(R.id.folder_name_text)
+                    val pathText = itemView.findViewById<TextView>(R.id.folder_path_text)
+                    val btnRemove = itemView.findViewById<ImageButton>(R.id.btn_remove_folder)
+
+                    nameText.text = MusicFolderManager.getDisplayName(this, folderUriString)
+                    pathText.text = MusicFolderManager.getDisplayPath(this, folderUriString)
+
+                    btnRemove.setOnClickListener {
+                        val removedName = MusicFolderManager.getDisplayName(this, folderUriString)
+                        MusicFolderManager.removeFolder(this, folderUriString)
+                        isFolderChanged = true
+                        prepareResult()
+                        updateFolderSubtitle()
+                        Toast.makeText(
+                            this,
+                            getString(R.string.folder_removed, removedName),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        refreshFoldersList()
+                    }
+                    container.addView(itemView)
+                }
             }
-        } else {
-            binding.settingFolderSubtitle.text = getString(R.string.music_folder_desc)
         }
+
+        refreshFoldersList()
+        refreshFoldersCallback = { refreshFoldersList() }
+
+        btnAddFolder.setOnClickListener {
+            try {
+                folderPickerLauncher.launch(null)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Failed to open folder picker: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .create()
+
+        btnDone.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.setOnDismissListener {
+            refreshFoldersCallback = null
+            manageFoldersDialog = null
+        }
+
+        manageFoldersDialog = dialog
+        dialog.show()
     }
 
     private fun showAboutDialog() {
