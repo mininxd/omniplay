@@ -24,7 +24,8 @@ data class FilterItem(
     val count: Int,
     val isAlbum: Boolean,
     val isSelected: Boolean = false,
-    val representativeSong: Song? = null
+    val representativeSong: Song? = null,
+    val isFolder: Boolean = false
 )
 
 class DrawerFilterAdapter(
@@ -72,7 +73,11 @@ class DrawerFilterAdapter(
         fun bind(item: FilterItem) {
             val context = binding.root.context
             val displayTitle = item.title.trim().ifEmpty {
-                if (item.isAlbum) context.getString(R.string.unknown_album) else context.getString(R.string.unknown_artist)
+                when {
+                    item.isFolder -> "Folder"
+                    item.isAlbum -> context.getString(R.string.unknown_album)
+                    else -> context.getString(R.string.unknown_artist)
+                }
             }
             binding.filterItemTitle.text = displayTitle
             binding.filterItemCount.text = "${item.count}"
@@ -92,7 +97,11 @@ class DrawerFilterAdapter(
                 val pad = (8 * context.resources.displayMetrics.density).toInt()
                 binding.filterItemIcon.setPadding(pad, pad, pad, pad)
                 binding.filterItemIcon.setImageResource(
-                    if (item.isAlbum) R.drawable.ic_album else R.drawable.ic_person
+                    when {
+                        item.isFolder -> R.drawable.ic_folder
+                        item.isAlbum -> R.drawable.ic_album
+                        else -> R.drawable.ic_person
+                    }
                 )
                 val tintColor = if (item.isSelected) {
                     ThemeColors.getPrimary(context)
@@ -103,7 +112,7 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.7f
             }
 
-            val albumArt = if (item.isAlbum) {
+            val albumArt = if (item.isAlbum && !item.isFolder) {
                 item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) }
                     ?: AlbumArtLoader.getAlbumArt(item.title)
             } else null

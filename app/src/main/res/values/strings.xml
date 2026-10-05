@@ -41,6 +41,7 @@
     <string name="filter_tracks">Tracks</string>
     <string name="filter_artists">Artists</string>
     <string name="filter_albums">Albums</string>
+    <string name="filter_folders">Folders</string>
     <string name="clear_filter">Clear Filter</string>
     <string name="all_tracks">All Tracks</string>
     <string name="unknown_album">Unknown Album</string>

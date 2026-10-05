@@ -71,13 +71,14 @@ class MusicScanner(private val context: Context) {
         val folderRelativePath = getRelativePathFromTreeUri(treeUri)
 
         // 1. Direct SAF traversal using DocumentsContract to discover all actual files on disk
+        val rootFolderName = folderRelativePath?.substringAfterLast('/')?.ifEmpty { "Music" } ?: "Music"
         try {
             val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
                 DocumentsContract.getDocumentId(treeUri)
             } else {
                 DocumentsContract.getTreeDocumentId(treeUri)
             }
-            scanFolderDocumentsContract(treeUri, rootDocId, songsList)
+            scanFolderDocumentsContract(treeUri, rootDocId, rootFolderName, songsList)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -87,7 +88,8 @@ class MusicScanner(private val context: Context) {
             try {
                 val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
                 if (rootDoc != null) {
-                    scanDocumentFileRecursive(rootDoc, songsList)
+                    val rootName = rootDoc.name ?: rootFolderName
+                    scanDocumentFileRecursive(rootDoc, rootName, songsList)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -123,13 +125,21 @@ class MusicScanner(private val context: Context) {
                         }
 
                     if (match != null) {
+                        val resolvedFolder = if (safSong.folderName.isNotEmpty()) {
+                            safSong.folderName
+                        } else if (match.folderName.isNotEmpty()) {
+                            match.folderName
+                        } else {
+                            File(match.filePath).parentFile?.name ?: ""
+                        }
                         safSong.copy(
                             albumArtUri = safSong.albumArtUri ?: (if (match.album != "Unknown Album") match.albumArtUri else null),
                             title = if (safSong.title == safSong.filePath.substringBeforeLast('.')) match.title else safSong.title,
                             artist = if (safSong.artist == "Unknown Artist") match.artist else safSong.artist,
                             album = if (safSong.album == "Unknown Album") match.album else safSong.album,
                             duration = if (safSong.duration > 0L) safSong.duration else match.duration,
-                            dateModified = if (match.dateModified > 0L) match.dateModified else safSong.dateModified
+                            dateModified = if (match.dateModified > 0L) match.dateModified else safSong.dateModified,
+                            folderName = resolvedFolder
                         )
                     } else {
                         safSong
@@ -222,6 +232,7 @@ class MusicScanner(private val context: Context) {
     private fun scanFolderDocumentsContract(
         treeUri: Uri,
         parentDocId: String,
+        currentFolderName: String,
         songsList: MutableList<Song>,
         visitedDocIds: MutableSet<String> = mutableSetOf()
     ) {
@@ -239,7 +250,7 @@ class MusicScanner(private val context: Context) {
             DocumentsContract.Document.COLUMN_SIZE
         )
 
-        val subDirs = mutableListOf<String>()
+        val subDirs = mutableListOf<Pair<String, String>>()
 
         try {
             context.contentResolver.query(
@@ -263,7 +274,8 @@ class MusicScanner(private val context: Context) {
                     val lastMod = if (lastModCol >= 0) cursor.getLong(lastModCol) else 0L
 
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        subDirs.add(docId)
+                        val subName = name.ifEmpty { currentFolderName }
+                        subDirs.add(Pair(docId, subName))
                     } else {
                         val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
                         val isAudio = ext in supportedExtensions ||
@@ -273,7 +285,7 @@ class MusicScanner(private val context: Context) {
                                 (mime == "application/octet-stream" && ext in supportedExtensions)
                         if (isAudio) {
                             val fileDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size, lastMod)
+                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size, lastMod, currentFolderName)
                             songsList.add(song)
                         }
                     }
@@ -283,16 +295,17 @@ class MusicScanner(private val context: Context) {
             e.printStackTrace()
         }
 
-        for (subDirDocId in subDirs) {
-            scanFolderDocumentsContract(treeUri, subDirDocId, songsList, visitedDocIds)
+        for ((subDirDocId, dirName) in subDirs) {
+            scanFolderDocumentsContract(treeUri, subDirDocId, dirName, songsList, visitedDocIds)
         }
     }
 
-    private fun scanDocumentFileRecursive(directory: DocumentFile, songsList: MutableList<Song>) {
+    private fun scanDocumentFileRecursive(directory: DocumentFile, currentFolderName: String, songsList: MutableList<Song>) {
         val files = directory.listFiles()
         for (file in files) {
             if (file.isDirectory) {
-                scanDocumentFileRecursive(file, songsList)
+                val dirName = file.name ?: currentFolderName
+                scanDocumentFileRecursive(file, dirName, songsList)
             } else if (file.isFile) {
                 val name = file.name ?: ""
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
@@ -303,7 +316,7 @@ class MusicScanner(private val context: Context) {
                                 mime.contains("ogg", ignoreCase = true) ||
                                 (mime == "application/octet-stream" && ext in supportedExtensions)
                 if (isAudio) {
-                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length(), file.lastModified())
+                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length(), file.lastModified(), currentFolderName)
                     songsList.add(song)
                 }
             }
@@ -315,7 +328,8 @@ class MusicScanner(private val context: Context) {
         displayName: String = "",
         ext: String = "",
         size: Long = 0L,
-        dateModified: Long = 0L
+        dateModified: Long = 0L,
+        folderName: String = ""
     ): Song {
         var resolvedName = displayName
         var resolvedSize = size
@@ -456,7 +470,8 @@ class MusicScanner(private val context: Context) {
             fileSize = resolvedSize,
             audioQuality = audioInfo.formatQualityString(),
             isHiRes = audioInfo.isHiRes,
-            dateModified = if (dateModified > 0L) dateModified else if (resolvedName.isNotEmpty()) File(resolvedName).lastModified() else 0L
+            dateModified = if (dateModified > 0L) dateModified else if (resolvedName.isNotEmpty()) File(resolvedName).lastModified() else 0L,
+            folderName = folderName
         )
     }
 
@@ -594,6 +609,11 @@ class MusicScanner(private val context: Context) {
             val isFormatHiRes = format.startsWith("DSD", true) || format == "DSF" || format == "DFF" ||
                     (format == "FLAC" && (fileSize > 25_000_000L || (resolvedDuration > 0 && (fileSize * 8) / resolvedDuration > 1500)))
 
+            val parentFolderName = if (filePath.isNotEmpty()) {
+                val p = File(filePath).parentFile?.name ?: ""
+                if (p == "0" || p == "emulated") "" else p
+            } else ""
+
             songsList.add(
                 Song(
                     id = id,
@@ -607,7 +627,8 @@ class MusicScanner(private val context: Context) {
                     filePath = filePath,
                     fileSize = fileSize,
                     isHiRes = isFormatHiRes,
-                    dateModified = dateModified
+                    dateModified = dateModified,
+                    folderName = parentFolderName
                 )
             )
         }

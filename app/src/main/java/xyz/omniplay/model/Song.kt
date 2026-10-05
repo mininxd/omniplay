@@ -1,6 +1,7 @@
 package xyz.omniplay.model
 
 import android.net.Uri
+import java.io.File
 import java.io.Serializable
 import java.util.Locale
 
@@ -17,8 +18,30 @@ data class Song(
     val fileSize: Long = 0L,
     val audioQuality: String = "",
     val isHiRes: Boolean = false,
-    val dateModified: Long = 0L
+    val dateModified: Long = 0L,
+    val folderName: String = ""
 ) : Serializable {
+
+    fun getResolvedFolderName(): String {
+        if (folderName.isNotBlank()) return folderName
+        if (filePath.isNotBlank()) {
+            val file = File(filePath)
+            val parentName = file.parentFile?.name
+            if (!parentName.isNullOrBlank() && parentName != "0" && parentName != "emulated") {
+                return parentName
+            }
+        }
+        val uriStr = contentUri.toString()
+        val decoded = try { Uri.decode(uriStr) } catch (e: Exception) { uriStr }
+        val segs = decoded.split('/', ':').filter { it.isNotBlank() }
+        if (segs.size >= 2) {
+            val candidate = segs[segs.size - 2]
+            if (candidate != "document" && candidate != "tree" && candidate != "primary" && candidate != "raw") {
+                return candidate
+            }
+        }
+        return "Music"
+    }
 
     companion object {
         fun formatTime(milliseconds: Long): String {
