@@ -162,6 +162,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         songAdapter?.setShowAlbumArt(isShowArt)
 
+        val themeChanged = result.data?.getBooleanExtra(SettingsActivity.EXTRA_THEME_CHANGED, false) == true
+        if (themeChanged) {
+            recreate()
+            return@registerForActivityResult
+        }
+
         val rescanRequested = result.data?.getBooleanExtra(SettingsActivity.EXTRA_RESCAN, false) == true
         val folderChanged = result.data?.getBooleanExtra(SettingsActivity.EXTRA_FOLDER_CHANGED, false) == true
 
@@ -221,6 +227,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         DynamicColors.applyIfAvailable(this)
+        xyz.omniplay.util.ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 

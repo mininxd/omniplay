@@ -119,6 +119,7 @@ class VideoPlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         DynamicColors.applyIfAvailable(this)
+        xyz.omniplay.util.ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
         binding = ActivityVideoPlayerBinding.inflate(layoutInflater)
         setContentView(binding.root)

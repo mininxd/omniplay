@@ -23,4 +23,40 @@
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
     </style>
+
+    <!-- Theme Overlays for Dynamic Theme Styles -->
+    <style name="ThemeOverlay.Omniplay.Tone" parent="">
+        <item name="colorPrimary">@color/theme_tone_primary</item>
+        <item name="colorOnPrimary">@color/theme_tone_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_tone_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_tone_on_primary_container</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Expressive" parent="">
+        <item name="colorPrimary">@color/theme_expressive_primary</item>
+        <item name="colorOnPrimary">@color/theme_expressive_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_expressive_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_expressive_on_primary_container</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Salad" parent="">
+        <item name="colorPrimary">@color/theme_salad_primary</item>
+        <item name="colorOnPrimary">@color/theme_salad_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_salad_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_salad_on_primary_container</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Monochrome" parent="">
+        <item name="colorPrimary">@color/theme_monochrome_primary</item>
+        <item name="colorOnPrimary">@color/theme_monochrome_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_monochrome_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_monochrome_on_primary_container</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Vibrant" parent="">
+        <item name="colorPrimary">@color/theme_vibrant_primary</item>
+        <item name="colorOnPrimary">@color/theme_vibrant_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_vibrant_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_vibrant_on_primary_container</item>
+    </style>
 </resources>

@@ -53,5 +53,13 @@
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
     <string name="about_app_desc">Version 0.5</string>
     <string name="close">Close</string>
+
+    <!-- Dynamic Theme Styles -->
+    <string name="theme_style">Theme style</string>
+    <string name="theme_style_tone">Tone (Tonal Spot)</string>
+    <string name="theme_style_expressive">Expressive</string>
+    <string name="theme_style_salad">Salad (Fruit Salad)</string>
+    <string name="theme_style_monochrome">Monochrome</string>
+    <string name="theme_style_vibrant">Vibrant</string>
 </resources>
 

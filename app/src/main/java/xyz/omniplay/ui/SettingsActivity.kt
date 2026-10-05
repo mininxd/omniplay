@@ -13,17 +13,21 @@ import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivitySettingsBinding
+import xyz.omniplay.util.ThemeHelper
+import xyz.omniplay.util.ThemeStyle
 
 class SettingsActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_RESCAN = "extra_rescan"
         const val EXTRA_FOLDER_CHANGED = "extra_folder_changed"
+        const val EXTRA_THEME_CHANGED = "extra_theme_changed"
     }
 
     private lateinit var binding: ActivitySettingsBinding
     private var isFolderChanged = false
     private var isRescanRequested = false
+    private var isThemeChanged = false
 
     private val folderPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -50,9 +54,15 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         DynamicColors.applyIfAvailable(this)
+        ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        if (savedInstanceState != null) {
+            isThemeChanged = savedInstanceState.getBoolean(EXTRA_THEME_CHANGED, false)
+            isFolderChanged = savedInstanceState.getBoolean(EXTRA_FOLDER_CHANGED, false)
+        }
 
         // Setup Toolbar back button
         binding.toolbar.setNavigationOnClickListener {
@@ -67,7 +77,13 @@ class SettingsActivity : AppCompatActivity() {
                 .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
         }
 
-        // 2. Select Music Folder
+        // 2. Theme Style Selector
+        updateThemeSubtitle()
+        binding.settingTheme.setOnClickListener {
+            showThemeStyleDialog()
+        }
+
+        // 3. Select Music Folder
         val currentFolder = prefs.getString(MainActivity.KEY_MUSIC_FOLDER_URI, null)
         updateFolderSubtitle(currentFolder)
 
@@ -79,7 +95,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 3. Show Album Art Switch & Row Click
+        // 4. Show Album Art Switch & Row Click
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
 
@@ -91,7 +107,7 @@ class SettingsActivity : AppCompatActivity() {
             binding.switchShowAlbumArt.toggle()
         }
 
-        // 4. Rescan Music
+        // 5. Rescan Music
         binding.settingRescanMusic.setOnClickListener {
             isRescanRequested = true
             prepareResult()
@@ -99,7 +115,7 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
-        // 5. About Omniplay
+        // 6. About Omniplay
         binding.settingAbout.setOnClickListener {
             showAboutDialog()
         }
@@ -107,12 +123,48 @@ class SettingsActivity : AppCompatActivity() {
         prepareResult()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(EXTRA_THEME_CHANGED, isThemeChanged)
+        outState.putBoolean(EXTRA_FOLDER_CHANGED, isFolderChanged)
+    }
+
     private fun prepareResult() {
         val resultIntent = Intent().apply {
             putExtra(EXTRA_FOLDER_CHANGED, isFolderChanged)
             putExtra(EXTRA_RESCAN, isRescanRequested)
+            putExtra(EXTRA_THEME_CHANGED, isThemeChanged)
         }
         setResult(Activity.RESULT_OK, resultIntent)
+    }
+
+    private fun updateThemeSubtitle() {
+        val currentStyle = ThemeHelper.getThemeStyle(this)
+        binding.settingThemeSubtitle.setText(currentStyle.titleRes)
+    }
+
+    private fun showThemeStyleDialog() {
+        val currentStyle = ThemeHelper.getThemeStyle(this)
+        val styles = ThemeStyle.values()
+        val names = styles.map { getString(it.titleRes) }.toTypedArray()
+        val selectedIndex = styles.indexOf(currentStyle)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.theme_style)
+            .setSingleChoiceItems(names, selectedIndex) { dialog, which ->
+                val chosenStyle = styles[which]
+                if (chosenStyle != currentStyle) {
+                    ThemeHelper.setThemeStyle(this, chosenStyle)
+                    isThemeChanged = true
+                    prepareResult()
+                    dialog.dismiss()
+                    recreate()
+                } else {
+                    dialog.dismiss()
+                }
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun updateFolderSubtitle(folderUriString: String?) {

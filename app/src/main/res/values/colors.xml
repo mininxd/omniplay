@@ -36,4 +36,35 @@
     <!-- Badges & Popup borders -->
     <color name="badge_stroke">#49454F</color>
     <color name="badge_cancel_stroke">#8C1D18</color>
+
+    <!-- Theme Palette Overlays (Pre-API 31 fallback values) -->
+    <!-- Tone (Tonal Spot / Default) -->
+    <color name="theme_tone_primary">#D0BCFF</color>
+    <color name="theme_tone_on_primary">#381E72</color>
+    <color name="theme_tone_primary_container">#4F378B</color>
+    <color name="theme_tone_on_primary_container">#EADDFF</color>
+
+    <!-- Expressive (Vibrant Warm Coral / Terracotta contrast) -->
+    <color name="theme_expressive_primary">#FFB4A9</color>
+    <color name="theme_expressive_on_primary">#680003</color>
+    <color name="theme_expressive_primary_container">#930006</color>
+    <color name="theme_expressive_on_primary_container">#FFDAD4</color>
+
+    <!-- Salad (Fruit Salad / Fresh Emerald & Lime) -->
+    <color name="theme_salad_primary">#7DDC97</color>
+    <color name="theme_salad_on_primary">#003919</color>
+    <color name="theme_salad_primary_container">#005327</color>
+    <color name="theme_salad_on_primary_container">#99F9B1</color>
+
+    <!-- Monochrome (Minimalist Grayscale Silver) -->
+    <color name="theme_monochrome_primary">#E2E2E6</color>
+    <color name="theme_monochrome_on_primary">#1A1C1E</color>
+    <color name="theme_monochrome_primary_container">#44474E</color>
+    <color name="theme_monochrome_on_primary_container">#F2F0F4</color>
+
+    <!-- Vibrant (High-chroma Electric Cyan) -->
+    <color name="theme_vibrant_primary">#78D9EC</color>
+    <color name="theme_vibrant_on_primary">#00363F</color>
+    <color name="theme_vibrant_primary_container">#004E5B</color>
+    <color name="theme_vibrant_on_primary_container">#A3EEFF</color>
 </resources>
