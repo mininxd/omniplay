@@ -95,15 +95,17 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Show Album Art Switch & Row Click
+        // 4. Show Album Art Switch & Row Click (Primary Container Toggle Card)
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
+        updateAlbumArtCardUI(isShowArt, animate = false)
 
         binding.switchShowAlbumArt.setOnCheckedChangeListener { _, isChecked ->
             prefs.edit().putBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, isChecked).apply()
+            updateAlbumArtCardUI(isChecked, animate = true)
         }
 
-        binding.settingAlbumArtLayout.setOnClickListener {
+        binding.cardSettingAlbumArt.setOnClickListener {
             binding.switchShowAlbumArt.toggle()
         }
 
@@ -165,6 +167,44 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton(R.string.close, null)
             .show()
+    }
+
+    private fun updateAlbumArtCardUI(isChecked: Boolean, animate: Boolean) {
+        val targetBg = if (isChecked) {
+            xyz.omniplay.util.ThemeColors.getPrimaryContainer(this)
+        } else {
+            xyz.omniplay.util.ThemeColors.getSurfaceContainer(this)
+        }
+
+        val targetContentColor = if (isChecked) {
+            xyz.omniplay.util.ThemeColors.getOnPrimaryContainer(this)
+        } else {
+            xyz.omniplay.util.ThemeColors.getOnSurface(this)
+        }
+
+        val targetSubtextColor = if (isChecked) {
+            xyz.omniplay.util.ThemeColors.getOnPrimaryContainer(this)
+        } else {
+            xyz.omniplay.util.ThemeColors.getOnSurfaceVariant(this)
+        }
+
+        if (animate) {
+            val currentBg = binding.cardSettingAlbumArt.cardBackgroundColor.defaultColor
+            val colorAnim = android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), currentBg, targetBg)
+            colorAnim.duration = 200L
+            colorAnim.addUpdateListener { animator ->
+                binding.cardSettingAlbumArt.setCardBackgroundColor(animator.animatedValue as Int)
+            }
+            colorAnim.start()
+        } else {
+            binding.cardSettingAlbumArt.setCardBackgroundColor(targetBg)
+        }
+
+        val iconTint = if (isChecked) targetContentColor else xyz.omniplay.util.ThemeColors.getPrimary(this)
+        binding.iconAlbumArt.imageTintList = android.content.res.ColorStateList.valueOf(iconTint)
+        binding.titleAlbumArt.setTextColor(targetContentColor)
+        binding.subtitleAlbumArt.setTextColor(targetSubtextColor)
+        binding.subtitleAlbumArt.alpha = if (isChecked) 0.85f else 1.0f
     }
 
     private fun updateFolderSubtitle(folderUriString: String?) {

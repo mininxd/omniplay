@@ -212,76 +212,82 @@
                     app:tint="?attr/colorOutline" />
             </LinearLayout>
 
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="68dp"
-                android:alpha="0.2"
-                android:background="?attr/colorOutlineVariant" />
-
-            <!-- 3. Show Album Art in Queue Switch -->
-            <LinearLayout
-                android:id="@+id/setting_album_art_layout"
+            <!-- 4. Show Album Art in Queue Switch (Primary Container Toggle Card) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_setting_album_art"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginBottom="8dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:gravity="center_vertical"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingTop="12dp"
-                android:paddingEnd="24dp"
-                android:paddingBottom="12dp">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_album"
-                    app:tint="?attr/colorPrimary" />
+                android:clipToOutline="true"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:id="@+id/setting_album_art_layout"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="12dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:minHeight="74dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="20dp"
+                    android:paddingTop="14dp"
+                    android:paddingEnd="20dp"
+                    android:paddingBottom="14dp">
 
-                    <TextView
+                    <ImageView
+                        android:id="@+id/icon_album_art"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_album"
+                        app:tint="?attr/colorOnPrimaryContainer" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="18dp"
+                        android:layout_marginEnd="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/title_album_art"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/show_album_art_in_playlist"
+                            android:textColor="?attr/colorOnPrimaryContainer"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/subtitle_album_art"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:alpha="0.8"
+                            android:text="@string/show_album_art_desc"
+                            android:textColor="?attr/colorOnPrimaryContainer"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_show_album_art"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="@string/show_album_art_in_playlist"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="@string/show_album_art_desc"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="14sp" />
+                        android:clickable="false"
+                        android:focusable="false"
+                        app:thumbIcon="@drawable/asl_switch_thumb" />
                 </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switch_show_album_art"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="false"
-                    android:focusable="false" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="68dp"
-                android:alpha="0.2"
-                android:background="?attr/colorOutlineVariant" />
-
-            <!-- 4. Rescan Music -->
+            <!-- 5. Rescan Music -->
             <LinearLayout
                 android:id="@+id/setting_rescan_music"
                 android:layout_width="match_parent"

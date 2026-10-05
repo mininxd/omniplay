@@ -26,6 +26,24 @@ object ThemeColors {
     }
 
     @ColorInt
+    fun getPrimaryContainer(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorPrimaryContainer,
+            ContextCompat.getColor(context, R.color.primary_accent)
+        )
+    }
+
+    @ColorInt
+    fun getOnPrimaryContainer(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorOnPrimaryContainer,
+            ContextCompat.getColor(context, R.color.on_primary)
+        )
+    }
+
+    @ColorInt
     fun getSurface(context: Context): Int {
         return MaterialColors.getColor(
             context,
