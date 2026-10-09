@@ -1273,24 +1273,24 @@
             android:id="@+id/drawer_filter_info_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginEnd="20dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="16dp"
             android:fontFamily="sans-serif"
             android:text="Showing all tracks"
             android:textColor="?attr/colorOutline"
-            android:textSize="12sp" />
+            android:textSize="11.5sp" />
 
         <!-- Dynamic Filter Sub-List (Artists or Albums) -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/drawer_filter_recycler_view"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:layout_weight="1"
             android:clipToPadding="false"
             android:overScrollMode="ifContentScrolls"
-            android:paddingBottom="16dp"
+            android:paddingBottom="12dp"
             android:visibility="visible" />
 
     </LinearLayout>

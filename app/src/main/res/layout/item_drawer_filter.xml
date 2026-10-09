@@ -10,16 +10,16 @@
     android:focusable="true"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingStart="16dp"
-    android:paddingTop="10dp"
-    android:paddingEnd="16dp"
-    android:paddingBottom="10dp">
+    android:paddingStart="14dp"
+    android:paddingTop="5dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="5dp">
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/filter_item_card"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        app:cardCornerRadius="10dp"
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        app:cardCornerRadius="8dp"
         app:cardElevation="0dp"
         app:cardBackgroundColor="?attr/colorSurfaceContainer"
         app:strokeWidth="0dp">
@@ -36,13 +36,13 @@
         android:id="@+id/filter_item_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="14dp"
+        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:ellipsize="end"
         android:fontFamily="sans-serif"
         android:singleLine="true"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="14sp"
+        android:textSize="13.5sp"
         tools:text="Artist Name" />
 
     <TextView
@@ -52,7 +52,7 @@
         android:layout_marginStart="8dp"
         android:fontFamily="sans-serif-medium"
         android:textColor="?attr/colorOutline"
-        android:textSize="12sp"
+        android:textSize="11.5sp"
         tools:text="12" />
 
 </LinearLayout>

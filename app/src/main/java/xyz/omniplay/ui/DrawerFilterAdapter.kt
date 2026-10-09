@@ -95,7 +95,7 @@ class DrawerFilterAdapter(
             fun showDefaultIcon() {
                 binding.filterItemIcon.imageTintList = null
                 binding.filterItemIcon.scaleType = ImageView.ScaleType.CENTER_INSIDE
-                val pad = (8 * context.resources.displayMetrics.density).toInt()
+                val pad = (6 * context.resources.displayMetrics.density).toInt()
                 binding.filterItemIcon.setPadding(pad, pad, pad, pad)
                 binding.filterItemIcon.setImageResource(
                     when {
