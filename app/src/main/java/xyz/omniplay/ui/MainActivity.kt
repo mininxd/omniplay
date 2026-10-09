@@ -47,6 +47,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.R
+import xyz.omniplay.data.MusicDatabase
 import xyz.omniplay.data.MusicScanner
 import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.lyrics.LyricLine
@@ -106,6 +107,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
     private val musicScanner by lazy { MusicScanner(this) }
+    private val musicDatabase by lazy { MusicDatabase.getInstance(this) }
     private var scannedSongs = listOf<Song>()
     private var allScannedSongs = listOf<Song>()
     private var displayedSongs = listOf<Song>()
@@ -179,8 +181,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         } else if (folderChanged) {
             val folders = MusicFolderManager.getFolders(this)
             if (folders.isNotEmpty()) {
-                loadMusicFromConfiguredFolders(isUserInitiated = true)
+                loadMusicFromConfiguredFolders(isUserInitiated = true, isRescan = true)
             } else {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    musicDatabase.clearAll()
+                }
                 updateSongList(emptyList())
             }
         }
@@ -192,12 +197,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     ) { treeUri: Uri? ->
         if (treeUri != null) {
             MusicFolderManager.addFolder(this, treeUri)
-            loadMusicFromConfiguredFolders(isUserInitiated = true)
+            loadMusicFromConfiguredFolders(isUserInitiated = true, isRescan = true)
         } else {
             val folders = MusicFolderManager.getFolders(this)
             if (folders.isNotEmpty()) {
-                loadMusicFromConfiguredFolders(isUserInitiated = false)
+                loadMusicFromConfiguredFolders(isUserInitiated = false, isRescan = false)
             } else {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    musicDatabase.clearAll()
+                }
                 updateSongList(emptyList())
                 Toast.makeText(this, "No folder selected. Please select a music folder.", Toast.LENGTH_SHORT).show()
             }
@@ -1899,11 +1907,26 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             try { Uri.parse(it) } catch (e: Exception) { null }
         }
         if (folderUris.isEmpty()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                musicDatabase.clearAll()
+            }
             updateSongList(emptyList())
             return
         }
         lifecycleScope.launch {
             try {
+                // If this is NOT an explicit rescan and we already have cached songs in the database,
+                // load and display them immediately without rescanning the disk!
+                if (!isRescan) {
+                    val cachedSongs = withContext(Dispatchers.IO) {
+                        musicDatabase.getAllSongs()
+                    }
+                    if (cachedSongs.isNotEmpty()) {
+                        updateSongList(cachedSongs)
+                        return@launch
+                    }
+                }
+
                 if (isUserInitiated) {
                     Toast.makeText(
                         this@MainActivity,
@@ -1924,6 +1947,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 val distinctSongs = allSongs.distinctBy {
                     it.filePath.ifEmpty { it.contentUri.toString() }
                 }
+
+                withContext(Dispatchers.IO) {
+                    musicDatabase.replaceAllSongs(distinctSongs)
+                }
+
                 updateSongList(distinctSongs)
 
                 if (isUserInitiated) {
@@ -1943,7 +1971,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun loadMusicFromFolder(treeUri: Uri, isUserInitiated: Boolean = false, isRescan: Boolean = false) {
         MusicFolderManager.addFolder(this, treeUri)
-        loadMusicFromConfiguredFolders(isUserInitiated, isRescan)
+        loadMusicFromConfiguredFolders(isUserInitiated, isRescan = true)
     }
 
     private fun rescanMusic() {
