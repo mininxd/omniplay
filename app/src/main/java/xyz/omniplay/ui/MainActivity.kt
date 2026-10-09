@@ -430,7 +430,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             safeRightCutoutInset = maxOf(cutoutInsets.right, rightCutout)
 
             val basePeekHeight = (64 * resources.displayMetrics.density).toInt()
-            bottomSheetBehavior.peekHeight = basePeekHeight + navInsets.bottom
+            bottomSheetBehavior.peekHeight = basePeekHeight
 
             binding.songsRecyclerView.setPadding(
                 binding.songsRecyclerView.paddingLeft,
@@ -623,11 +623,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 .apply()
             updateSearchModeUI()
             applyCurrentFilter()
-            Toast.makeText(
-                this,
-                if (isUniversalSearch) getString(R.string.universal_search_enabled) else getString(R.string.first_text_search_enabled),
-                Toast.LENGTH_SHORT
-            ).show()
         }
 
         binding.btnSortQueue.setOnClickListener {
@@ -2748,15 +2743,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             val primaryColor = ThemeColors.getPrimary(this)
             binding.btnSearchMode.setColorFilter(primaryColor)
             binding.btnSearchMode.alpha = 1.0f
-            binding.btnSearchMode.contentDescription = getString(R.string.search_mode_universal)
-            binding.searchEditText.hint = getString(R.string.search_tracks_hint_universal)
         } else {
             val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(this)
             binding.btnSearchMode.setColorFilter(onSurfaceVariant)
             binding.btnSearchMode.alpha = 0.5f
-            binding.btnSearchMode.contentDescription = getString(R.string.search_mode_first_text)
-            binding.searchEditText.hint = getString(R.string.search_tracks_hint)
         }
+        binding.searchEditText.hint = getString(R.string.search_tracks_hint)
+        binding.btnSearchMode.contentDescription = getString(R.string.search_mode)
     }
 
     private fun updatePlaylistCutoutPadding(customProgress: Float? = null) {
