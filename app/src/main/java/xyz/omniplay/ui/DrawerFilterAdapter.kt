@@ -22,11 +22,15 @@ import java.util.Locale
 
 data class FilterItem(
     val title: String,
-    val count: Int,
-    val isAlbum: Boolean,
+    val count: Int = 0,
+    val isAlbum: Boolean = false,
     val isSelected: Boolean = false,
     val representativeSong: Song? = null,
-    val isFolder: Boolean = false
+    val isFolder: Boolean = false,
+    val isBack: Boolean = false,
+    val song: Song? = null,
+    val subtitle: String? = null,
+    val folderPath: String? = null
 )
 
 class DrawerFilterAdapter(
@@ -73,15 +77,37 @@ class DrawerFilterAdapter(
 
         fun bind(item: FilterItem) {
             val context = binding.root.context
-            val displayTitle = item.title.trim().ifEmpty {
-                when {
-                    item.isFolder -> "Folder"
-                    item.isAlbum -> context.getString(R.string.unknown_album)
-                    else -> context.getString(R.string.unknown_artist)
+            val displayTitle = if (item.isBack) {
+                ".."
+            } else if (item.song != null) {
+                item.title
+            } else {
+                item.title.trim().ifEmpty {
+                    when {
+                        item.isFolder -> "Folder"
+                        item.isAlbum -> context.getString(R.string.unknown_album)
+                        else -> context.getString(R.string.unknown_artist)
+                    }
                 }
             }
             binding.filterItemTitle.text = displayTitle
-            binding.filterItemCount.text = "${item.count}"
+
+            if (!item.subtitle.isNullOrBlank()) {
+                binding.filterItemSubtitle.visibility = android.view.View.VISIBLE
+                binding.filterItemSubtitle.text = item.subtitle
+            } else {
+                binding.filterItemSubtitle.visibility = android.view.View.GONE
+            }
+
+            if (item.isBack) {
+                binding.filterItemCount.visibility = android.view.View.GONE
+            } else if (item.song != null) {
+                binding.filterItemCount.visibility = android.view.View.VISIBLE
+                binding.filterItemCount.text = Song.formatTime(item.song.duration)
+            } else {
+                binding.filterItemCount.visibility = android.view.View.VISIBLE
+                binding.filterItemCount.text = "${item.count}"
+            }
 
             fun showAlbumArt(bitmap: Bitmap) {
                 binding.filterItemIcon.imageTintList = null
@@ -99,7 +125,9 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.setPadding(pad, pad, pad, pad)
                 binding.filterItemIcon.setImageResource(
                     when {
+                        item.isBack -> R.drawable.ic_arrow_back
                         item.isFolder -> R.drawable.ic_folder
+                        item.song != null -> R.drawable.ic_music_note
                         item.isAlbum -> R.drawable.ic_album
                         else -> R.drawable.ic_person
                     }
@@ -113,19 +141,34 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.7f
             }
 
-            val cachedArt = if (item.isAlbum && !item.isFolder) {
-                item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) }
+            val cachedArt = when {
+                item.isBack -> null
+                item.song != null -> AlbumArtLoader.getCachedAlbumArt(item.song)
+                item.isFolder -> null
+                item.isAlbum -> item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) }
                     ?: AlbumArtLoader.getAlbumArt(item.title)
-            } else if (!item.isAlbum && !item.isFolder) {
-                AlbumArtLoader.getCachedArtistArt(item.title)
+                else -> AlbumArtLoader.getCachedArtistArt(item.title)
                     ?: (item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) })
-            } else null
+            }
 
             if (cachedArt != null) {
                 showAlbumArt(cachedArt)
             } else {
                 showDefaultIcon()
-                if (item.isAlbum && item.representativeSong != null) {
+                if (item.song != null) {
+                    val s = item.song
+                    val imageKey = AlbumArtLoader.getCacheKey(s)
+                    binding.filterItemIcon.tag = imageKey
+
+                    loadJob = adapterScope.launch {
+                        val bitmap = AlbumArtLoader.loadAlbumArt(context, s)
+                        withContext(Dispatchers.Main) {
+                            if (binding.filterItemIcon.tag == imageKey && bitmap != null) {
+                                showAlbumArt(bitmap)
+                            }
+                        }
+                    }
+                } else if (item.isAlbum && item.representativeSong != null) {
                     val repSong = item.representativeSong
                     val imageKey = AlbumArtLoader.getCacheKey(repSong)
                     binding.filterItemIcon.tag = imageKey
@@ -138,7 +181,7 @@ class DrawerFilterAdapter(
                             }
                         }
                     }
-                } else if (!item.isAlbum && !item.isFolder && item.title.isNotBlank()) {
+                } else if (!item.isAlbum && !item.isFolder && !item.isBack && item.title.isNotBlank()) {
                     val artistKey = "artist_${item.title.lowercase(Locale.ROOT)}"
                     binding.filterItemIcon.tag = artistKey
 

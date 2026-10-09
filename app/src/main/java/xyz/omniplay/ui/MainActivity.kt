@@ -63,6 +63,7 @@ import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioTrackInfo
 import xyz.omniplay.util.MusicFolderManager
 import xyz.omniplay.util.ThemeColors
+import java.io.File
 import java.util.Locale
 
 class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
@@ -122,6 +123,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var activeOngoingQueueTitle: String? = null
     private var activeOngoingFilterMode = LibraryFilterMode.TRACK
     private var activeOngoingQueue = listOf<Song>()
+    private var currentFolderNavigationPath = mutableListOf<String>()
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
     private var currentSearchQuery = ""
@@ -337,7 +339,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isFilterMenuOpen) {
-                    closeLeftMenu()
+                    if (currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders) {
+                        currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+                        updateFilterSubList()
+                    } else {
+                        closeLeftMenu()
+                    }
                 } else if (isLyricsShowing) {
                     closeLyricsCard()
                 } else if (binding.searchBarContainer.visibility == View.VISIBLE) {
@@ -356,6 +363,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (isFilterMenuOpen) {
+            if (currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders) {
+                currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+                updateFilterSubList()
+                return
+            }
             closeLeftMenu()
             return
         }
@@ -2271,6 +2283,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.cardAllTracks.setOnClickListener {
             selectedFilterValue = null
+            currentFolderNavigationPath.clear()
             currentFilterMode = LibraryFilterMode.TRACK
             if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
                 isFilterPreviewActive = true
@@ -2290,6 +2303,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
+            currentFolderNavigationPath.clear()
             when (checkedId) {
                 R.id.btn_filter_artists -> setFilterMode(LibraryFilterMode.ARTIST)
                 R.id.btn_filter_albums -> setFilterMode(LibraryFilterMode.ALBUM)
@@ -2299,6 +2313,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.btnClearFilter.setOnClickListener {
             selectedFilterValue = null
+            currentFolderNavigationPath.clear()
             currentFilterMode = LibraryFilterMode.TRACK
             if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
                 isFilterPreviewActive = true
@@ -2314,7 +2329,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
             val count = when (subMode) {
                 LibraryFilterMode.ALBUM -> allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
-                LibraryFilterMode.FOLDER -> allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
+                LibraryFilterMode.FOLDER -> getRootFolderCount()
                 else -> allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
             }
             binding.drawerFilterInfoText.text = when (subMode) {
@@ -2325,6 +2340,85 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             updateFilterSubList()
             applyCurrentFilter()
         }
+    }
+
+    private fun getSongFolderSegments(song: Song): List<String> {
+        val filePath = song.filePath.trim()
+        if (filePath.isNotEmpty() && (filePath.contains('/') || filePath.contains(File.separator))) {
+            val pClean = filePath
+                .replace(Regex("^/storage/emulated/[0-9]+/"), "")
+                .replace(Regex("^/storage/[^/]+/"), "")
+                .replace(Regex("^/(sdcard|mnt/sdcard)/"), "")
+                .trimStart('/')
+            if (pClean.contains('/')) {
+                val dirPart = pClean.substringBeforeLast('/')
+                val segs = dirPart.split('/').filter { it.isNotBlank() && it != "0" && it != "emulated" }
+                if (segs.isNotEmpty()) return segs
+            } else if (pClean.isNotBlank() && !pClean.contains('.')) {
+                return listOf(pClean)
+            }
+        }
+
+        val uriStr = song.contentUri.toString()
+        val decoded = try { Uri.decode(uriStr) } catch (_: Exception) { uriStr }
+        if (decoded.contains("documents") && decoded.contains(':')) {
+            val lastColonPart = decoded.substringAfterLast(':').trimStart('/')
+            if (lastColonPart.contains('/')) {
+                val dirPart = lastColonPart.substringBeforeLast('/')
+                val segs = dirPart.split('/').filter {
+                    it.isNotBlank() && it != "document" && it != "tree" && it != "primary" && it != "raw"
+                }
+                if (segs.isNotEmpty()) return segs
+            }
+        }
+
+        if (song.folderName.isNotBlank()) {
+            val segs = song.folderName.trim().trim('/').split('/').filter { it.isNotBlank() }
+            if (segs.isNotEmpty()) return segs
+        }
+
+        val fallback = song.getResolvedFolderName()
+        return if (fallback.isNotBlank()) listOf(fallback) else listOf("Music")
+    }
+
+    private fun getCommonFolderPrefixDepth(allSegments: List<List<String>>): Int {
+        if (allSegments.isEmpty()) return 0
+        val genericRoots = setOf("music", "audio", "audios", "sound", "sounds")
+        val first = allSegments[0]
+        var depth = 0
+        while (depth < first.size) {
+            val seg = first[depth].lowercase(Locale.ROOT)
+            if (seg in genericRoots && allSegments.all { it.size > depth + 1 && it[depth].equals(seg, ignoreCase = true) }) {
+                depth++
+            } else {
+                break
+            }
+        }
+        return depth
+    }
+
+    private fun getRootFolderCount(): Int {
+        val allSegs = allScannedSongs.map { getSongFolderSegments(it) }
+        val depth = getCommonFolderPrefixDepth(allSegs)
+        return allSegs.map { segs ->
+            if (depth > 0 && segs.size > depth) segs[depth] else segs.firstOrNull() ?: "Music"
+        }.distinct().size
+    }
+
+    private fun getSongsInCurrentFolder(): List<Song> {
+        val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
+        val depth = getCommonFolderPrefixDepth(allSongSegs)
+        val trimmedSongs = allScannedSongs.mapIndexed { idx, song ->
+            val segs = allSongSegs[idx]
+            Pair(song, if (depth > 0 && segs.size > depth) segs.subList(depth, segs.size) else segs)
+        }
+        val currentPath = currentFolderNavigationPath.toList()
+        val matchingSongs = trimmedSongs.filter { (_, segs) ->
+            segs.size >= currentPath.size &&
+                    segs.subList(0, currentPath.size).map { it.lowercase(Locale.ROOT) } == currentPath.map { it.lowercase(Locale.ROOT) }
+        }.map { it.first }
+
+        return sortSongs(matchingSongs, currentSortField, isSortAscending)
     }
 
     private fun setFilterMode(mode: LibraryFilterMode) {
@@ -2368,7 +2462,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.drawerFilterInfoText.text = "Filtered by folder: $selectedFilterValue"
                 } else {
                     binding.activeFilterBar.visibility = View.GONE
-                    val count = allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
+                    val count = getRootFolderCount()
                     binding.drawerFilterInfoText.text = "Select from $count folders"
                     if (activeOngoingFilterMode == LibraryFilterMode.TRACK) {
                         applyCurrentFilter()
@@ -2384,7 +2478,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 val count = when (subMode) {
                     LibraryFilterMode.ALBUM -> allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
-                    LibraryFilterMode.FOLDER -> allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
+                    LibraryFilterMode.FOLDER -> getRootFolderCount()
                     else -> allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
                 }
                 binding.drawerFilterInfoText.text = when (subMode) {
@@ -2438,19 +2532,78 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
             }
             LibraryFilterMode.FOLDER -> {
-                allScannedSongs
-                    .groupBy { it.getResolvedFolderName() }
-                    .map { (folder, songs) ->
+                val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
+                val depth = getCommonFolderPrefixDepth(allSongSegs)
+                val trimmedSongs = allScannedSongs.mapIndexed { idx, song ->
+                    val segs = allSongSegs[idx]
+                    Pair(song, if (depth > 0 && segs.size > depth) segs.subList(depth, segs.size) else segs)
+                }
+
+                val currentPath = currentFolderNavigationPath.toList()
+                val itemsList = mutableListOf<FilterItem>()
+
+                if (currentPath.isNotEmpty()) {
+                    val parentName = if (currentPath.size > 1) currentPath[currentPath.size - 2] else "All Folders"
+                    itemsList.add(
                         FilterItem(
-                            title = folder,
-                            count = songs.size,
+                            title = "..",
+                            count = 0,
                             isAlbum = false,
-                            isSelected = (currentFilterMode == LibraryFilterMode.FOLDER) && folder.equals(selectedFilterValue, ignoreCase = true),
-                            representativeSong = songs.firstOrNull(),
-                            isFolder = true
+                            isFolder = false,
+                            isBack = true,
+                            subtitle = parentName
+                        )
+                    )
+                }
+
+                val matching = trimmedSongs.filter { (_, segs) ->
+                    segs.size >= currentPath.size &&
+                            segs.subList(0, currentPath.size).map { it.lowercase(Locale.ROOT) } == currentPath.map { it.lowercase(Locale.ROOT) }
+                }
+
+                val subfolders = matching
+                    .filter { (_, segs) -> segs.size > currentPath.size }
+                    .groupBy { (_, segs) -> segs[currentPath.size] }
+
+                val subfolderItems = subfolders.map { (subName, pairs) ->
+                    FilterItem(
+                        title = subName,
+                        count = pairs.size,
+                        isAlbum = false,
+                        isFolder = true,
+                        representativeSong = pairs.firstOrNull()?.first
+                    )
+                }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+
+                itemsList.addAll(subfolderItems)
+
+                val directSongs = matching
+                    .filter { (_, segs) -> segs.size == currentPath.size }
+                    .map { (song, _) ->
+                        FilterItem(
+                            title = song.title,
+                            count = 0,
+                            isAlbum = false,
+                            isFolder = false,
+                            song = song,
+                            representativeSong = song,
+                            subtitle = song.artist.trim().ifEmpty { getString(R.string.unknown_artist) },
+                            isSelected = (playbackService?.currentSong?.id == song.id)
                         )
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+
+                itemsList.addAll(directSongs)
+
+                if (currentPath.isNotEmpty()) {
+                    val pathDisplay = currentPath.joinToString(" / ")
+                    binding.drawerFilterInfoText.text = "$pathDisplay (${matching.size} songs)"
+                } else {
+                    val count = subfolderItems.size + directSongs.size
+                    binding.drawerFilterInfoText.text = "Select from $count folders"
+                }
+
+                itemsList
             }
             LibraryFilterMode.TRACK -> emptyList()
         }
@@ -2458,9 +2611,68 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun onFilterItemSelected(item: FilterItem) {
+        if (item.isBack) {
+            if (currentFolderNavigationPath.isNotEmpty()) {
+                currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+            }
+            updateFilterSubList()
+            return
+        }
+
+        if (item.isFolder) {
+            currentFolderNavigationPath.add(item.title)
+            updateFilterSubList()
+            return
+        }
+
+        if (item.song != null) {
+            val song = item.song
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                closeSearchBar(clearQuery = true)
+            }
+
+            val folderSongs = getSongsInCurrentFolder()
+            val queueToSet = if (folderSongs.isNotEmpty()) folderSongs else listOf(song)
+            val targetIdx = queueToSet.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+
+            isFilterPreviewActive = false
+            currentFilterMode = LibraryFilterMode.FOLDER
+            selectedFilterValue = if (currentFolderNavigationPath.isNotEmpty()) {
+                currentFolderNavigationPath.joinToString("/")
+            } else {
+                item.title
+            }
+            activeOngoingQueueTitle = selectedFilterValue
+            activeOngoingFilterMode = LibraryFilterMode.FOLDER
+            activeOngoingQueue = queueToSet
+
+            displayedSongs = queueToSet
+            songAdapter?.setSongs(queueToSet)
+            songAdapter?.setCurrentPlayingSongId(song.id)
+
+            playbackService?.let { service ->
+                service.setSongQueue(queueToSet, startIndex = targetIdx, startPlaying = true)
+            }
+
+            updateAppTitle()
+            binding.activeFilterBar.visibility = View.VISIBLE
+            binding.activeFilterText.text = "Folder: $selectedFilterValue"
+            binding.drawerFilterInfoText.text = "Filtered by folder: $selectedFilterValue"
+
+            closeLeftMenu()
+            if (::bottomSheetBehavior.isInitialized) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+            }
+            return
+        }
+
         selectedFilterValue = item.title
         currentFilterMode = when {
-            item.isFolder -> LibraryFilterMode.FOLDER
             item.isAlbum -> LibraryFilterMode.ALBUM
             else -> LibraryFilterMode.ARTIST
         }
@@ -2468,12 +2680,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         updateAppTitle()
         binding.activeFilterBar.visibility = View.VISIBLE
         val prefix = when {
-            item.isFolder -> "Folder: "
             item.isAlbum -> "Album: "
             else -> "Artist: "
         }
         val typeLabel = when {
-            item.isFolder -> "folder"
             item.isAlbum -> "album"
             else -> "artist"
         }
@@ -2492,6 +2702,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         updateAppTitle()
         selectedFilterValue = activeOngoingQueueTitle
         currentFilterMode = activeOngoingFilterMode
+        currentFolderNavigationPath.clear()
         if (selectedFilterValue != null) {
             binding.activeFilterBar.visibility = View.VISIBLE
             val prefix = when (activeOngoingFilterMode) {
@@ -2520,7 +2731,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
             val count = when (subMode) {
                 LibraryFilterMode.ALBUM -> allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
-                LibraryFilterMode.FOLDER -> allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
+                LibraryFilterMode.FOLDER -> getRootFolderCount()
                 else -> allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
             }
             binding.drawerFilterInfoText.text = when (subMode) {
@@ -2539,6 +2750,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         activeOngoingQueueTitle = null
         activeOngoingFilterMode = LibraryFilterMode.TRACK
         selectedFilterValue = null
+        currentFolderNavigationPath.clear()
         currentFilterMode = LibraryFilterMode.TRACK
         binding.activeFilterBar.visibility = View.GONE
         val subMode = when (binding.filterToggleGroup.checkedButtonId) {
@@ -2548,7 +2760,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         val count = when (subMode) {
             LibraryFilterMode.ALBUM -> allScannedSongs.map { it.album.trim().ifEmpty { getString(R.string.unknown_album) } }.distinct().size
-            LibraryFilterMode.FOLDER -> allScannedSongs.map { it.getResolvedFolderName() }.distinct().size
+            LibraryFilterMode.FOLDER -> getRootFolderCount()
             else -> allScannedSongs.map { it.artist.trim().ifEmpty { getString(R.string.unknown_artist) } }.distinct().size
         }
         binding.drawerFilterInfoText.text = when (subMode) {
@@ -2686,8 +2898,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (selectedFilterValue.isNullOrEmpty()) {
                     allScannedSongs
                 } else {
-                    allScannedSongs.filter {
-                        it.getResolvedFolderName().equals(selectedFilterValue, ignoreCase = true)
+                    allScannedSongs.filter { song ->
+                        val segs = getSongFolderSegments(song)
+                        val folderPath = segs.joinToString("/")
+                        folderPath.equals(selectedFilterValue, ignoreCase = true) ||
+                                folderPath.endsWith("/$selectedFilterValue", ignoreCase = true) ||
+                                segs.any { it.equals(selectedFilterValue, ignoreCase = true) } ||
+                                song.getResolvedFolderName().equals(selectedFilterValue, ignoreCase = true)
                     }
                 }
             }
@@ -2820,8 +3037,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun updateFolderFilterVisibility() {
-        val detectedFolders = allScannedSongs.map { it.getResolvedFolderName() }.filter { it.isNotBlank() }.distinct()
-        val hasMultipleFolders = detectedFolders.size > 1
+        val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
+        val hasMultipleFolders = allSongSegs.mapNotNull { it.firstOrNull() }.distinct().size > 1 ||
+                allSongSegs.flatten().distinct().size > 1 ||
+                allScannedSongs.map { it.getResolvedFolderName() }.filter { it.isNotBlank() }.distinct().size > 1
         binding.btnFilterFolders.visibility = if (hasMultipleFolders) View.VISIBLE else View.GONE
         if (!hasMultipleFolders && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders) {
             binding.filterToggleGroup.check(R.id.btn_filter_artists)

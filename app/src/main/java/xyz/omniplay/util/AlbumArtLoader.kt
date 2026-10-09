@@ -170,7 +170,7 @@ object AlbumArtLoader {
         }
 
         if (isOnlineArtEnabled(context)) {
-            val onlineArt = CoverArtArchiveClient.fetchArtistImage(context, artistName)
+            val onlineArt = CoverArtArchiveClient.fetchArtistImage(context, artistName, representativeSong)
             if (onlineArt != null) {
                 artistArtCache.put(cleanArtist, onlineArt)
                 saveToDiskCache(context, diskKey, onlineArt)

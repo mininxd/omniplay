@@ -274,7 +274,7 @@ class MusicScanner(private val context: Context) {
                     val lastMod = if (lastModCol >= 0) cursor.getLong(lastModCol) else 0L
 
                     if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        val subName = name.ifEmpty { currentFolderName }
+                        val subName = if (currentFolderName.isNotEmpty()) "$currentFolderName/$name" else name
                         subDirs.add(Pair(docId, subName))
                     } else {
                         val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
@@ -304,8 +304,9 @@ class MusicScanner(private val context: Context) {
         val files = directory.listFiles()
         for (file in files) {
             if (file.isDirectory) {
-                val dirName = file.name ?: currentFolderName
-                scanDocumentFileRecursive(file, dirName, songsList)
+                val dirName = file.name ?: ""
+                val nextDir = if (currentFolderName.isNotEmpty()) "$currentFolderName/$dirName" else dirName
+                scanDocumentFileRecursive(file, nextDir, songsList)
             } else if (file.isFile) {
                 val name = file.name ?: ""
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)

@@ -185,8 +185,9 @@ object CoverArtArchiveClient {
     /**
      * Fetches artist portrait / image from MusicBrainz relations
      * (Wikimedia Commons, Wikidata, Wikipedia, or artist release group fallback).
+     * Uses [representativeSong] to disambiguate artists sharing the same name.
      */
-    suspend fun fetchArtistImage(context: Context, artistName: String): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun fetchArtistImage(context: Context, artistName: String, representativeSong: Song? = null): Bitmap? = withContext(Dispatchers.IO) {
         val cleanArtist = cleanArtistName(artistName)
         if (cleanArtist.isBlank() || isUnknownArtist(cleanArtist)) return@withContext null
 
@@ -201,26 +202,32 @@ object CoverArtArchiveClient {
             return@withContext null
         }
 
-        // Step 1: Find artist MBID in MusicBrainz
-        val artistMbid = searchArtistMbid(cleanArtist)
-        if (artistMbid == null) {
+        // Step 1: Find candidate artist MBIDs (with song/album disambiguation if available)
+        val candidateMbids = searchArtistMbids(cleanArtist, representativeSong)
+        if (candidateMbids.isEmpty()) {
             negativeCache.put(cacheKey, true)
             return@withContext null
         }
 
-        // Step 2: Fetch artist relations (URL relationships)
-        val imageUrl = fetchArtistImageUrlFromRelations(artistMbid)
         var bitmap: Bitmap? = null
 
-        if (imageUrl != null) {
-            bitmap = downloadAndDecodeImage(imageUrl)
+        // Step 2: Try relations for each candidate artist
+        for (artistMbid in candidateMbids) {
+            val imageUrl = fetchArtistImageUrlFromRelations(artistMbid)
+            if (imageUrl != null) {
+                bitmap = downloadAndDecodeImage(imageUrl)
+                if (bitmap != null) break
+            }
         }
 
-        // Step 3: Fallback to primary release-group cover art for this artist
+        // Step 3: Fallback to primary release-group cover art for candidates
         if (bitmap == null) {
-            val fallbackRgMbid = fetchArtistPrimaryReleaseGroup(artistMbid)
-            if (fallbackRgMbid != null) {
-                bitmap = fetchCaaImage("release-group", fallbackRgMbid)
+            for (artistMbid in candidateMbids) {
+                val fallbackRgMbid = fetchArtistPrimaryReleaseGroup(artistMbid)
+                if (fallbackRgMbid != null) {
+                    bitmap = fetchCaaImage("release-group", fallbackRgMbid)
+                    if (bitmap != null) break
+                }
             }
         }
 
@@ -239,62 +246,136 @@ object CoverArtArchiveClient {
     // =========================================================================
 
     private suspend fun searchReleaseGroups(album: String, artist: String): List<String> {
-        val q = URLEncoder.encode("releasegroup:\"$album\" AND artist:\"$artist\"", "UTF-8")
-        val json = executeMusicBrainzRequest("$MB_BASE_URL/release-group/?query=$q&fmt=json&limit=3") ?: return emptyList()
+        val q1 = URLEncoder.encode("releasegroup:\"$album\" AND artist:\"$artist\"", "UTF-8")
+        var json = executeMusicBrainzRequest("$MB_BASE_URL/release-group/?query=$q1&fmt=json&limit=5")
+        var array = json?.optJSONArray("release-groups")
+        if (array == null || array.length() == 0) {
+            val q2 = URLEncoder.encode("releasegroup:$album AND artist:$artist", "UTF-8")
+            json = executeMusicBrainzRequest("$MB_BASE_URL/release-group/?query=$q2&fmt=json&limit=5")
+            array = json?.optJSONArray("release-groups")
+        }
         val mbids = mutableListOf<String>()
-        val array = json.optJSONArray("release-groups") ?: return emptyList()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val id = item.optString("id")
-            if (id.isNotBlank()) mbids.add(id)
+        if (array != null) {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val id = item.optString("id")
+                if (id.isNotBlank() && !mbids.contains(id)) mbids.add(id)
+            }
         }
         return mbids
     }
 
     private suspend fun searchReleases(album: String, artist: String): List<String> {
-        val q = URLEncoder.encode("release:\"$album\" AND artist:\"$artist\"", "UTF-8")
-        val json = executeMusicBrainzRequest("$MB_BASE_URL/release/?query=$q&fmt=json&limit=3") ?: return emptyList()
+        val q1 = URLEncoder.encode("release:\"$album\" AND artist:\"$artist\"", "UTF-8")
+        var json = executeMusicBrainzRequest("$MB_BASE_URL/release/?query=$q1&fmt=json&limit=5")
+        var array = json?.optJSONArray("releases")
+        if (array == null || array.length() == 0) {
+            val q2 = URLEncoder.encode("release:$album AND artist:$artist", "UTF-8")
+            json = executeMusicBrainzRequest("$MB_BASE_URL/release/?query=$q2&fmt=json&limit=5")
+            array = json?.optJSONArray("releases")
+        }
         val mbids = mutableListOf<String>()
-        val array = json.optJSONArray("releases") ?: return emptyList()
-        for (i in 0 until array.length()) {
-            val item = array.optJSONObject(i) ?: continue
-            val id = item.optString("id")
-            if (id.isNotBlank()) mbids.add(id)
+        if (array != null) {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val id = item.optString("id")
+                if (id.isNotBlank() && !mbids.contains(id)) mbids.add(id)
+            }
         }
         return mbids
     }
 
     private suspend fun searchRecordingReleases(title: String, artist: String): List<Pair<String, String>> {
-        val q = URLEncoder.encode("recording:\"$title\" AND artist:\"$artist\"", "UTF-8")
-        val json = executeMusicBrainzRequest("$MB_BASE_URL/recording/?query=$q&fmt=json&limit=3") ?: return emptyList()
+        val q1 = URLEncoder.encode("recording:\"$title\" AND artist:\"$artist\"", "UTF-8")
+        var json = executeMusicBrainzRequest("$MB_BASE_URL/recording/?query=$q1&fmt=json&limit=5")
+        var recordings = json?.optJSONArray("recordings")
+        if (recordings == null || recordings.length() == 0) {
+            val q2 = URLEncoder.encode("recording:$title AND artist:$artist", "UTF-8")
+            json = executeMusicBrainzRequest("$MB_BASE_URL/recording/?query=$q2&fmt=json&limit=5")
+            recordings = json?.optJSONArray("recordings")
+        }
         val results = mutableListOf<Pair<String, String>>()
-        val recordings = json.optJSONArray("recordings") ?: return emptyList()
-
-        for (i in 0 until recordings.length()) {
-            val rec = recordings.optJSONObject(i) ?: continue
-            val releases = rec.optJSONArray("releases") ?: continue
-            for (j in 0 until releases.length()) {
-                val rel = releases.optJSONObject(j) ?: continue
-                val rg = rel.optJSONObject("release-group")
-                val rgId = rg?.optString("id")
-                if (!rgId.isNullOrBlank()) {
-                    results.add("release-group" to rgId)
-                }
-                val relId = rel.optString("id")
-                if (relId.isNotBlank()) {
-                    results.add("release" to relId)
+        if (recordings != null) {
+            for (i in 0 until recordings.length()) {
+                val rec = recordings.optJSONObject(i) ?: continue
+                val releases = rec.optJSONArray("releases") ?: continue
+                for (j in 0 until releases.length()) {
+                    val rel = releases.optJSONObject(j) ?: continue
+                    val rg = rel.optJSONObject("release-group")
+                    val rgId = rg?.optString("id")
+                    if (!rgId.isNullOrBlank()) {
+                        results.add("release-group" to rgId)
+                    }
+                    val relId = rel.optString("id")
+                    if (relId.isNotBlank()) {
+                        results.add("release" to relId)
+                    }
                 }
             }
         }
         return results
     }
 
-    private suspend fun searchArtistMbid(artist: String): String? {
+    private suspend fun searchArtistMbids(artist: String, representativeSong: Song? = null): List<String> {
+        val mbids = mutableListOf<String>()
+
+        // 1. If representative song has album or title, query release-group or recording to find exact artist
+        if (representativeSong != null) {
+            val album = cleanAlbumName(representativeSong.album)
+            if (album.isNotBlank() && !isUnknownAlbum(album)) {
+                val q = URLEncoder.encode("releasegroup:\"$album\" AND artist:\"$artist\"", "UTF-8")
+                val json = executeMusicBrainzRequest("$MB_BASE_URL/release-group/?query=$q&fmt=json&limit=3")
+                val rgs = json?.optJSONArray("release-groups")
+                if (rgs != null) {
+                    for (i in 0 until rgs.length()) {
+                        val rg = rgs.optJSONObject(i) ?: continue
+                        val credits = rg.optJSONArray("artist-credit") ?: continue
+                        for (j in 0 until credits.length()) {
+                            val art = credits.optJSONObject(j)?.optJSONObject("artist")
+                            val id = art?.optString("id")
+                            if (!id.isNullOrBlank() && !mbids.contains(id)) {
+                                mbids.add(id)
+                            }
+                        }
+                    }
+                }
+            }
+
+            val title = cleanTrackName(representativeSong.title)
+            if (mbids.isEmpty() && title.isNotBlank()) {
+                val q = URLEncoder.encode("recording:\"$title\" AND artist:\"$artist\"", "UTF-8")
+                val json = executeMusicBrainzRequest("$MB_BASE_URL/recording/?query=$q&fmt=json&limit=3")
+                val recs = json?.optJSONArray("recordings")
+                if (recs != null) {
+                    for (i in 0 until recs.length()) {
+                        val rec = recs.optJSONObject(i) ?: continue
+                        val credits = rec.optJSONArray("artist-credit") ?: continue
+                        for (j in 0 until credits.length()) {
+                            val art = credits.optJSONObject(j)?.optJSONObject("artist")
+                            val id = art?.optString("id")
+                            if (!id.isNullOrBlank() && !mbids.contains(id)) {
+                                mbids.add(id)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Query MusicBrainz artist endpoint with up to 6 results
         val q = URLEncoder.encode("artist:\"$artist\"", "UTF-8")
-        val json = executeMusicBrainzRequest("$MB_BASE_URL/artist/?query=$q&fmt=json&limit=1") ?: return null
-        val artists = json.optJSONArray("artists") ?: return null
-        if (artists.length() == 0) return null
-        return artists.optJSONObject(0)?.optString("id")?.takeIf { it.isNotBlank() }
+        val json = executeMusicBrainzRequest("$MB_BASE_URL/artist/?query=$q&fmt=json&limit=6")
+        val artists = json?.optJSONArray("artists")
+        if (artists != null) {
+            for (i in 0 until artists.length()) {
+                val id = artists.optJSONObject(i)?.optString("id")
+                if (!id.isNullOrBlank() && !mbids.contains(id)) {
+                    mbids.add(id)
+                }
+            }
+        }
+
+        return mbids
     }
 
     private suspend fun fetchArtistImageUrlFromRelations(artistMbid: String): String? {
