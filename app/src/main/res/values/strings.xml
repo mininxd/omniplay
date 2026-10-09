@@ -89,8 +89,13 @@
     <string name="done">Done</string>
     <string name="search">Search</string>
     <string name="search_tracks_hint">Search all tracks…</string>
+    <string name="search_tracks_hint_universal">Search all tracks (universal)…</string>
     <string name="clear_search">Clear search</string>
     <string name="close_search">Close search</string>
+    <string name="search_mode_universal">Universal search (search anywhere)</string>
+    <string name="search_mode_first_text">First text search (search from start)</string>
+    <string name="universal_search_enabled">Universal text search enabled</string>
+    <string name="first_text_search_enabled">First text search enabled</string>
     <string name="no_tracks_found_format">No tracks found matching \"%1$s\"</string>
 </resources>
 

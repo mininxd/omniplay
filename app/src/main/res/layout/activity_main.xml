@@ -927,13 +927,13 @@
                         app:tint="?attr/colorOnSurfaceVariant" />
 
                     <ImageButton
-                        android:id="@+id/btn_close_search"
+                        android:id="@+id/btn_search_mode"
                         android:layout_width="32dp"
                         android:layout_height="32dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/close_search"
+                        android:contentDescription="@string/search_mode_first_text"
                         android:padding="6dp"
-                        android:src="@drawable/ic_arrow_back"
+                        android:src="@drawable/ic_match_word"
                         android:visibility="visible"
                         app:tint="?attr/colorOnSurfaceVariant" />
                 </LinearLayout>

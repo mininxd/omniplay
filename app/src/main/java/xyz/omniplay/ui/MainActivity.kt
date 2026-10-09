@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
         private const val KEY_SORT_FIELD = "key_sort_field"
         private const val KEY_SORT_ASCENDING = "key_sort_ascending"
+        const val KEY_UNIVERSAL_SEARCH = "key_universal_search"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -123,6 +124,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
     private var currentSearchQuery = ""
+    private var isUniversalSearch = false
 
     private var isFilterMenuOpen = false
     private var filterDrawerAnimator: ValueAnimator? = null
@@ -246,6 +248,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             SortField.TITLE
         }
         isSortAscending = prefs.getBoolean(KEY_SORT_ASCENDING, true)
+        isUniversalSearch = prefs.getBoolean(KEY_UNIVERSAL_SEARCH, false)
 
         setupBackPressHandler()
         setupDefaultView()
@@ -587,8 +590,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             applyCurrentFilter()
         }
 
-        binding.btnCloseSearch.setOnClickListener {
-            closeSearchBar()
+        updateSearchModeUI()
+
+        binding.btnSearchMode.setOnClickListener {
+            isUniversalSearch = !isUniversalSearch
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_UNIVERSAL_SEARCH, isUniversalSearch)
+                .apply()
+            updateSearchModeUI()
+            applyCurrentFilter()
+            Toast.makeText(
+                this,
+                if (isUniversalSearch) getString(R.string.universal_search_enabled) else getString(R.string.first_text_search_enabled),
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         binding.btnSortQueue.setOnClickListener {
@@ -2644,10 +2660,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         val filteredBySearch = if (currentSearchQuery.isNotBlank()) {
             val q = currentSearchQuery.lowercase(Locale.getDefault())
+            val locale = Locale.getDefault()
             baseList.filter { song ->
-                song.title.lowercase(Locale.getDefault()).contains(q) ||
-                song.artist.lowercase(Locale.getDefault()).contains(q) ||
-                song.album.lowercase(Locale.getDefault()).contains(q)
+                if (isUniversalSearch) {
+                    song.title.lowercase(locale).contains(q) ||
+                    song.artist.lowercase(locale).contains(q) ||
+                    song.album.lowercase(locale).contains(q)
+                } else {
+                    matchesFrontText(song.title, q, locale) ||
+                    matchesFrontText(song.artist, q, locale) ||
+                    matchesFrontText(song.album, q, locale)
+                }
             }
         } else {
             baseList
@@ -2687,11 +2710,38 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private fun matchesFrontText(text: String, query: String, locale: Locale): Boolean {
+        val lower = text.trim().lowercase(locale)
+        if (lower.startsWith(query)) return true
+        val strippedPunctuation = lower.trimStart('"', '\'', '`', '“', '”', '‘', '’', '(', '[', '{', '.', '-', '_', ' ')
+        if (strippedPunctuation.isNotEmpty() && strippedPunctuation.startsWith(query)) return true
+        val strippedNumbers = strippedPunctuation.replaceFirst(Regex("^(\\d{1,3}[.\\-\\s_]+|[(\\[]\\d{1,3}[)\\]][.\\-\\s_]*)"), "").trim()
+        if (strippedNumbers.isNotEmpty() && strippedNumbers.startsWith(query)) return true
+        return false
+    }
+
+    private fun updateSearchModeUI() {
+        if (isUniversalSearch) {
+            val primaryColor = MaterialColors.getColor(binding.btnSearchMode, com.google.android.material.R.attr.colorPrimary)
+            binding.btnSearchMode.setColorFilter(primaryColor)
+            binding.btnSearchMode.alpha = 1.0f
+            binding.btnSearchMode.contentDescription = getString(R.string.search_mode_universal)
+            binding.searchEditText.hint = getString(R.string.search_tracks_hint_universal)
+        } else {
+            val onSurfaceVariant = MaterialColors.getColor(binding.btnSearchMode, com.google.android.material.R.attr.colorOnSurfaceVariant)
+            binding.btnSearchMode.setColorFilter(onSurfaceVariant)
+            binding.btnSearchMode.alpha = 0.5f
+            binding.btnSearchMode.contentDescription = getString(R.string.search_mode_first_text)
+            binding.searchEditText.hint = getString(R.string.search_tracks_hint)
+        }
+    }
+
     private fun openSearchBar(clearExisting: Boolean = false) {
         if (clearExisting) {
             binding.searchEditText.setText("")
             currentSearchQuery = ""
         }
+        updateSearchModeUI()
         binding.searchBarContainer.visibility = View.VISIBLE
         binding.searchEditText.post {
             binding.searchEditText.requestFocus()
