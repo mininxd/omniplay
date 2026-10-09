@@ -90,7 +90,7 @@ class SettingsActivity : AppCompatActivity() {
             showManageFoldersDialog()
         }
 
-        // 3. Show Album Art Switch & Row Click (Compact Split Button)
+        // 3. Show Album Art Switch & Row Click (Unified Row)
         binding.titleAlbumArt.isSelected = true
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         binding.switchShowAlbumArt.isChecked = isShowArt
@@ -99,11 +99,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.edit().putBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, isChecked).apply()
         }
 
-        binding.btnAlbumArtLabel.setOnClickListener {
-            binding.switchShowAlbumArt.toggle()
-        }
-
-        binding.btnAlbumArtSwitch.setOnClickListener {
+        binding.settingShowAlbumArt.setOnClickListener {
             binding.switchShowAlbumArt.toggle()
         }
 

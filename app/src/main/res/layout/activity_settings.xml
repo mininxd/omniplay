@@ -152,104 +152,64 @@
                 android:alpha="0.2"
                 android:background="?attr/colorOutlineVariant" />
 
-            <!-- 4. Show Album Art in Queue Switch (Grouped Button) -->
+            <!-- 3. Show Album Art in Queue Switch (Unified Row) -->
             <LinearLayout
+                android:id="@+id/setting_show_album_art"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
                 android:minHeight="72dp"
-                android:baselineAligned="false"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="12dp">
 
-                <!-- Left Split Button: Label Pill -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/btn_album_art_label"
+                <ImageView
+                    android:id="@+id/icon_album_art"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_album"
+                    app:tint="?attr/colorPrimary" />
+
+                <LinearLayout
                     android:layout_width="0dp"
-                    android:layout_height="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="12dp"
                     android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:clipToOutline="true"
-                    app:cardBackgroundColor="@android:color/transparent"
-                    app:cardElevation="0dp"
-                    app:strokeWidth="0dp">
+                    android:orientation="vertical">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackground"
-                        android:gravity="center_vertical"
-                        android:minHeight="72dp"
-                        android:orientation="horizontal"
-                        android:paddingStart="24dp"
-                        android:paddingTop="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingBottom="12dp">
-
-                        <ImageView
-                            android:id="@+id/icon_album_art"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:src="@drawable/ic_album"
-                            app:tint="?attr/colorPrimary" />
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="20dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:id="@+id/title_album_art"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif-medium"
-                                android:text="@string/show_album_art_in_playlist"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textSize="16sp" />
-
-                            <TextView
-                                android:id="@+id/subtitle_album_art"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:text="@string/show_album_art_desc"
-                                android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="14sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Right Split Button: Switch Pill -->
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/btn_album_art_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:clipToOutline="true"
-                    app:cardBackgroundColor="@android:color/transparent"
-                    app:cardElevation="0dp"
-                    app:strokeWidth="0dp">
-
-                    <FrameLayout
+                    <TextView
+                        android:id="@+id/title_album_art"
                         android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
-                        android:background="?attr/selectableItemBackground"
-                        android:minHeight="72dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="24dp">
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/show_album_art_in_playlist"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="16sp" />
 
-                        <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_show_album_art"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:clickable="false"
-                            android:focusable="false"
-                            app:thumbIcon="@drawable/asl_switch_thumb" />
-                    </FrameLayout>
-                </com.google.android.material.card.MaterialCardView>
+                    <TextView
+                        android:id="@+id/subtitle_album_art"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/show_album_art_desc"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_show_album_art"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false"
+                    app:thumbIcon="@drawable/asl_switch_thumb" />
+
             </LinearLayout>
 
             <View
