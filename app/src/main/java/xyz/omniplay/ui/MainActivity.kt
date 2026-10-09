@@ -554,21 +554,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
-                        binding.songsRecyclerView.visibility = View.VISIBLE
+                        binding.queueScrimOverlay.alpha = 0.5f
                         updatePlaylistCutoutPadding(1f)
                         updateAppTitle()
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
-                        binding.songsRecyclerView.visibility = View.VISIBLE
+                        binding.queueScrimOverlay.alpha = 0.4f
                         updatePlaylistCutoutPadding(0f)
                         updateAppTitle()
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
-                        binding.songsRecyclerView.visibility = View.GONE
+                        binding.queueScrimOverlay.alpha = 0f
                         updatePlaylistCutoutPadding(0f)
                         if (binding.searchBarContainer.visibility == View.VISIBLE) {
                             closeSearchBar(clearQuery = true)
@@ -583,7 +583,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
                             binding.queueScrimOverlay.visibility = View.VISIBLE
                         }
-                        binding.songsRecyclerView.visibility = View.VISIBLE
                     }
                     else -> {}
                 }
@@ -591,25 +590,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
                 if (slideOffset > 0.01f) {
-                    if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
-                        binding.queueScrimOverlay.visibility = View.VISIBLE
-                    }
-                    if (binding.songsRecyclerView.visibility != View.VISIBLE) {
-                        binding.songsRecyclerView.visibility = View.VISIBLE
-                    }
+                    binding.queueScrimOverlay.visibility = View.VISIBLE
+                    binding.queueScrimOverlay.alpha = (slideOffset * 0.45f).coerceIn(0f, 0.5f)
                 } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                    if (binding.queueScrimOverlay.visibility != View.GONE) {
-                        binding.queueScrimOverlay.visibility = View.GONE
-                    }
-                    if (binding.songsRecyclerView.visibility != View.GONE) {
-                        binding.songsRecyclerView.visibility = View.GONE
-                    }
-                }
-
-                if (slideOffset > 0.05f) {
-                    binding.appTitleText.text = getString(R.string.music_library)
-                } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED && !isFilterMenuOpen && !isFilterPreviewActive) {
-                    binding.appTitleText.text = getString(R.string.app_name)
+                    binding.queueScrimOverlay.visibility = View.GONE
+                    binding.queueScrimOverlay.alpha = 0f
                 }
 
                 if (slideOffset >= 0f) {
@@ -3202,11 +3187,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
-            binding.songsRecyclerView.visibility = if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                View.GONE
-            } else {
-                View.VISIBLE
-            }
+            binding.songsRecyclerView.visibility = View.VISIBLE
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
