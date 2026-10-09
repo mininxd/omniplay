@@ -2972,14 +2972,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showAboutDialog() {
+        val version = xyz.omniplay.util.UpdateChecker.getAppVersion(this)
         val message = """
-            Omniplay 0.5
-            Open Source Music Player
-            
-            Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
-            Architectures: armv7, armv8, x86, x86_64, Universal
-            
-            Built with pure Android.
+            Omniplay $version
+
+            • Bit-perfect audio engine with low latency
+            • Native support for DSD, FLAC, WAV, OPUS, AAC, and MP3
+            • Material 3 Expressive dynamic styling
+            • Seamless local device streaming via OmniSync
         """.trimIndent()
 
         MaterialAlertDialogBuilder(this)
