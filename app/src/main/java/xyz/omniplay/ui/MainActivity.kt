@@ -430,7 +430,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             safeRightCutoutInset = maxOf(cutoutInsets.right, rightCutout)
 
             val basePeekHeight = (64 * resources.displayMetrics.density).toInt()
-            bottomSheetBehavior.peekHeight = basePeekHeight
+            bottomSheetBehavior.peekHeight = basePeekHeight + navInsets.bottom
+
+            binding.playlistPeekHeader.setPadding(
+                binding.playlistPeekHeader.paddingLeft,
+                binding.playlistPeekHeader.paddingTop,
+                binding.playlistPeekHeader.paddingRight,
+                navInsets.bottom
+            )
 
             binding.songsRecyclerView.setPadding(
                 binding.songsRecyclerView.paddingLeft,
@@ -497,16 +504,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
+                        binding.songsRecyclerView.visibility = View.VISIBLE
                         updatePlaylistCutoutPadding(1f)
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
+                        binding.songsRecyclerView.visibility = View.VISIBLE
                         updatePlaylistCutoutPadding(0f)
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
+                        binding.songsRecyclerView.visibility = View.GONE
                         updatePlaylistCutoutPadding(0f)
                         if (binding.searchBarContainer.visibility == View.VISIBLE) {
                             closeSearchBar(clearQuery = true)
@@ -520,6 +530,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
                             binding.queueScrimOverlay.visibility = View.VISIBLE
                         }
+                        binding.songsRecyclerView.visibility = View.VISIBLE
                     }
                     else -> {}
                 }
@@ -530,9 +541,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                     }
+                    if (binding.songsRecyclerView.visibility != View.VISIBLE) {
+                        binding.songsRecyclerView.visibility = View.VISIBLE
+                    }
                 } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
                     if (binding.queueScrimOverlay.visibility != View.GONE) {
                         binding.queueScrimOverlay.visibility = View.GONE
+                    }
+                    if (binding.songsRecyclerView.visibility != View.GONE) {
+                        binding.songsRecyclerView.visibility = View.GONE
                     }
                 }
 
@@ -2708,7 +2725,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
-            binding.songsRecyclerView.visibility = View.VISIBLE
+            binding.songsRecyclerView.visibility = if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                View.GONE
+            } else {
+                View.VISIBLE
+            }
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
