@@ -111,10 +111,10 @@ object ThemeHelper {
         AppCompatDelegate.setDefaultNightMode(mode.nightMode)
         if (DynamicColors.isDynamicColorAvailable()) {
             DynamicColors.applyIfAvailable(activity)
-        }
-        val style = getThemeStyle(activity)
-        if (style.themeOverlayRes != 0) {
-            activity.theme.applyStyle(style.themeOverlayRes, true)
+            val style = getThemeStyle(activity)
+            if (style.themeOverlayRes != 0) {
+                activity.theme.applyStyle(style.themeOverlayRes, true)
+            }
         }
         applySystemBars(activity)
     }

@@ -85,10 +85,17 @@ class SettingsActivity : AppCompatActivity() {
             showThemeModeDialog()
         }
 
-        // 2. Theme Style Selector
-        updateThemeSubtitle()
-        binding.settingTheme.setOnClickListener {
-            showThemeStyleDialog()
+        // 2. Theme Style Selector (only available on devices supporting dynamic colors)
+        if (DynamicColors.isDynamicColorAvailable()) {
+            binding.settingTheme.visibility = View.VISIBLE
+            binding.dividerThemeStyle.visibility = View.VISIBLE
+            updateThemeSubtitle()
+            binding.settingTheme.setOnClickListener {
+                showThemeStyleDialog()
+            }
+        } else {
+            binding.settingTheme.visibility = View.GONE
+            binding.dividerThemeStyle.visibility = View.GONE
         }
 
         // 2. Select Music Folder (Shows Manage Folders Modal)
