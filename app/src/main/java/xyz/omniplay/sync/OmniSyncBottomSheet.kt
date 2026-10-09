@@ -1,5 +1,6 @@
 package xyz.omniplay.sync
 
+import android.app.Dialog
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -8,11 +9,13 @@ import android.widget.SeekBar
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.color.DynamicColors
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.databinding.BottomSheetOmnisyncBinding
 import xyz.omniplay.databinding.ItemOmnisyncHostBinding
 import xyz.omniplay.util.ThemeColors
+import xyz.omniplay.util.ThemeHelper
 
 /**
  * Material You (Material 3) OmniSync Bottom Sheet:
@@ -25,6 +28,19 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
     private val binding get() = _binding!!
 
     private lateinit var syncManager: OmniSyncManager
+
+    override fun getTheme(): Int = R.style.BottomSheetDialogTheme
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val dialog = super.onCreateDialog(savedInstanceState)
+        if (DynamicColors.isDynamicColorAvailable()) {
+            val style = ThemeHelper.getThemeStyle(requireContext())
+            if (style.themeOverlayRes != 0) {
+                dialog.context.theme.applyStyle(style.themeOverlayRes, true)
+            }
+        }
+        return dialog
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,

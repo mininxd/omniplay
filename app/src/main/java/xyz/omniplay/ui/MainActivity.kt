@@ -289,6 +289,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onResume() {
         super.onResume()
+        updateOmniSyncButtonState(xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole)
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         songAdapter?.setShowAlbumArt(isShowArt)
@@ -1905,6 +1906,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun setupListeners() {
         // OmniSync button (left of gear button) -> open OmniSync bottom sheet
+        updateOmniSyncButtonState(xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole)
         binding.btnOmnisync.setOnClickListener {
             xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
                 .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
@@ -3777,9 +3779,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
     }
+
+    private fun updateOmniSyncButtonState(role: xyz.omniplay.sync.OmniSyncRole) {
+        val tint = if (role == xyz.omniplay.sync.OmniSyncRole.IDLE) {
+            ThemeColors.getOnSurfaceVariant(this)
+        } else {
+            ThemeColors.getPrimary(this)
+        }
+        binding.btnOmnisync.setColorFilter(tint)
+    }
+
     private val omniSyncListener = object : xyz.omniplay.sync.OmniSyncManager.OmniSyncListener {
         override fun onRoleChanged(role: xyz.omniplay.sync.OmniSyncRole) {
             runOnUiThread {
+                updateOmniSyncButtonState(role)
                 if (role == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
                     val hostName = xyz.omniplay.sync.OmniSyncManager.getInstance(this@MainActivity).currentHostRoomName
                     binding.albumNameText.text = "OmniSync • ${hostName ?: "Listening"}"

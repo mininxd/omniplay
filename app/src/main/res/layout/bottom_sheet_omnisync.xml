@@ -87,23 +87,21 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_tab_host"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+                style="@style/Widget.Omniplay.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:fontFamily="sans-serif-medium"
-                android:text="@string/omnisync_host_tab"
-                android:textColor="?attr/colorOnSurface" />
+                android:text="@string/omnisync_host_tab" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_tab_listener"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+                style="@style/Widget.Omniplay.SegmentedButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:fontFamily="sans-serif-medium"
-                android:text="@string/omnisync_listen_tab"
-                android:textColor="?attr/colorOnSurface" />
+                android:text="@string/omnisync_listen_tab" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
         <!-- ============================================================= -->
@@ -297,7 +295,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_quality_high"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Omniplay.SegmentedButton"
                         android:layout_width="wrap_content"
                         android:layout_height="36dp"
                         android:minHeight="36dp"
@@ -313,7 +311,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_quality_low"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        style="@style/Widget.Omniplay.SegmentedButton"
                         android:layout_width="wrap_content"
                         android:layout_height="36dp"
                         android:minHeight="36dp"
