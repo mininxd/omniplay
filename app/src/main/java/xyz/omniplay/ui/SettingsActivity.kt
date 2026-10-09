@@ -111,12 +111,7 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
-        // 5. About Omniplay
-        binding.settingAbout.setOnClickListener {
-            showAboutDialog()
-        }
-
-        // 6. Check for Updates
+        // 5. Check for Updates
         binding.settingCheckUpdate.setOnClickListener {
             checkAppUpdate(isManual = true)
         }
@@ -266,23 +261,5 @@ class SettingsActivity : AppCompatActivity() {
 
         manageFoldersDialog = dialog
         dialog.show()
-    }
-
-    private fun showAboutDialog() {
-        val version = UpdateChecker.getAppVersion(this)
-        val message = """
-            Omniplay $version
-
-            • Bit-perfect audio engine with low latency
-            • Native support for DSD, FLAC, WAV, OPUS, AAC, and MP3
-            • Material 3 Expressive dynamic styling
-            • Seamless local device streaming via OmniSync
-        """.trimIndent()
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.about_omniplay)
-            .setMessage(message)
-            .setPositiveButton("OK", null)
-            .show()
     }
 }

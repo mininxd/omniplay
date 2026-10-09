@@ -17,8 +17,4 @@
         android:id="@+id/action_rescan"
         android:icon="@drawable/ic_refresh"
         android:title="@string/rescan_library" />
-    <item
-        android:id="@+id/action_about"
-        android:icon="@drawable/ic_info"
-        android:title="@string/about_omniplay" />
 </menu>

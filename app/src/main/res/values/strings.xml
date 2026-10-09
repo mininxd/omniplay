@@ -6,7 +6,6 @@
     <string name="select_folder">Select Music Folder</string>
     <string name="rescan_library">Rescan Music</string>
     <string name="track_details">Audio Details</string>
-    <string name="about_omniplay">About Omniplay</string>
     <string name="permission_audio_needed">Omniplay needs storage permission to scan and play your music library.</string>
     <string name="grant_permission">Grant Permission</string>
     <string name="no_songs_found">No audio files found. Tap Select Music Folder to choose your music directory.</string>
@@ -55,7 +54,6 @@
     <string name="show_album_art_desc">Display artwork in queue</string>
     <string name="rescan_library_desc">Check for new or updated tracks</string>
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
-    <string name="about_app_desc">Version 0.6.1</string>
     <string name="close">Close</string>
 
     <!-- Dynamic Theme Styles -->
