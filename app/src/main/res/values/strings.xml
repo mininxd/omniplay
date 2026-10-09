@@ -55,7 +55,7 @@
     <string name="show_album_art_desc">Display artwork in queue</string>
     <string name="rescan_library_desc">Check for new or updated tracks</string>
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
-    <string name="about_app_desc">Version 0.6</string>
+    <string name="about_app_desc">Version 0.6.1</string>
     <string name="close">Close</string>
 
     <!-- Dynamic Theme Styles -->

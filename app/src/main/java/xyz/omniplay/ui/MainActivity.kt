@@ -497,19 +497,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     BottomSheetBehavior.STATE_EXPANDED -> {
                         binding.ivChevron.rotation = 180f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
-                        binding.queueScrimOverlay.alpha = 0.5f
                         updatePlaylistCutoutPadding(1f)
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
-                        binding.queueScrimOverlay.alpha = 0.4f
                         updatePlaylistCutoutPadding(0f)
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
-                        binding.queueScrimOverlay.alpha = 0f
                         updatePlaylistCutoutPadding(0f)
                         if (binding.searchBarContainer.visibility == View.VISIBLE) {
                             closeSearchBar(clearQuery = true)
@@ -530,11 +527,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
                 if (slideOffset > 0.01f) {
-                    binding.queueScrimOverlay.visibility = View.VISIBLE
-                    binding.queueScrimOverlay.alpha = (slideOffset * 0.45f).coerceIn(0f, 0.5f)
+                    if (binding.queueScrimOverlay.visibility != View.VISIBLE) {
+                        binding.queueScrimOverlay.visibility = View.VISIBLE
+                    }
                 } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
-                    binding.queueScrimOverlay.visibility = View.GONE
-                    binding.queueScrimOverlay.alpha = 0f
+                    if (binding.queueScrimOverlay.visibility != View.GONE) {
+                        binding.queueScrimOverlay.visibility = View.GONE
+                    }
                 }
 
                 if (slideOffset >= 0f) {

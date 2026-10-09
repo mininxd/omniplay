@@ -745,13 +745,12 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Outer Scrim Overlay: Dim background & close queue when touching outer area -->
+    <!-- Outer Scrim Overlay: Transparent touch interceptor to close queue when touching outer area -->
     <View
         android:id="@+id/queue_scrim_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#000000"
-        android:alpha="0"
+        android:background="@android:color/transparent"
         android:visibility="gone"
         android:elevation="6dp"
         android:clickable="true"
