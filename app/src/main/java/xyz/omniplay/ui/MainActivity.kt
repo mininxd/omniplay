@@ -2745,13 +2745,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun updateSearchModeUI() {
         if (isUniversalSearch) {
-            val primaryColor = MaterialColors.getColor(binding.btnSearchMode, com.google.android.material.R.attr.colorPrimary)
+            val primaryColor = ThemeColors.getPrimary(this)
             binding.btnSearchMode.setColorFilter(primaryColor)
             binding.btnSearchMode.alpha = 1.0f
             binding.btnSearchMode.contentDescription = getString(R.string.search_mode_universal)
             binding.searchEditText.hint = getString(R.string.search_tracks_hint_universal)
         } else {
-            val onSurfaceVariant = MaterialColors.getColor(binding.btnSearchMode, com.google.android.material.R.attr.colorOnSurfaceVariant)
+            val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(this)
             binding.btnSearchMode.setColorFilter(onSurfaceVariant)
             binding.btnSearchMode.alpha = 0.5f
             binding.btnSearchMode.contentDescription = getString(R.string.search_mode_first_text)
