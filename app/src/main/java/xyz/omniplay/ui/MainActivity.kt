@@ -124,6 +124,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var activeOngoingFilterMode = LibraryFilterMode.TRACK
     private var activeOngoingQueue = listOf<Song>()
     private var currentFolderNavigationPath = mutableListOf<String>()
+    private var isAllTracksDrillDown = false
+    private var currentArtistDrillDown: String? = null
+    private var currentAlbumDrillDown: String? = null
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
     private var currentSearchQuery = ""
@@ -339,11 +342,26 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isFilterMenuOpen) {
-                    if (currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders) {
-                        currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
-                        updateFilterSubList()
-                    } else {
-                        closeLeftMenu()
+                    when {
+                        isAllTracksDrillDown -> {
+                            isAllTracksDrillDown = false
+                            updateFilterSubList()
+                        }
+                        currentArtistDrillDown != null -> {
+                            currentArtistDrillDown = null
+                            updateFilterSubList()
+                        }
+                        currentAlbumDrillDown != null -> {
+                            currentAlbumDrillDown = null
+                            updateFilterSubList()
+                        }
+                        currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders -> {
+                            currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+                            updateFilterSubList()
+                        }
+                        else -> {
+                            closeLeftMenu()
+                        }
                     }
                 } else if (isLyricsShowing) {
                     closeLyricsCard()
@@ -363,13 +381,32 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (isFilterMenuOpen) {
-            if (currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders) {
-                currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
-                updateFilterSubList()
-                return
+            when {
+                isAllTracksDrillDown -> {
+                    isAllTracksDrillDown = false
+                    updateFilterSubList()
+                    return
+                }
+                currentArtistDrillDown != null -> {
+                    currentArtistDrillDown = null
+                    updateFilterSubList()
+                    return
+                }
+                currentAlbumDrillDown != null -> {
+                    currentAlbumDrillDown = null
+                    updateFilterSubList()
+                    return
+                }
+                currentFolderNavigationPath.isNotEmpty() && binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders -> {
+                    currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+                    updateFilterSubList()
+                    return
+                }
+                else -> {
+                    closeLeftMenu()
+                    return
+                }
             }
-            closeLeftMenu()
-            return
         }
         if (isLyricsShowing) {
             closeLyricsCard()
@@ -519,12 +556,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.songsRecyclerView.visibility = View.VISIBLE
                         updatePlaylistCutoutPadding(1f)
+                        updateAppTitle()
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.songsRecyclerView.visibility = View.VISIBLE
                         updatePlaylistCutoutPadding(0f)
+                        updateAppTitle()
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
@@ -537,6 +576,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         if (isFilterPreviewActive) {
                             revertToOngoingQueue()
                         }
+                        updateAppTitle()
                     }
                     BottomSheetBehavior.STATE_DRAGGING,
                     BottomSheetBehavior.STATE_SETTLING -> {
@@ -564,6 +604,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (binding.songsRecyclerView.visibility != View.GONE) {
                         binding.songsRecyclerView.visibility = View.GONE
                     }
+                }
+
+                if (slideOffset > 0.05f) {
+                    binding.appTitleText.text = getString(R.string.music_library)
+                } else if (slideOffset <= 0f && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED && !isFilterMenuOpen && !isFilterPreviewActive) {
+                    binding.appTitleText.text = getString(R.string.app_name)
                 }
 
                 if (slideOffset >= 0f) {
@@ -2112,7 +2158,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun updateAppTitle() {
-        if (isFilterMenuOpen || isFilterPreviewActive) {
+        val isBottomSheetOpen = ::bottomSheetBehavior.isInitialized &&
+                bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED
+        if (isFilterMenuOpen || isFilterPreviewActive || isBottomSheetOpen) {
             binding.appTitleText.text = getString(R.string.music_library)
         } else {
             binding.appTitleText.text = getString(R.string.app_name)
@@ -2282,27 +2330,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.drawerFilterRecyclerView.adapter = drawerFilterAdapter
 
         binding.cardAllTracks.setOnClickListener {
-            selectedFilterValue = null
+            isAllTracksDrillDown = true
+            currentArtistDrillDown = null
+            currentAlbumDrillDown = null
             currentFolderNavigationPath.clear()
-            currentFilterMode = LibraryFilterMode.TRACK
-            if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
-                isFilterPreviewActive = true
-            } else {
-                isFilterPreviewActive = false
-            }
-            updateAppTitle()
-            binding.activeFilterBar.visibility = View.GONE
             updateFilterSubList()
-            applyCurrentFilter()
-            closeLeftMenu()
-            if (::bottomSheetBehavior.isInitialized) {
-                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
-            }
-            openSearchBar(clearExisting = true)
         }
 
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
+            isAllTracksDrillDown = false
+            currentArtistDrillDown = null
+            currentAlbumDrillDown = null
             currentFolderNavigationPath.clear()
             when (checkedId) {
                 R.id.btn_filter_artists -> setFilterMode(LibraryFilterMode.ARTIST)
@@ -2311,9 +2350,42 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
+        binding.btnFilterArtists.setOnClickListener {
+            if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
+                isAllTracksDrillDown = false
+                currentArtistDrillDown = null
+                currentAlbumDrillDown = null
+                currentFolderNavigationPath.clear()
+                setFilterMode(LibraryFilterMode.ARTIST)
+            }
+        }
+
+        binding.btnFilterAlbums.setOnClickListener {
+            if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
+                isAllTracksDrillDown = false
+                currentArtistDrillDown = null
+                currentAlbumDrillDown = null
+                currentFolderNavigationPath.clear()
+                setFilterMode(LibraryFilterMode.ALBUM)
+            }
+        }
+
+        binding.btnFilterFolders.setOnClickListener {
+            if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
+                isAllTracksDrillDown = false
+                currentArtistDrillDown = null
+                currentAlbumDrillDown = null
+                currentFolderNavigationPath.clear()
+                setFilterMode(LibraryFilterMode.FOLDER)
+            }
+        }
+
         binding.btnClearFilter.setOnClickListener {
-            selectedFilterValue = null
+            isAllTracksDrillDown = false
+            currentArtistDrillDown = null
+            currentAlbumDrillDown = null
             currentFolderNavigationPath.clear()
+            selectedFilterValue = null
             currentFilterMode = LibraryFilterMode.TRACK
             if (activeOngoingQueueTitle != null || activeOngoingFilterMode != LibraryFilterMode.TRACK) {
                 isFilterPreviewActive = true
@@ -2422,6 +2494,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setFilterMode(mode: LibraryFilterMode) {
+        isAllTracksDrillDown = false
+        currentArtistDrillDown = null
+        currentAlbumDrillDown = null
+        currentFolderNavigationPath.clear()
         currentFilterMode = mode
         binding.drawerFilterRecyclerView.visibility = View.VISIBLE
         updateFilterSubList()
@@ -2496,29 +2572,146 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             drawerFilterAdapter?.setItems(emptyList())
             return
         }
+
+        val unknownAlbumStr = getString(R.string.unknown_album)
+        val unknownArtistStr = getString(R.string.unknown_artist)
+
+        if (isAllTracksDrillDown) {
+            val allSongsSorted = sortSongs(allScannedSongs, currentSortField, isSortAscending)
+            val items = mutableListOf<FilterItem>()
+            items.add(
+                FilterItem(
+                    title = "..",
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isBack = true,
+                    subtitle = "Back to Filters"
+                )
+            )
+            items.addAll(
+                allSongsSorted.map { song ->
+                    FilterItem(
+                        title = song.title,
+                        count = 0,
+                        isAlbum = false,
+                        isFolder = false,
+                        song = song,
+                        representativeSong = song,
+                        subtitle = song.artist.trim().ifEmpty { unknownArtistStr },
+                        isSelected = (playbackService?.currentSong?.id == song.id)
+                    )
+                }
+            )
+            binding.drawerFilterInfoText.text = "All Tracks (${allScannedSongs.size} songs)"
+            drawerFilterAdapter?.setItems(items)
+            binding.drawerFilterRecyclerView.scrollToPosition(0)
+            return
+        }
+
+        val artistTarget = currentArtistDrillDown
+        if (artistTarget != null) {
+            val artistSongs = allScannedSongs.filter {
+                it.artist.trim().ifEmpty { unknownArtistStr }.equals(artistTarget, ignoreCase = true)
+            }
+            val sortedArtistSongs = sortSongs(artistSongs, currentSortField, isSortAscending)
+            val items = mutableListOf<FilterItem>()
+            items.add(
+                FilterItem(
+                    title = "..",
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isBack = true,
+                    subtitle = "All Artists"
+                )
+            )
+            items.addAll(
+                sortedArtistSongs.map { song ->
+                    FilterItem(
+                        title = song.title,
+                        count = 0,
+                        isAlbum = false,
+                        isFolder = false,
+                        song = song,
+                        representativeSong = song,
+                        subtitle = song.album.trim().ifEmpty { unknownAlbumStr },
+                        isSelected = (playbackService?.currentSong?.id == song.id)
+                    )
+                }
+            )
+            binding.drawerFilterInfoText.text = "Artist: $artistTarget (${artistSongs.size} songs)"
+            drawerFilterAdapter?.setItems(items)
+            binding.drawerFilterRecyclerView.scrollToPosition(0)
+            return
+        }
+
+        val albumTarget = currentAlbumDrillDown
+        if (albumTarget != null) {
+            val albumSongs = allScannedSongs.filter {
+                it.album.trim().ifEmpty { unknownAlbumStr }.equals(albumTarget, ignoreCase = true)
+            }
+            val sortedAlbumSongs = sortSongs(albumSongs, currentSortField, isSortAscending)
+            val items = mutableListOf<FilterItem>()
+            items.add(
+                FilterItem(
+                    title = "..",
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isBack = true,
+                    subtitle = "All Albums"
+                )
+            )
+            items.addAll(
+                sortedAlbumSongs.map { song ->
+                    FilterItem(
+                        title = song.title,
+                        count = 0,
+                        isAlbum = false,
+                        isFolder = false,
+                        song = song,
+                        representativeSong = song,
+                        subtitle = song.artist.trim().ifEmpty { unknownArtistStr },
+                        isSelected = (playbackService?.currentSong?.id == song.id)
+                    )
+                }
+            )
+            binding.drawerFilterInfoText.text = "Album: $albumTarget (${albumSongs.size} songs)"
+            drawerFilterAdapter?.setItems(items)
+            binding.drawerFilterRecyclerView.scrollToPosition(0)
+            return
+        }
+
         val browseMode = when (binding.filterToggleGroup.checkedButtonId) {
             R.id.btn_filter_albums -> LibraryFilterMode.ALBUM
             R.id.btn_filter_folders -> LibraryFilterMode.FOLDER
             else -> LibraryFilterMode.ARTIST
         }
-        val unknownAlbumStr = getString(R.string.unknown_album)
-        val unknownArtistStr = getString(R.string.unknown_artist)
+
         val items = when (browseMode) {
             LibraryFilterMode.ARTIST -> {
-                allScannedSongs
+                val artistGroups = allScannedSongs
                     .groupBy { it.artist.trim().ifEmpty { unknownArtistStr } }
                     .map { (artist, songs) ->
                         FilterItem(
                             title = artist,
                             count = songs.size,
                             isAlbum = false,
-                            isSelected = (currentFilterMode == LibraryFilterMode.ARTIST) && artist.equals(selectedFilterValue, ignoreCase = true)
+                            isSelected = (currentFilterMode == LibraryFilterMode.ARTIST) && artist.equals(selectedFilterValue, ignoreCase = true),
+                            representativeSong = songs.firstOrNull()
                         )
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                if (activeOngoingFilterMode == LibraryFilterMode.ARTIST && !selectedFilterValue.isNullOrEmpty()) {
+                    binding.drawerFilterInfoText.text = "Filtered by artist: $selectedFilterValue"
+                } else {
+                    binding.drawerFilterInfoText.text = "Select from ${artistGroups.size} artists"
+                }
+                artistGroups
             }
             LibraryFilterMode.ALBUM -> {
-                allScannedSongs
+                val albumGroups = allScannedSongs
                     .groupBy { it.album.trim().ifEmpty { unknownAlbumStr } }
                     .map { (album, songs) ->
                         FilterItem(
@@ -2530,6 +2723,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         )
                     }
                     .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                if (activeOngoingFilterMode == LibraryFilterMode.ALBUM && !selectedFilterValue.isNullOrEmpty()) {
+                    binding.drawerFilterInfoText.text = "Filtered by album: $selectedFilterValue"
+                } else {
+                    binding.drawerFilterInfoText.text = "Select from ${albumGroups.size} albums"
+                }
+                albumGroups
             }
             LibraryFilterMode.FOLDER -> {
                 val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
@@ -2587,7 +2786,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             isFolder = false,
                             song = song,
                             representativeSong = song,
-                            subtitle = song.artist.trim().ifEmpty { getString(R.string.unknown_artist) },
+                            subtitle = song.artist.trim().ifEmpty { unknownArtistStr },
                             isSelected = (playbackService?.currentSong?.id == song.id)
                         )
                     }
@@ -2612,10 +2811,24 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun onFilterItemSelected(item: FilterItem) {
         if (item.isBack) {
-            if (currentFolderNavigationPath.isNotEmpty()) {
-                currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+            when {
+                isAllTracksDrillDown -> {
+                    isAllTracksDrillDown = false
+                    updateFilterSubList()
+                }
+                currentArtistDrillDown != null -> {
+                    currentArtistDrillDown = null
+                    updateFilterSubList()
+                }
+                currentAlbumDrillDown != null -> {
+                    currentAlbumDrillDown = null
+                    updateFilterSubList()
+                }
+                currentFolderNavigationPath.isNotEmpty() -> {
+                    currentFolderNavigationPath.removeAt(currentFolderNavigationPath.lastIndex)
+                    updateFilterSubList()
+                }
             }
-            updateFilterSubList()
             return
         }
 
@@ -2625,81 +2838,124 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             return
         }
 
-        if (item.song != null) {
-            val song = item.song
-            if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
-                Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
-                return
-            }
+        if (item.isAlbum) {
+            currentAlbumDrillDown = item.title
+            currentArtistDrillDown = null
+            isAllTracksDrillDown = false
+            updateFilterSubList()
+            return
+        }
 
-            if (binding.searchBarContainer.visibility == View.VISIBLE) {
-                closeSearchBar(clearQuery = true)
-            }
+        if (item.song == null) {
+            currentArtistDrillDown = item.title
+            currentAlbumDrillDown = null
+            isAllTracksDrillDown = false
+            updateFilterSubList()
+            return
+        }
 
+        val song = item.song
+        if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (binding.searchBarContainer.visibility == View.VISIBLE) {
+            closeSearchBar(clearQuery = true)
+        }
+
+        val queueToSet: List<Song>
+        val filterModeToSet: LibraryFilterMode
+        val filterValueToSet: String?
+
+        if (isAllTracksDrillDown) {
+            val allSorted = sortSongs(allScannedSongs, currentSortField, isSortAscending)
+            queueToSet = if (allSorted.isNotEmpty()) allSorted else listOf(song)
+            filterModeToSet = LibraryFilterMode.TRACK
+            filterValueToSet = null
+        } else if (currentArtistDrillDown != null) {
+            val unknownArtistStr = getString(R.string.unknown_artist)
+            val artistSongs = allScannedSongs.filter {
+                it.artist.trim().ifEmpty { unknownArtistStr }.equals(currentArtistDrillDown, ignoreCase = true)
+            }
+            val sorted = sortSongs(artistSongs, currentSortField, isSortAscending)
+            queueToSet = if (sorted.isNotEmpty()) sorted else listOf(song)
+            filterModeToSet = LibraryFilterMode.ARTIST
+            filterValueToSet = currentArtistDrillDown
+        } else if (currentAlbumDrillDown != null) {
+            val unknownAlbumStr = getString(R.string.unknown_album)
+            val albumSongs = allScannedSongs.filter {
+                it.album.trim().ifEmpty { unknownAlbumStr }.equals(currentAlbumDrillDown, ignoreCase = true)
+            }
+            val sorted = sortSongs(albumSongs, currentSortField, isSortAscending)
+            queueToSet = if (sorted.isNotEmpty()) sorted else listOf(song)
+            filterModeToSet = LibraryFilterMode.ALBUM
+            filterValueToSet = currentAlbumDrillDown
+        } else {
             val folderSongs = getSongsInCurrentFolder()
-            val queueToSet = if (folderSongs.isNotEmpty()) folderSongs else listOf(song)
-            val targetIdx = queueToSet.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-
-            isFilterPreviewActive = false
-            currentFilterMode = LibraryFilterMode.FOLDER
-            selectedFilterValue = if (currentFolderNavigationPath.isNotEmpty()) {
+            queueToSet = if (folderSongs.isNotEmpty()) folderSongs else listOf(song)
+            filterModeToSet = LibraryFilterMode.FOLDER
+            filterValueToSet = if (currentFolderNavigationPath.isNotEmpty()) {
                 currentFolderNavigationPath.joinToString("/")
             } else {
                 item.title
             }
-            activeOngoingQueueTitle = selectedFilterValue
-            activeOngoingFilterMode = LibraryFilterMode.FOLDER
-            activeOngoingQueue = queueToSet
+        }
 
-            displayedSongs = queueToSet
-            songAdapter?.setSongs(queueToSet)
-            songAdapter?.setCurrentPlayingSongId(song.id)
+        val targetIdx = queueToSet.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
-            playbackService?.let { service ->
+        isFilterPreviewActive = false
+        currentFilterMode = filterModeToSet
+        selectedFilterValue = filterValueToSet
+        activeOngoingQueueTitle = selectedFilterValue
+        activeOngoingFilterMode = filterModeToSet
+        activeOngoingQueue = queueToSet
+
+        displayedSongs = queueToSet
+        songAdapter?.setSongs(queueToSet)
+        songAdapter?.setCurrentPlayingSongId(song.id)
+
+        playbackService?.let { service ->
+            val queueMatches = service.queue.size == queueToSet.size &&
+                    service.queue.any { it.id == song.id }
+            if (queueMatches) {
+                service.playSongFromPlaylist(song, startPlaying = true)
+            } else {
                 service.setSongQueue(queueToSet, startIndex = targetIdx, startPlaying = true)
             }
-
-            updateAppTitle()
-            binding.activeFilterBar.visibility = View.VISIBLE
-            binding.activeFilterText.text = "Folder: $selectedFilterValue"
-            binding.drawerFilterInfoText.text = "Filtered by folder: $selectedFilterValue"
-
-            closeLeftMenu()
-            if (::bottomSheetBehavior.isInitialized) {
-                bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-            }
-            return
         }
 
-        selectedFilterValue = item.title
-        currentFilterMode = when {
-            item.isAlbum -> LibraryFilterMode.ALBUM
-            else -> LibraryFilterMode.ARTIST
-        }
-        isFilterPreviewActive = true
         updateAppTitle()
-        binding.activeFilterBar.visibility = View.VISIBLE
-        val prefix = when {
-            item.isAlbum -> "Album: "
-            else -> "Artist: "
+        if (filterValueToSet != null) {
+            binding.activeFilterBar.visibility = View.VISIBLE
+            val prefix = when (filterModeToSet) {
+                LibraryFilterMode.ALBUM -> "Album: "
+                LibraryFilterMode.FOLDER -> "Folder: "
+                else -> "Artist: "
+            }
+            val typeStr = when (filterModeToSet) {
+                LibraryFilterMode.ALBUM -> "album"
+                LibraryFilterMode.FOLDER -> "folder"
+                else -> "artist"
+            }
+            binding.activeFilterText.text = "$prefix$selectedFilterValue"
+            binding.drawerFilterInfoText.text = "Filtered by $typeStr: $selectedFilterValue"
+        } else {
+            binding.activeFilterBar.visibility = View.GONE
         }
-        val typeLabel = when {
-            item.isAlbum -> "album"
-            else -> "artist"
-        }
-        binding.activeFilterText.text = "$prefix${item.title}"
-        binding.drawerFilterInfoText.text = "Filtered by $typeLabel: ${item.title}"
-        updateFilterSubList()
-        applyCurrentFilter()
+
         closeLeftMenu()
         if (::bottomSheetBehavior.isInitialized) {
-            bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
         }
     }
 
     private fun revertToOngoingQueue() {
         isFilterPreviewActive = false
         updateAppTitle()
+        isAllTracksDrillDown = false
+        currentArtistDrillDown = null
+        currentAlbumDrillDown = null
         selectedFilterValue = activeOngoingQueueTitle
         currentFilterMode = activeOngoingFilterMode
         currentFolderNavigationPath.clear()
@@ -2747,6 +3003,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun clearFilter() {
         isFilterPreviewActive = false
         updateAppTitle()
+        isAllTracksDrillDown = false
+        currentArtistDrillDown = null
+        currentAlbumDrillDown = null
         activeOngoingQueueTitle = null
         activeOngoingFilterMode = LibraryFilterMode.TRACK
         selectedFilterValue = null

@@ -21,6 +21,7 @@ import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivitySettingsBinding
 import xyz.omniplay.util.MusicFolderManager
 import xyz.omniplay.util.ThemeHelper
+import xyz.omniplay.util.ThemeMode
 import xyz.omniplay.util.ThemeStyle
 import xyz.omniplay.util.UpdateChecker
 
@@ -77,7 +78,13 @@ class SettingsActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
 
-        // 1. Theme Style Selector
+        // 1. Theme Mode (Auto / Light / Dark)
+        updateThemeModeSubtitle()
+        binding.settingThemeMode.setOnClickListener {
+            showThemeModeDialog()
+        }
+
+        // 2. Theme Style Selector
         updateThemeSubtitle()
         binding.settingTheme.setOnClickListener {
             showThemeStyleDialog()
@@ -174,6 +181,35 @@ class SettingsActivity : AppCompatActivity() {
             putExtra(EXTRA_THEME_CHANGED, isThemeChanged)
         }
         setResult(Activity.RESULT_OK, resultIntent)
+    }
+
+    private fun updateThemeModeSubtitle() {
+        val currentMode = ThemeHelper.getThemeMode(this)
+        binding.settingThemeModeSubtitle.setText(currentMode.titleRes)
+    }
+
+    private fun showThemeModeDialog() {
+        val currentMode = ThemeHelper.getThemeMode(this)
+        val modes = ThemeMode.values()
+        val names = modes.map { getString(it.titleRes) }.toTypedArray()
+        val selectedIndex = modes.indexOf(currentMode)
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.theme_setting)
+            .setSingleChoiceItems(names, selectedIndex) { dialog, which ->
+                val chosenMode = modes[which]
+                if (chosenMode != currentMode) {
+                    ThemeHelper.setThemeMode(this, chosenMode)
+                    isThemeChanged = true
+                    prepareResult()
+                    dialog.dismiss()
+                    recreate()
+                } else {
+                    dialog.dismiss()
+                }
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
     }
 
     private fun updateThemeSubtitle() {

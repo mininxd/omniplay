@@ -59,10 +59,14 @@
     <string name="close">Close</string>
 
     <!-- Dynamic Theme Styles -->
+    <string name="theme_setting">Theme</string>
+    <string name="theme_mode_auto">Auto</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
     <string name="theme_style">Theme style</string>
-    <string name="theme_style_tone">Tone (Tonal Spot)</string>
+    <string name="theme_style_tone">Tonal Spot</string>
     <string name="theme_style_expressive">Expressive</string>
-    <string name="theme_style_salad">Salad (Fruit Salad)</string>
+    <string name="theme_style_salad">Fruit Salad</string>
     <string name="theme_style_monochrome">Monochrome</string>
     <string name="theme_style_vibrant">Vibrant</string>
 

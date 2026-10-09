@@ -4,8 +4,25 @@ import android.app.Activity
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
+import androidx.appcompat.app.AppCompatDelegate
 import xyz.omniplay.R
 import xyz.omniplay.ui.MainActivity
+
+enum class ThemeMode(
+    val key: String,
+    @StringRes val titleRes: Int,
+    val nightMode: Int
+) {
+    AUTO("auto", R.string.theme_mode_auto, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM),
+    LIGHT("light", R.string.theme_mode_light, AppCompatDelegate.MODE_NIGHT_NO),
+    DARK("dark", R.string.theme_mode_dark, AppCompatDelegate.MODE_NIGHT_YES);
+
+    companion object {
+        fun fromKey(key: String?): ThemeMode {
+            return values().firstOrNull { it.key == key } ?: AUTO
+        }
+    }
+}
 
 enum class ThemeStyle(
     val key: String,
@@ -26,7 +43,24 @@ enum class ThemeStyle(
 }
 
 object ThemeHelper {
+    const val KEY_THEME_MODE = "key_theme_mode"
     const val KEY_THEME_STYLE = "key_theme_style"
+
+    fun getThemeMode(context: Context): ThemeMode {
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        return ThemeMode.fromKey(prefs.getString(KEY_THEME_MODE, ThemeMode.AUTO.key))
+    }
+
+    fun setThemeMode(context: Context, mode: ThemeMode) {
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_THEME_MODE, mode.key).apply()
+        AppCompatDelegate.setDefaultNightMode(mode.nightMode)
+    }
+
+    fun applyNightMode(context: Context) {
+        val mode = getThemeMode(context)
+        AppCompatDelegate.setDefaultNightMode(mode.nightMode)
+    }
 
     fun getThemeStyle(context: Context): ThemeStyle {
         val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
@@ -39,6 +73,8 @@ object ThemeHelper {
     }
 
     fun applyTheme(activity: Activity) {
+        val mode = getThemeMode(activity)
+        AppCompatDelegate.setDefaultNightMode(mode.nightMode)
         val style = getThemeStyle(activity)
         if (style.themeOverlayRes != 0) {
             activity.theme.applyStyle(style.themeOverlayRes, true)
