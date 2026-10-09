@@ -14,7 +14,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xyz.omniplay.coverart.CoverArtArchiveClient
 import xyz.omniplay.model.Song
+import xyz.omniplay.ui.MainActivity
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -51,6 +53,17 @@ object AlbumArtLoader {
     // 3. Negative Cache: prevents repeatedly parsing songs that have NO album art
     private val negativeCache: LruCache<String, Boolean> by lazy {
         LruCache<String, Boolean>(1000)
+    }
+
+    // 4. Pre-rendered Artist-level cache: keyed by lowercase artist name
+    private val artistArtCache: LruCache<String, Bitmap> by lazy {
+        val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+        val cacheSize = (maxMemory / 8).coerceAtLeast(1024)
+        object : LruCache<String, Bitmap>(cacheSize) {
+            override fun sizeOf(key: String, bitmap: Bitmap): Int {
+                return (bitmap.byteCount / 1024).coerceAtLeast(1)
+            }
+        }
     }
 
     private var preloadJob: Job? = null
@@ -124,7 +137,70 @@ object AlbumArtLoader {
     fun clearMemoryCache() {
         memoryCache.evictAll()
         albumArtCache.evictAll()
+        artistArtCache.evictAll()
         negativeCache.evictAll()
+        CoverArtArchiveClient.clearCaches()
+    }
+
+    /**
+     * Synchronously returns cached artist image in memory for [artistName].
+     */
+    fun getCachedArtistArt(artistName: String): Bitmap? {
+        if (artistName.isBlank() || isUnknownArtist(artistName)) return null
+        val cleanArtist = artistName.trim().lowercase(Locale.ROOT)
+        return artistArtCache.get(cleanArtist)
+    }
+
+    /**
+     * Loads artist portrait / photo asynchronously.
+     * Checks in-memory cache -> disk cache -> online (MusicBrainz / Wikimedia / CAA) -> representative song's album art.
+     */
+    suspend fun loadArtistArt(context: Context, artistName: String, representativeSong: Song? = null): Bitmap? = withContext(Dispatchers.IO) {
+        if (artistName.isBlank() || isUnknownArtist(artistName)) return@withContext null
+        val cleanArtist = artistName.trim().lowercase(Locale.ROOT)
+
+        val cachedMem = artistArtCache.get(cleanArtist)
+        if (cachedMem != null) return@withContext cachedMem
+
+        val diskKey = "artist_$cleanArtist"
+        val diskBitmap = loadFromDiskCache(context, diskKey)
+        if (diskBitmap != null) {
+            artistArtCache.put(cleanArtist, diskBitmap)
+            return@withContext diskBitmap
+        }
+
+        if (isOnlineArtEnabled(context)) {
+            val onlineArt = CoverArtArchiveClient.fetchArtistImage(context, artistName)
+            if (onlineArt != null) {
+                artistArtCache.put(cleanArtist, onlineArt)
+                saveToDiskCache(context, diskKey, onlineArt)
+                return@withContext onlineArt
+            }
+        }
+
+        if (representativeSong != null) {
+            val repBitmap = loadAlbumArt(context, representativeSong)
+            if (repBitmap != null) {
+                artistArtCache.put(cleanArtist, repBitmap)
+                saveToDiskCache(context, diskKey, repBitmap)
+                return@withContext repBitmap
+            }
+        }
+
+        null
+    }
+
+    fun isOnlineArtEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(MainActivity.KEY_FETCH_ONLINE_ARTWORK, true)
+    }
+
+    private fun isUnknownArtist(artist: String): Boolean {
+        val lower = artist.trim().lowercase(Locale.ROOT)
+        return lower.isEmpty() ||
+                lower == "unknown artist" ||
+                lower == "unknown" ||
+                lower == "<unknown>"
     }
 
     /**
@@ -323,7 +399,14 @@ object AlbumArtLoader {
                 } catch (ignored: Throwable) {}
             }
 
-            // Step 10: Validate decoded bitmap and write to caches
+            // Step 10: Online fallback via Cover Art Archive API & MusicBrainz (when there is no image at all in the music file)
+            if (decodedBitmap == null && isOnlineArtEnabled(context)) {
+                try {
+                    decodedBitmap = CoverArtArchiveClient.fetchCoverArt(context, song)
+                } catch (ignored: Throwable) {}
+            }
+
+            // Step 11: Validate decoded bitmap and write to caches
             val finalBitmap = decodedBitmap
             if (finalBitmap != null) {
                 if (isSolidOrBlankBitmap(finalBitmap)) {
@@ -334,6 +417,7 @@ object AlbumArtLoader {
                 val albumKey = getAlbumKey(song)
                 if (albumKey != null) {
                     albumArtCache.put(albumKey, finalBitmap)
+                    saveToDiskCache(context, "album_$albumKey", finalBitmap)
                 }
                 saveToDiskCache(context, cacheKey, finalBitmap)
                 return@withContext finalBitmap

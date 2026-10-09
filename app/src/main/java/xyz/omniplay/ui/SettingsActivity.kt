@@ -103,6 +103,22 @@ class SettingsActivity : AppCompatActivity() {
             binding.switchShowAlbumArt.toggle()
         }
 
+        // 4. Download Missing Artwork Switch & Row Click
+        binding.titleOnlineArt.isSelected = true
+        val isFetchOnlineArt = prefs.getBoolean(MainActivity.KEY_FETCH_ONLINE_ARTWORK, true)
+        binding.switchFetchOnlineArtwork.isChecked = isFetchOnlineArt
+
+        binding.switchFetchOnlineArtwork.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_FETCH_ONLINE_ARTWORK, isChecked).apply()
+            if (isChecked) {
+                xyz.omniplay.util.AlbumArtLoader.clearMemoryCache()
+            }
+        }
+
+        binding.settingFetchOnlineArtwork.setOnClickListener {
+            binding.switchFetchOnlineArtwork.toggle()
+        }
+
         // 4. Rescan Music
         binding.settingRescanMusic.setOnClickListener {
             isRescanRequested = true

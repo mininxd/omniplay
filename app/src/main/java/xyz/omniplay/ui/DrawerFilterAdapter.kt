@@ -18,6 +18,7 @@ import xyz.omniplay.databinding.ItemDrawerFilterBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.ThemeColors
+import java.util.Locale
 
 data class FilterItem(
     val title: String,
@@ -112,13 +113,16 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.7f
             }
 
-            val albumArt = if (item.isAlbum && !item.isFolder) {
+            val cachedArt = if (item.isAlbum && !item.isFolder) {
                 item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) }
                     ?: AlbumArtLoader.getAlbumArt(item.title)
+            } else if (!item.isAlbum && !item.isFolder) {
+                AlbumArtLoader.getCachedArtistArt(item.title)
+                    ?: (item.representativeSong?.let { AlbumArtLoader.getCachedAlbumArt(it) })
             } else null
 
-            if (albumArt != null) {
-                showAlbumArt(albumArt)
+            if (cachedArt != null) {
+                showAlbumArt(cachedArt)
             } else {
                 showDefaultIcon()
                 if (item.isAlbum && item.representativeSong != null) {
@@ -130,6 +134,18 @@ class DrawerFilterAdapter(
                         val bitmap = AlbumArtLoader.loadAlbumArt(context, repSong)
                         withContext(Dispatchers.Main) {
                             if (binding.filterItemIcon.tag == imageKey && bitmap != null) {
+                                showAlbumArt(bitmap)
+                            }
+                        }
+                    }
+                } else if (!item.isAlbum && !item.isFolder && item.title.isNotBlank()) {
+                    val artistKey = "artist_${item.title.lowercase(Locale.ROOT)}"
+                    binding.filterItemIcon.tag = artistKey
+
+                    loadJob = adapterScope.launch {
+                        val bitmap = AlbumArtLoader.loadArtistArt(context, item.title, item.representativeSong)
+                        withContext(Dispatchers.Main) {
+                            if (binding.filterItemIcon.tag == artistKey && bitmap != null) {
                                 showAlbumArt(bitmap)
                             }
                         }

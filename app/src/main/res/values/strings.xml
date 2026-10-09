@@ -52,6 +52,8 @@
     <string name="music_folder">Music Folder</string>
     <string name="music_folder_desc">Select directory to scan songs</string>
     <string name="show_album_art_desc">Display artwork in queue</string>
+    <string name="download_missing_artwork">Download missing artwork</string>
+    <string name="download_missing_artwork_desc">Fetch covers and artist images from Cover Art Archive &amp; MusicBrainz</string>
     <string name="rescan_library_desc">Check for new or updated tracks</string>
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
     <string name="close">Close</string>

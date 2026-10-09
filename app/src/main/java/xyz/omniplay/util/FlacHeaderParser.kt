@@ -15,7 +15,9 @@ data class FlacHeader(
     val bitDepth: Int = 0,
     val totalSamples: Long = 0L,
     val pictureData: ByteArray? = null,
-    val pictureMime: String? = null
+    val pictureMime: String? = null,
+    val musicbrainzReleaseId: String? = null,
+    val musicbrainzReleaseGroupId: String? = null
 )
 
 object FlacHeaderParser {
@@ -80,6 +82,8 @@ object FlacHeaderParser {
 
         var pictureData: ByteArray? = null
         var pictureMime: String? = null
+        var mbReleaseId: String? = null
+        var mbReleaseGroupId: String? = null
 
         val blockHdr = ByteArray(4)
 
@@ -148,6 +152,8 @@ object FlacHeaderParser {
                                             "TITLE" -> if (title.isNullOrBlank()) title = value
                                             "ARTIST" -> if (artist.isNullOrBlank()) artist = value
                                             "ALBUM" -> if (album.isNullOrBlank()) album = value
+                                            "MUSICBRAINZ_ALBUMID" -> if (mbReleaseId.isNullOrBlank()) mbReleaseId = value
+                                            "MUSICBRAINZ_RELEASEGROUPID" -> if (mbReleaseGroupId.isNullOrBlank()) mbReleaseGroupId = value
                                         }
                                     }
                                 }
@@ -210,7 +216,9 @@ object FlacHeaderParser {
             bitDepth = bitDepth,
             totalSamples = totalSamples,
             pictureData = pictureData,
-            pictureMime = pictureMime
+            pictureMime = pictureMime,
+            musicbrainzReleaseId = mbReleaseId,
+            musicbrainzReleaseGroupId = mbReleaseGroupId
         )
     }
 

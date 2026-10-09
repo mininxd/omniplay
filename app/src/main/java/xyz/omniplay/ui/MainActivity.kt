@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_MUSIC_FOLDER_URI = "key_music_folder_uri"
         const val KEY_MUSIC_FOLDERS_SET = "key_music_folders_set"
         const val KEY_SHOW_ALBUM_ART_IN_PLAYLIST = "key_show_album_art_in_playlist"
+        const val KEY_FETCH_ONLINE_ARTWORK = "key_fetch_online_artwork"
         private const val KEY_SORT_FIELD = "key_sort_field"
         private const val KEY_SORT_ASCENDING = "key_sort_ascending"
         const val KEY_UNIVERSAL_SEARCH = "key_universal_search"
