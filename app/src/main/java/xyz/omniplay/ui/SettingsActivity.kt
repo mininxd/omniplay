@@ -220,9 +220,9 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showThemeStyleDialog() {
         val currentStyle = ThemeHelper.getThemeStyle(this)
-        val styles = ThemeStyle.values()
+        val styles = ThemeHelper.getAvailableStyles()
         val names = styles.map { getString(it.titleRes) }.toTypedArray()
-        val selectedIndex = styles.indexOf(currentStyle)
+        val selectedIndex = styles.indexOf(currentStyle).let { if (it >= 0) it else 0 }
 
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.theme_style)

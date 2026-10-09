@@ -11,7 +11,7 @@ object ThemeColors {
     fun getPrimary(context: Context): Int {
         return MaterialColors.getColor(
             context,
-            androidx.appcompat.R.attr.colorPrimary,
+            com.google.android.material.R.attr.colorPrimary,
             ContextCompat.getColor(context, R.color.primary_accent)
         )
     }
@@ -30,7 +30,7 @@ object ThemeColors {
         return MaterialColors.getColor(
             context,
             com.google.android.material.R.attr.colorPrimaryContainer,
-            ContextCompat.getColor(context, R.color.primary_accent)
+            ContextCompat.getColor(context, R.color.theme_tone_primary_container)
         )
     }
 
@@ -39,7 +39,7 @@ object ThemeColors {
         return MaterialColors.getColor(
             context,
             com.google.android.material.R.attr.colorOnPrimaryContainer,
-            ContextCompat.getColor(context, R.color.on_primary)
+            ContextCompat.getColor(context, R.color.theme_tone_on_primary_container)
         )
     }
 
@@ -84,7 +84,7 @@ object ThemeColors {
         return MaterialColors.getColor(
             context,
             com.google.android.material.R.attr.colorSurfaceContainerLow,
-            ContextCompat.getColor(context, R.color.surface_dark)
+            ContextCompat.getColor(context, R.color.surface_container)
         )
     }
 
@@ -102,7 +102,7 @@ object ThemeColors {
         return MaterialColors.getColor(
             context,
             com.google.android.material.R.attr.colorSurfaceContainerHighest,
-            ContextCompat.getColor(context, R.color.slider_track_inactive)
+            ContextCompat.getColor(context, R.color.surface_container_highest)
         )
     }
 
@@ -128,7 +128,7 @@ object ThemeColors {
     fun getError(context: Context): Int {
         return MaterialColors.getColor(
             context,
-            androidx.appcompat.R.attr.colorError,
+            com.google.android.material.R.attr.colorError,
             ContextCompat.getColor(context, R.color.slider_cancel_accent)
         )
     }

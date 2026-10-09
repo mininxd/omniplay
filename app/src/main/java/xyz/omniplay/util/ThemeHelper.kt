@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.WindowCompat
+import com.google.android.material.color.DynamicColors
 import xyz.omniplay.R
 import xyz.omniplay.ui.MainActivity
 
@@ -31,6 +32,7 @@ enum class ThemeStyle(
     @StringRes val titleRes: Int,
     @StyleRes val themeOverlayRes: Int
 ) {
+    DYNAMIC("dynamic", R.string.theme_style_dynamic, 0),
     EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive),
     TONE("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
     SALAD("salad", R.string.theme_style_salad, R.style.ThemeOverlay_Omniplay_Salad),
@@ -38,8 +40,12 @@ enum class ThemeStyle(
     VIBRANT("vibrant", R.string.theme_style_vibrant, R.style.ThemeOverlay_Omniplay_Vibrant);
 
     companion object {
+        fun getDefault(): ThemeStyle {
+            return if (DynamicColors.isDynamicColorAvailable()) DYNAMIC else EXPRESSIVE
+        }
+
         fun fromKey(key: String?): ThemeStyle {
-            return values().firstOrNull { it.key == key } ?: EXPRESSIVE
+            return values().firstOrNull { it.key == key } ?: getDefault()
         }
     }
 }
@@ -75,9 +81,24 @@ object ThemeHelper {
         }
     }
 
+    fun getAvailableStyles(): List<ThemeStyle> {
+        return if (DynamicColors.isDynamicColorAvailable()) {
+            ThemeStyle.values().toList()
+        } else {
+            ThemeStyle.values().filter { it != ThemeStyle.DYNAMIC }
+        }
+    }
+
     fun getThemeStyle(context: Context): ThemeStyle {
         val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        return ThemeStyle.fromKey(prefs.getString(KEY_THEME_STYLE, ThemeStyle.EXPRESSIVE.key))
+        val defaultKey = ThemeStyle.getDefault().key
+        val key = prefs.getString(KEY_THEME_STYLE, defaultKey)
+        val style = ThemeStyle.fromKey(key)
+        return if (!DynamicColors.isDynamicColorAvailable() && style == ThemeStyle.DYNAMIC) {
+            ThemeStyle.EXPRESSIVE
+        } else {
+            style
+        }
     }
 
     fun setThemeStyle(context: Context, style: ThemeStyle) {
@@ -88,6 +109,9 @@ object ThemeHelper {
     fun applyTheme(activity: Activity) {
         val mode = getThemeMode(activity)
         AppCompatDelegate.setDefaultNightMode(mode.nightMode)
+        if (DynamicColors.isDynamicColorAvailable()) {
+            DynamicColors.applyIfAvailable(activity)
+        }
         val style = getThemeStyle(activity)
         if (style.themeOverlayRes != 0) {
             activity.theme.applyStyle(style.themeOverlayRes, true)

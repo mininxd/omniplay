@@ -1664,14 +1664,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
      */
     private fun updatePeekTextContrast(isBright: Boolean) {
         if (isBright) {
-            // Bright album art: use dark text
-            binding.peekLabelText.setTextColor(Color.parseColor("#1E3A8A"))
+            // Bright album art: use dynamic theme colors
+            binding.peekLabelText.setTextColor(ThemeColors.getPrimary(this))
             binding.peekLabelText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#80FFFFFF"))
 
-            binding.peekTitleText.setTextColor(Color.parseColor("#111827"))
+            binding.peekTitleText.setTextColor(ThemeColors.getOnSurface(this))
             binding.peekTitleText.setShadowLayer(4f, 0f, 1f, Color.parseColor("#99FFFFFF"))
 
-            binding.peekArtistText.setTextColor(Color.parseColor("#374151"))
+            binding.peekArtistText.setTextColor(ThemeColors.getOnSurfaceVariant(this))
             binding.peekArtistText.setShadowLayer(3f, 0f, 1f, Color.parseColor("#99FFFFFF"))
         } else {
             // Dark album art: use white text
