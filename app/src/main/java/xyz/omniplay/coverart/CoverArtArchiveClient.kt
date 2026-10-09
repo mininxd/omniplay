@@ -44,7 +44,7 @@ object CoverArtArchiveClient {
     private const val WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
     private const val WIKIMEDIA_COMMONS_FILE_URL = "https://commons.wikimedia.org/wiki/Special:FilePath"
 
-    private const val USER_AGENT = "Omniplay/0.6.1 (https://github.com/mininxd/omniplay)"
+    private const val USER_AGENT = "Omniplay/0.7 (https://github.com/mininxd/omniplay)"
     private const val TIMEOUT_MS = 10000
     private const val MAX_DIMENSION = 800
     private const val MAX_DISK_CACHE_SIZE = 40 * 1024 * 1024L // 40MB
