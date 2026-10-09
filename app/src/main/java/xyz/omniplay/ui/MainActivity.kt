@@ -22,7 +22,6 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
-import android.view.ViewGroup
 import android.os.Handler
 import android.os.Looper
 import android.view.animation.DecelerateInterpolator
@@ -2185,7 +2184,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 R.id.btn_filter_folders -> setFilterMode(LibraryFilterMode.FOLDER)
             }
         }
-        applyToggleGroupShapes()
 
         binding.btnClearFilter.setOnClickListener {
             selectedFilterValue = null
@@ -2214,110 +2212,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
             updateFilterSubList()
             applyCurrentFilter()
-            applyToggleGroupShapes()
-        }
-    }
-
-    private fun applyToggleGroupShapes() {
-        val radius = 19f * resources.displayMetrics.density
-        val zero = 0f
-        val strokeWidth = (1 * resources.displayMetrics.density).toInt().coerceAtLeast(1)
-
-        val isFoldersVisible = binding.btnFilterFolders.visibility == View.VISIBLE
-
-        binding.btnFilterArtists.shapeAppearanceModel = binding.btnFilterArtists.shapeAppearanceModel.toBuilder()
-            .setTopLeftCornerSize(radius)
-            .setBottomLeftCornerSize(radius)
-            .setTopRightCornerSize(zero)
-            .setBottomRightCornerSize(zero)
-            .build()
-        (binding.btnFilterArtists.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-            it.marginStart = 0
-            it.marginEnd = 0
-            binding.btnFilterArtists.layoutParams = it
-        }
-
-        if (isFoldersVisible) {
-            binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
-                .setTopLeftCornerSize(zero)
-                .setBottomLeftCornerSize(zero)
-                .setTopRightCornerSize(zero)
-                .setBottomRightCornerSize(zero)
-                .build()
-            (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                it.marginStart = -strokeWidth
-                it.marginEnd = 0
-                binding.btnFilterAlbums.layoutParams = it
-            }
-
-            binding.btnFilterFolders.shapeAppearanceModel = binding.btnFilterFolders.shapeAppearanceModel.toBuilder()
-                .setTopLeftCornerSize(zero)
-                .setBottomLeftCornerSize(zero)
-                .setTopRightCornerSize(radius)
-                .setBottomRightCornerSize(radius)
-                .build()
-            (binding.btnFilterFolders.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                it.marginStart = -strokeWidth
-                it.marginEnd = 0
-                binding.btnFilterFolders.layoutParams = it
-            }
-        } else {
-            binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
-                .setTopLeftCornerSize(zero)
-                .setBottomLeftCornerSize(zero)
-                .setTopRightCornerSize(radius)
-                .setBottomRightCornerSize(radius)
-                .build()
-            (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                it.marginStart = -strokeWidth
-                it.marginEnd = 0
-                binding.btnFilterAlbums.layoutParams = it
-            }
-        }
-
-        binding.filterToggleGroup.post {
-            val postFoldersVisible = binding.btnFilterFolders.visibility == View.VISIBLE
-            binding.btnFilterArtists.shapeAppearanceModel = binding.btnFilterArtists.shapeAppearanceModel.toBuilder()
-                .setTopLeftCornerSize(radius)
-                .setBottomLeftCornerSize(radius)
-                .setTopRightCornerSize(zero)
-                .setBottomRightCornerSize(zero)
-                .build()
-
-            if (postFoldersVisible) {
-                binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
-                    .setTopLeftCornerSize(zero)
-                    .setBottomLeftCornerSize(zero)
-                    .setTopRightCornerSize(zero)
-                    .setBottomRightCornerSize(zero)
-                    .build()
-                (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                    it.marginStart = -strokeWidth
-                    binding.btnFilterAlbums.layoutParams = it
-                }
-
-                binding.btnFilterFolders.shapeAppearanceModel = binding.btnFilterFolders.shapeAppearanceModel.toBuilder()
-                    .setTopLeftCornerSize(zero)
-                    .setBottomLeftCornerSize(zero)
-                    .setTopRightCornerSize(radius)
-                    .setBottomRightCornerSize(radius)
-                    .build()
-                (binding.btnFilterFolders.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                    it.marginStart = -strokeWidth
-                    binding.btnFilterFolders.layoutParams = it
-                }
-            } else {
-                binding.btnFilterAlbums.shapeAppearanceModel = binding.btnFilterAlbums.shapeAppearanceModel.toBuilder()
-                    .setTopLeftCornerSize(zero)
-                    .setBottomLeftCornerSize(zero)
-                    .setTopRightCornerSize(radius)
-                    .setBottomRightCornerSize(radius)
-                    .build()
-                (binding.btnFilterAlbums.layoutParams as? ViewGroup.MarginLayoutParams)?.let {
-                    it.marginStart = -strokeWidth
-                    binding.btnFilterAlbums.layoutParams = it
-                }
-            }
         }
     }
 
@@ -2389,7 +2283,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 applyCurrentFilter()
             }
         }
-        applyToggleGroupShapes()
     }
 
     private fun updateFilterSubList() {
@@ -2725,7 +2618,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 setFilterMode(LibraryFilterMode.ARTIST)
             }
         }
-        applyToggleGroupShapes()
     }
 
     private fun updateSongList(songs: List<Song>) {
