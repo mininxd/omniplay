@@ -1,70 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Background & Surface - Material 3 Expressive Baseline -->
-    <color name="background_dark">#141218</color>
-    <color name="surface_dark">#141218</color>
-    <color name="surface_container">#211F26</color>
-    <color name="surface_container_high">#2B2930</color>
-    <color name="surface_container_highest">#36343B</color>
+    <!-- Background & Surface - Material 3 Expressive Baseline (Light) -->
+    <color name="background_dark">#FEF7FF</color>
+    <color name="surface_dark">#FEF7FF</color>
+    <color name="surface_container">#F3EDF7</color>
+    <color name="surface_container_high">#ECE6F0</color>
+    <color name="surface_container_highest">#E6E0E9</color>
 
-    <!-- Material You Primary & Accent (Default M3 Expressive Baseline fallback) -->
-    <color name="primary_accent">#D0BCFF</color>
-    <color name="primary_variant">#CCC2DC</color>
-    <color name="on_primary">#381E72</color>
+    <!-- Material You Primary & Accent (Default M3 Expressive Baseline fallback - Light) -->
+    <color name="primary_accent">#65558F</color>
+    <color name="primary_variant">#625B71</color>
+    <color name="on_primary">#FFFFFF</color>
 
-    <!-- Text colors -->
-    <color name="text_primary">#E6E0E9</color>
-    <color name="text_secondary">#CAC4D0</color>
-    <color name="text_tertiary">#938F99</color>
+    <!-- Text colors (Light) -->
+    <color name="text_primary">#1D1B20</color>
+    <color name="text_secondary">#49454F</color>
+    <color name="text_tertiary">#79747E</color>
 
-    <!-- Controls & Material You Slider -->
-    <color name="control_tint">#CAC4D0</color>
-    <color name="control_tint_active">#D0BCFF</color>
-    <color name="control_tint_inactive">#49454F</color>
-    <color name="slider_track_inactive">#49454F</color>
-    <color name="slider_track_active">#D0BCFF</color>
-    <color name="slider_thumb">#D0BCFF</color>
-    <color name="slider_halo">#33D0BCFF</color>
+    <!-- Controls & Material You Slider (Light) -->
+    <color name="control_tint">#49454F</color>
+    <color name="control_tint_active">#65558F</color>
+    <color name="control_tint_inactive">#CAC4D0</color>
+    <color name="slider_track_inactive">#E6E0E9</color>
+    <color name="slider_track_active">#65558F</color>
+    <color name="slider_thumb">#65558F</color>
+    <color name="slider_halo">#3365558F</color>
 
     <!-- System & Window -->
-    <color name="status_bar_color">#141218</color>
-    <color name="navigation_bar_color">#141218</color>
+    <color name="status_bar_color">#FEF7FF</color>
+    <color name="navigation_bar_color">#FEF7FF</color>
 
     <!-- Seek cancel indicator -->
-    <color name="slider_cancel_accent">#F2B8B5</color>
+    <color name="slider_cancel_accent">#B3261E</color>
 
     <!-- Badges & Popup borders -->
-    <color name="badge_stroke">#49454F</color>
-    <color name="badge_cancel_stroke">#8C1D18</color>
+    <color name="badge_stroke">#CAC4D0</color>
+    <color name="badge_cancel_stroke">#B3261E</color>
 
-    <!-- Theme Palette Overlays (Pre-API 31 fallback values) -->
+    <!-- Theme Palette Overlays (Pre-API 31 fallback values - Light) -->
     <!-- Tone (Tonal Spot / Default) -->
-    <color name="theme_tone_primary">#D0BCFF</color>
-    <color name="theme_tone_on_primary">#381E72</color>
-    <color name="theme_tone_primary_container">#4F378B</color>
-    <color name="theme_tone_on_primary_container">#EADDFF</color>
+    <color name="theme_tone_primary">#65558F</color>
+    <color name="theme_tone_on_primary">#FFFFFF</color>
+    <color name="theme_tone_primary_container">#E8DEF8</color>
+    <color name="theme_tone_on_primary_container">#210F47</color>
 
     <!-- Expressive (Vibrant Warm Coral / Terracotta contrast) -->
-    <color name="theme_expressive_primary">#FFB4A9</color>
-    <color name="theme_expressive_on_primary">#680003</color>
-    <color name="theme_expressive_primary_container">#930006</color>
-    <color name="theme_expressive_on_primary_container">#FFDAD4</color>
+    <color name="theme_expressive_primary">#8F4C38</color>
+    <color name="theme_expressive_on_primary">#FFFFFF</color>
+    <color name="theme_expressive_primary_container">#FFDAD4</color>
+    <color name="theme_expressive_on_primary_container">#3A0B01</color>
 
     <!-- Salad (Fruit Salad / Fresh Emerald & Lime) -->
-    <color name="theme_salad_primary">#7DDC97</color>
-    <color name="theme_salad_on_primary">#003919</color>
-    <color name="theme_salad_primary_container">#005327</color>
-    <color name="theme_salad_on_primary_container">#99F9B1</color>
+    <color name="theme_salad_primary">#006E34</color>
+    <color name="theme_salad_on_primary">#FFFFFF</color>
+    <color name="theme_salad_primary_container">#99F9B1</color>
+    <color name="theme_salad_on_primary_container">#00210B</color>
 
     <!-- Monochrome (Minimalist Grayscale Silver) -->
-    <color name="theme_monochrome_primary">#E2E2E6</color>
-    <color name="theme_monochrome_on_primary">#1A1C1E</color>
-    <color name="theme_monochrome_primary_container">#44474E</color>
-    <color name="theme_monochrome_on_primary_container">#F2F0F4</color>
+    <color name="theme_monochrome_primary">#5E5E62</color>
+    <color name="theme_monochrome_on_primary">#FFFFFF</color>
+    <color name="theme_monochrome_primary_container">#E2E2E6</color>
+    <color name="theme_monochrome_on_primary_container">#1A1C1E</color>
 
     <!-- Vibrant (High-chroma Electric Cyan) -->
-    <color name="theme_vibrant_primary">#78D9EC</color>
-    <color name="theme_vibrant_on_primary">#00363F</color>
-    <color name="theme_vibrant_primary_container">#004E5B</color>
-    <color name="theme_vibrant_on_primary_container">#A3EEFF</color>
+    <color name="theme_vibrant_primary">#006877</color>
+    <color name="theme_vibrant_on_primary">#FFFFFF</color>
+    <color name="theme_vibrant_primary_container">#A3EEFF</color>
+    <color name="theme_vibrant_on_primary_container">#001F25</color>
 </resources>

@@ -246,6 +246,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         xyz.omniplay.util.ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        xyz.omniplay.util.ThemeHelper.applySystemBars(this)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

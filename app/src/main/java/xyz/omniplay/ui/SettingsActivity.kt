@@ -65,6 +65,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        ThemeHelper.applySystemBars(this)
 
         if (savedInstanceState != null) {
             isThemeChanged = savedInstanceState.getBoolean(EXTRA_THEME_CHANGED, false)

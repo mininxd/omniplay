@@ -2,9 +2,11 @@ package xyz.omniplay.util
 
 import android.app.Activity
 import android.content.Context
+import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.WindowCompat
 import xyz.omniplay.R
 import xyz.omniplay.ui.MainActivity
 
@@ -29,15 +31,15 @@ enum class ThemeStyle(
     @StringRes val titleRes: Int,
     @StyleRes val themeOverlayRes: Int
 ) {
-    TONE("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
     EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive),
+    TONE("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
     SALAD("salad", R.string.theme_style_salad, R.style.ThemeOverlay_Omniplay_Salad),
     MONOCHROME("monochrome", R.string.theme_style_monochrome, R.style.ThemeOverlay_Omniplay_Monochrome),
     VIBRANT("vibrant", R.string.theme_style_vibrant, R.style.ThemeOverlay_Omniplay_Vibrant);
 
     companion object {
         fun fromKey(key: String?): ThemeStyle {
-            return values().firstOrNull { it.key == key } ?: TONE
+            return values().firstOrNull { it.key == key } ?: EXPRESSIVE
         }
     }
 }
@@ -62,9 +64,20 @@ object ThemeHelper {
         AppCompatDelegate.setDefaultNightMode(mode.nightMode)
     }
 
+    fun isNightMode(context: Context): Boolean {
+        return when (getThemeMode(context)) {
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+            ThemeMode.AUTO -> {
+                val nightModeFlags = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+                nightModeFlags == Configuration.UI_MODE_NIGHT_YES
+            }
+        }
+    }
+
     fun getThemeStyle(context: Context): ThemeStyle {
         val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        return ThemeStyle.fromKey(prefs.getString(KEY_THEME_STYLE, ThemeStyle.TONE.key))
+        return ThemeStyle.fromKey(prefs.getString(KEY_THEME_STYLE, ThemeStyle.EXPRESSIVE.key))
     }
 
     fun setThemeStyle(context: Context, style: ThemeStyle) {
@@ -79,5 +92,14 @@ object ThemeHelper {
         if (style.themeOverlayRes != 0) {
             activity.theme.applyStyle(style.themeOverlayRes, true)
         }
+        applySystemBars(activity)
+    }
+
+    fun applySystemBars(activity: Activity) {
+        if (activity.javaClass.simpleName == "VideoPlayerActivity") return
+        val isLight = !isNightMode(activity)
+        val insetsController = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        insetsController.isAppearanceLightStatusBars = isLight
+        insetsController.isAppearanceLightNavigationBars = isLight
     }
 }

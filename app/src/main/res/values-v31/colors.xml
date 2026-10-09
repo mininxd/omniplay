@@ -1,73 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 Expressive Dynamic Colors (Android 12+ / API 31+) -->
+    <!-- Material 3 Expressive Dynamic Colors (Android 12+ / API 31+ Light Mode) -->
     <!-- System Monet Wallpaper-derived tokens -->
 
     <!-- Primary & Accent Roles -->
-    <color name="primary_accent">@android:color/system_accent1_200</color>
-    <color name="primary_variant">@android:color/system_accent1_300</color>
-    <color name="on_primary">@android:color/system_accent1_900</color>
+    <color name="primary_accent">@android:color/system_accent1_600</color>
+    <color name="primary_variant">@android:color/system_accent1_700</color>
+    <color name="on_primary">@android:color/white</color>
 
     <!-- Surfaces & Containers -->
-    <color name="background_dark">@android:color/system_neutral1_900</color>
-    <color name="surface_dark">@android:color/system_neutral1_900</color>
-    <color name="surface_container">@android:color/system_neutral1_800</color>
-    <color name="surface_container_high">@android:color/system_neutral1_700</color>
-    <color name="surface_container_highest">@android:color/system_neutral1_600</color>
+    <color name="background_dark">@android:color/system_neutral1_10</color>
+    <color name="surface_dark">@android:color/system_neutral1_10</color>
+    <color name="surface_container">@android:color/system_neutral1_100</color>
+    <color name="surface_container_high">@android:color/system_neutral1_200</color>
+    <color name="surface_container_highest">@android:color/system_neutral2_200</color>
 
     <!-- Text & Typography Roles -->
-    <color name="text_primary">@android:color/system_neutral1_50</color>
-    <color name="text_secondary">@android:color/system_neutral2_200</color>
-    <color name="text_tertiary">@android:color/system_neutral2_400</color>
+    <color name="text_primary">@android:color/system_neutral1_900</color>
+    <color name="text_secondary">@android:color/system_neutral2_700</color>
+    <color name="text_tertiary">@android:color/system_neutral2_500</color>
 
     <!-- Controls & Playback States -->
-    <color name="control_tint">@android:color/system_neutral2_200</color>
-    <color name="control_tint_active">@android:color/system_accent1_200</color>
-    <color name="control_tint_inactive">@android:color/system_neutral2_600</color>
+    <color name="control_tint">@android:color/system_neutral2_700</color>
+    <color name="control_tint_active">@android:color/system_accent1_600</color>
+    <color name="control_tint_inactive">@android:color/system_neutral2_300</color>
 
     <!-- Sliders & Seekbars -->
-    <color name="slider_track_inactive">@android:color/system_neutral1_700</color>
-    <color name="slider_track_active">@android:color/system_accent1_200</color>
-    <color name="slider_thumb">@android:color/system_accent1_200</color>
-    <color name="slider_halo">@android:color/system_accent1_700</color>
-    <color name="slider_cancel_accent">@android:color/system_accent3_300</color>
+    <color name="slider_track_inactive">@android:color/system_neutral1_200</color>
+    <color name="slider_track_active">@android:color/system_accent1_600</color>
+    <color name="slider_thumb">@android:color/system_accent1_600</color>
+    <color name="slider_halo">@android:color/system_accent1_200</color>
+    <color name="slider_cancel_accent">@android:color/system_accent3_600</color>
 
     <!-- System Bars -->
-    <color name="status_bar_color">@android:color/system_neutral1_900</color>
-    <color name="navigation_bar_color">@android:color/system_neutral1_900</color>
+    <color name="status_bar_color">@android:color/system_neutral1_10</color>
+    <color name="navigation_bar_color">@android:color/system_neutral1_10</color>
 
     <!-- Badges & Outlines -->
-    <color name="badge_stroke">@android:color/system_neutral2_700</color>
-    <color name="badge_cancel_stroke">@android:color/system_accent3_800</color>
+    <color name="badge_stroke">@android:color/system_neutral2_300</color>
+    <color name="badge_cancel_stroke">@android:color/system_accent3_700</color>
 
-    <!-- Theme Palette Overlays (Android 12+ / API 31+ System Monet Dynamic Roles) -->
+    <!-- Theme Palette Overlays (Android 12+ / API 31+ System Monet Dynamic Roles - Light) -->
     <!-- Tone (System Accent 1 - Primary wallpaper hue) -->
-    <color name="theme_tone_primary">@android:color/system_accent1_200</color>
-    <color name="theme_tone_on_primary">@android:color/system_accent1_900</color>
-    <color name="theme_tone_primary_container">@android:color/system_accent1_700</color>
-    <color name="theme_tone_on_primary_container">@android:color/system_accent1_100</color>
+    <color name="theme_tone_primary">@android:color/system_accent1_600</color>
+    <color name="theme_tone_on_primary">@android:color/white</color>
+    <color name="theme_tone_primary_container">@android:color/system_accent1_100</color>
+    <color name="theme_tone_on_primary_container">@android:color/system_accent1_900</color>
 
     <!-- Expressive (System Accent 3 - Contrasting tertiary dynamic hue) -->
-    <color name="theme_expressive_primary">@android:color/system_accent3_200</color>
-    <color name="theme_expressive_on_primary">@android:color/system_accent3_900</color>
-    <color name="theme_expressive_primary_container">@android:color/system_accent3_700</color>
-    <color name="theme_expressive_on_primary_container">@android:color/system_accent3_100</color>
+    <color name="theme_expressive_primary">@android:color/system_accent3_600</color>
+    <color name="theme_expressive_on_primary">@android:color/white</color>
+    <color name="theme_expressive_primary_container">@android:color/system_accent3_100</color>
+    <color name="theme_expressive_on_primary_container">@android:color/system_accent3_900</color>
 
     <!-- Salad (System Accent 2 - Playful secondary dynamic hue) -->
-    <color name="theme_salad_primary">@android:color/system_accent2_200</color>
-    <color name="theme_salad_on_primary">@android:color/system_accent2_900</color>
-    <color name="theme_salad_primary_container">@android:color/system_accent2_700</color>
-    <color name="theme_salad_on_primary_container">@android:color/system_accent2_100</color>
+    <color name="theme_salad_primary">@android:color/system_accent2_600</color>
+    <color name="theme_salad_on_primary">@android:color/white</color>
+    <color name="theme_salad_primary_container">@android:color/system_accent2_100</color>
+    <color name="theme_salad_on_primary_container">@android:color/system_accent2_900</color>
 
     <!-- Monochrome (System Neutral 1 - Pure grayscale dynamic values) -->
-    <color name="theme_monochrome_primary">@android:color/system_neutral1_100</color>
-    <color name="theme_monochrome_on_primary">@android:color/system_neutral1_900</color>
-    <color name="theme_monochrome_primary_container">@android:color/system_neutral1_700</color>
-    <color name="theme_monochrome_on_primary_container">@android:color/system_neutral1_50</color>
+    <color name="theme_monochrome_primary">@android:color/system_neutral1_700</color>
+    <color name="theme_monochrome_on_primary">@android:color/white</color>
+    <color name="theme_monochrome_primary_container">@android:color/system_neutral1_200</color>
+    <color name="theme_monochrome_on_primary_container">@android:color/system_neutral1_900</color>
 
-    <!-- Vibrant (System Accent 1_100 - Maximum vibrancy dynamic accent) -->
-    <color name="theme_vibrant_primary">@android:color/system_accent1_100</color>
-    <color name="theme_vibrant_on_primary">@android:color/system_accent1_900</color>
-    <color name="theme_vibrant_primary_container">@android:color/system_accent1_800</color>
-    <color name="theme_vibrant_on_primary_container">@android:color/system_accent1_50</color>
+    <!-- Vibrant (System Accent 1 - High vibrancy dynamic accent) -->
+    <color name="theme_vibrant_primary">@android:color/system_accent1_600</color>
+    <color name="theme_vibrant_on_primary">@android:color/white</color>
+    <color name="theme_vibrant_primary_container">@android:color/system_accent1_100</color>
+    <color name="theme_vibrant_on_primary_container">@android:color/system_accent1_900</color>
 </resources>
