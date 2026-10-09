@@ -270,7 +270,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showAboutDialog() {
         val message = """
-            Omniplay 0.5
+            Omniplay 0.6
             Open Source Music Player
             
             Supports: MP3, WAV, FLAC, AAC, M4A, OGG, OPUS, DSD (DSF/DFF), and more.
