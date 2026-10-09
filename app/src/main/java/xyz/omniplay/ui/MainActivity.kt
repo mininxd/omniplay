@@ -2680,13 +2680,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             val locale = Locale.getDefault()
             baseList.filter { song ->
                 if (isUniversalSearch) {
-                    song.title.lowercase(locale).contains(q) ||
-                    song.artist.lowercase(locale).contains(q) ||
-                    song.album.lowercase(locale).contains(q)
+                    song.title.lowercase(locale).contains(q)
                 } else {
-                    matchesFrontText(song.title, q, locale) ||
-                    matchesFrontText(song.artist, q, locale) ||
-                    matchesFrontText(song.album, q, locale)
+                    matchesFrontText(song.title, q, locale)
                 }
             }
         } else {
