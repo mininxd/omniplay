@@ -560,7 +560,7 @@
                 android:paddingTop="3dp"
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
-                android:text="bit perfect"
+                android:text="Bit Perfect"
                 android:textColor="#00E5FF"
                 android:textSize="11sp"
                 android:visibility="gone" />
