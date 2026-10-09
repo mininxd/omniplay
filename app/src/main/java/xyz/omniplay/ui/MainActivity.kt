@@ -125,6 +125,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var songAdapter: SongAdapter? = null
     private var currentSearchQuery = ""
     private var isUniversalSearch = false
+    private var safeTopCutoutInset: Int = 0
+    private var safeLeftCutoutInset: Int = 0
+    private var safeRightCutoutInset: Int = 0
 
     private var isFilterMenuOpen = false
     private var filterDrawerAnimator: ValueAnimator? = null
@@ -410,13 +413,21 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             bottomSheetBehavior.isFitToContents = false
             bottomSheetBehavior.halfExpandedRatio = 0.62f
             bottomSheetBehavior.maxHeight = -1
-            bottomSheetBehavior.expandedOffset = topInset
+            bottomSheetBehavior.expandedOffset = 0
         }
 
-        // Apply system window insets so queue peek header and list items are never hidden behind navigation bar
+        // Apply system window insets so queue peek header and list items are never hidden behind navigation bar or cutout
         ViewCompat.setOnApplyWindowInsetsListener(binding.playlistSlidingPanel) { _, insets ->
             val navInsets = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
             val statusInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val cutoutInsets = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            val topCutout = insets.displayCutout?.safeInsetTop ?: 0
+            val leftCutout = insets.displayCutout?.safeInsetLeft ?: 0
+            val rightCutout = insets.displayCutout?.safeInsetRight ?: 0
+
+            safeTopCutoutInset = maxOf(statusInsets.top, cutoutInsets.top, topCutout)
+            safeLeftCutoutInset = maxOf(cutoutInsets.left, leftCutout)
+            safeRightCutoutInset = maxOf(cutoutInsets.right, rightCutout)
 
             val basePeekHeight = (64 * resources.displayMetrics.density).toInt()
             bottomSheetBehavior.peekHeight = basePeekHeight + navInsets.bottom
@@ -428,12 +439,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 navInsets.bottom + (28 * resources.displayMetrics.density).toInt()
             )
 
-            updateSheetDimensions(statusInsets.top)
+            updateSheetDimensions(0)
+            updatePlaylistCutoutPadding()
             insets
         }
 
         binding.coordinatorRoot.post {
             updateSheetDimensions(0)
+            updatePlaylistCutoutPadding()
         }
 
         // Outer Scrim: Close queue when pressing / tapping / dragging down on the area outside the half-expanded queue
@@ -485,16 +498,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         binding.ivChevron.rotation = 180f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.queueScrimOverlay.alpha = 0.5f
+                        updatePlaylistCutoutPadding(1f)
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.queueScrimOverlay.alpha = 0.4f
+                        updatePlaylistCutoutPadding(0f)
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
                         binding.queueScrimOverlay.alpha = 0f
+                        updatePlaylistCutoutPadding(0f)
                         if (binding.searchBarContainer.visibility == View.VISIBLE) {
                             closeSearchBar(clearQuery = true)
                         }
@@ -537,6 +553,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         90f + ((slideOffset - halfSlideOffset) / (1f - halfSlideOffset)).coerceIn(0f, 1f) * 90f
                     }
                     binding.ivChevron.rotation = rotation
+
+                    val progressToExpanded = if (slideOffset <= halfSlideOffset) {
+                        0f
+                    } else {
+                        ((slideOffset - halfSlideOffset) / (1f - halfSlideOffset)).coerceIn(0f, 1f)
+                    }
+                    updatePlaylistCutoutPadding(progressToExpanded)
                 }
             }
         })
@@ -2733,6 +2756,29 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.btnSearchMode.alpha = 0.5f
             binding.btnSearchMode.contentDescription = getString(R.string.search_mode_first_text)
             binding.searchEditText.hint = getString(R.string.search_tracks_hint)
+        }
+    }
+
+    private fun updatePlaylistCutoutPadding(customProgress: Float? = null) {
+        if (!::bottomSheetBehavior.isInitialized) return
+        val progress = customProgress ?: when (bottomSheetBehavior.state) {
+            BottomSheetBehavior.STATE_EXPANDED -> 1f
+            else -> 0f
+        }
+        val topPadding = (safeTopCutoutInset * progress).toInt()
+        val leftPadding = if (progress > 0.05f) safeLeftCutoutInset else 0
+        val rightPadding = if (progress > 0.05f) safeRightCutoutInset else 0
+
+        if (binding.playlistSlidingPanel.paddingTop != topPadding ||
+            binding.playlistSlidingPanel.paddingLeft != leftPadding ||
+            binding.playlistSlidingPanel.paddingRight != rightPadding
+        ) {
+            binding.playlistSlidingPanel.setPadding(
+                leftPadding,
+                topPadding,
+                rightPadding,
+                0
+            )
         }
     }
 
