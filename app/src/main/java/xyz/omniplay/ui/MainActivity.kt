@@ -22,6 +22,10 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.text.Editable
+import android.text.TextWatcher
 import android.os.Handler
 import android.os.Looper
 import android.view.animation.DecelerateInterpolator
@@ -118,6 +122,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private var activeOngoingQueue = listOf<Song>()
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
     private var songAdapter: SongAdapter? = null
+    private var currentSearchQuery = ""
 
     private var isFilterMenuOpen = false
     private var filterDrawerAnimator: ValueAnimator? = null
@@ -328,6 +333,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     closeLeftMenu()
                 } else if (isLyricsShowing) {
                     closeLyricsCard()
+                } else if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                    closeSearchBar()
                 } else if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
                     bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
                 } else {
@@ -347,6 +354,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         if (isLyricsShowing) {
             closeLyricsCard()
+            return
+        }
+        if (binding.searchBarContainer.visibility == View.VISIBLE) {
+            closeSearchBar()
             return
         }
         if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
@@ -481,6 +492,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
                         binding.queueScrimOverlay.alpha = 0f
+                        if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                            closeSearchBar(clearQuery = true)
+                        }
                         if (isFilterPreviewActive) {
                             revertToOngoingQueue()
                         }
@@ -535,6 +549,48 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
         binding.sheetTitleText.isSelected = true
 
+        binding.btnSearchQueue.setOnClickListener {
+            if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+            }
+            if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                closeSearchBar()
+            } else {
+                openSearchBar()
+            }
+        }
+
+        binding.searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString()?.trim() ?: ""
+                currentSearchQuery = query
+                binding.btnClearSearch.visibility = if (query.isNotEmpty()) View.VISIBLE else View.GONE
+                applyCurrentFilter()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        binding.searchEditText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.hideSoftInputFromWindow(binding.searchEditText.windowToken, 0)
+                true
+            } else {
+                false
+            }
+        }
+
+        binding.btnClearSearch.setOnClickListener {
+            binding.searchEditText.setText("")
+            currentSearchQuery = ""
+            applyCurrentFilter()
+        }
+
+        binding.btnCloseSearch.setOnClickListener {
+            closeSearchBar()
+        }
+
         binding.btnSortQueue.setOnClickListener {
             if (::bottomSheetBehavior.isInitialized && bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
@@ -550,6 +606,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (xyz.omniplay.sync.OmniSyncManager.getInstance(this).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
                 Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
                 return@SongAdapter
+            }
+
+            if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                closeSearchBar(clearQuery = true)
             }
 
             val wasPreview = isFilterPreviewActive
@@ -2174,6 +2234,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (::bottomSheetBehavior.isInitialized) {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
             }
+            openSearchBar(clearExisting = true)
         }
 
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -2581,7 +2642,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        val filtered = sortSongs(baseList, currentSortField, isSortAscending)
+        val filteredBySearch = if (currentSearchQuery.isNotBlank()) {
+            val q = currentSearchQuery.lowercase(Locale.getDefault())
+            baseList.filter { song ->
+                song.title.lowercase(Locale.getDefault()).contains(q) ||
+                song.artist.lowercase(Locale.getDefault()).contains(q) ||
+                song.album.lowercase(Locale.getDefault()).contains(q)
+            }
+        } else {
+            baseList
+        }
+
+        val filtered = sortSongs(filteredBySearch, currentSortField, isSortAscending)
         displayedSongs = filtered
         songAdapter?.setSongs(filtered)
         playbackService?.currentSong?.let { songAdapter?.setCurrentPlayingSongId(it.id) }
@@ -2589,7 +2661,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val filterVal = selectedFilterValue
         if (!filterVal.isNullOrEmpty()) {
             binding.sheetTitleText.text = filterVal
-        } else if (isFilterPreviewActive && currentFilterMode == LibraryFilterMode.TRACK) {
+        } else if (currentFilterMode == LibraryFilterMode.TRACK && (isFilterPreviewActive || binding.searchBarContainer.visibility == View.VISIBLE)) {
             binding.sheetTitleText.text = getString(R.string.all_tracks)
         } else {
             binding.sheetTitleText.text = getString(R.string.queue_title)
@@ -2605,7 +2677,40 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
             binding.songsRecyclerView.visibility = View.GONE
+            if (currentSearchQuery.isNotBlank()) {
+                binding.emptyStateText.text = getString(R.string.no_tracks_found_format, currentSearchQuery)
+                binding.btnSelectFolderEmpty.visibility = View.GONE
+            } else {
+                binding.emptyStateText.text = getString(R.string.no_songs_found)
+                binding.btnSelectFolderEmpty.visibility = if (allScannedSongs.isEmpty()) View.VISIBLE else View.GONE
+            }
         }
+    }
+
+    private fun openSearchBar(clearExisting: Boolean = false) {
+        if (clearExisting) {
+            binding.searchEditText.setText("")
+            currentSearchQuery = ""
+        }
+        binding.searchBarContainer.visibility = View.VISIBLE
+        binding.searchEditText.post {
+            binding.searchEditText.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(binding.searchEditText, InputMethodManager.SHOW_IMPLICIT)
+        }
+        applyCurrentFilter()
+    }
+
+    private fun closeSearchBar(clearQuery: Boolean = true) {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.searchEditText.windowToken, 0)
+        binding.searchEditText.clearFocus()
+        if (clearQuery) {
+            binding.searchEditText.setText("")
+            currentSearchQuery = ""
+        }
+        binding.searchBarContainer.visibility = View.GONE
+        applyCurrentFilter()
     }
 
     private fun updateFolderFilterVisibility() {

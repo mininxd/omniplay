@@ -87,5 +87,10 @@
     <string name="folder_added">Folder added: %1$s</string>
     <string name="folder_removed">Folder removed: %1$s</string>
     <string name="done">Done</string>
+    <string name="search">Search</string>
+    <string name="search_tracks_hint">Search all tracks…</string>
+    <string name="clear_search">Clear search</string>
+    <string name="close_search">Close search</string>
+    <string name="no_tracks_found_format">No tracks found matching \"%1$s\"</string>
 </resources>
 
