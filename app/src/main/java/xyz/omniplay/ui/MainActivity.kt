@@ -2702,7 +2702,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val filterVal = selectedFilterValue
         if (!filterVal.isNullOrEmpty()) {
             binding.sheetTitleText.text = filterVal
-        } else if (currentFilterMode == LibraryFilterMode.TRACK && (isFilterPreviewActive || binding.searchBarContainer.visibility == View.VISIBLE)) {
+        } else if (isFilterPreviewActive && currentFilterMode == LibraryFilterMode.TRACK) {
             binding.sheetTitleText.text = getString(R.string.all_tracks)
         } else {
             binding.sheetTitleText.text = getString(R.string.queue_title)
