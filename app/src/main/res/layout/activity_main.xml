@@ -1005,6 +1005,7 @@
         android:layout_width="320dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
+        android:animateLayoutChanges="true"
         android:background="?attr/colorSurfaceContainerLow"
         android:clickable="true"
         android:focusable="true"
@@ -1084,7 +1085,7 @@
             android:layout_height="1dp"
             android:background="?attr/colorSurfaceContainer" />
 
-        <!-- All Tracks Quick-Action Card -->
+        <!-- All Tracks Quick-Action Card (Material 3 Expressive) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/card_all_tracks"
             android:layout_width="match_parent"
@@ -1095,32 +1096,39 @@
             android:clickable="true"
             android:focusable="true"
             app:cardBackgroundColor="?attr/colorSurfaceContainer"
-            app:cardCornerRadius="14dp"
+            app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
             app:strokeColor="?attr/colorOutlineVariant"
             app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="62dp"
+                android:layout_height="68dp"
                 android:background="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="14dp"
-                android:paddingEnd="14dp">
+                android:paddingEnd="16dp">
 
-                <FrameLayout
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_badge_material_you">
+                <!-- Expressive Icon Container -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_all_tracks_icon_container"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+                    app:cardCornerRadius="14dp"
+                    app:cardElevation="0dp"
+                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeWidth="1dp">
 
                     <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
+                        android:id="@+id/card_all_tracks_icon"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
                         android:layout_gravity="center"
                         android:src="@drawable/ic_music_note"
                         app:tint="?attr/colorPrimary" />
-                </FrameLayout>
+                </com.google.android.material.card.MaterialCardView>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -1136,7 +1144,7 @@
                         android:fontFamily="sans-serif-medium"
                         android:text="@string/all_tracks"
                         android:textColor="?attr/colorOnSurface"
-                        android:textSize="15sp" />
+                        android:textSize="15.5sp" />
 
                     <TextView
                         android:id="@+id/card_all_tracks_subtitle"
@@ -1149,81 +1157,91 @@
                 </LinearLayout>
 
                 <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
+                    android:id="@+id/card_all_tracks_arrow"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
                     android:src="@drawable/ic_chevron_right"
                     app:tint="?attr/colorOutline" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Section Header: Browse By -->
-        <TextView
+        <!-- Browse By Section Container (Can be smoothly hidden when All Tracks is clicked) -->
+        <LinearLayout
+            android:id="@+id/browse_by_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:layout_marginTop="16dp"
-            android:layout_marginEnd="20dp"
-            android:fontFamily="sans-serif-medium"
-            android:letterSpacing="0.08"
-            android:text="BROWSE BY"
-            android:textColor="?attr/colorOutline"
-            android:textSize="11sp" />
+            android:orientation="vertical">
 
-        <!-- Filter Toggle Group: Artists vs Albums -->
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/filter_toggle_group"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="8dp"
-            android:layout_marginEnd="16dp"
-            app:checkedButton="@id/btn_filter_artists"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_filter_artists"
-                style="@style/Widget.Omniplay.SegmentedButton"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
+            <!-- Section Header: Browse By -->
+            <TextView
+                android:id="@+id/header_browse_by"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginEnd="20dp"
                 android:fontFamily="sans-serif-medium"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:text="@string/filter_artists"
-                android:textSize="13sp" />
+                android:letterSpacing="0.08"
+                android:text="BROWSE BY"
+                android:textColor="?attr/colorOutline"
+                android:textSize="11sp" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_filter_albums"
-                style="@style/Widget.Omniplay.SegmentedButton"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:fontFamily="sans-serif-medium"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:text="@string/filter_albums"
-                android:textSize="13sp" />
+            <!-- Filter Toggle Group: Artists vs Albums -->
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/filter_toggle_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                app:checkedButton="@id/btn_filter_artists"
+                app:selectionRequired="true"
+                app:singleSelection="true">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_filter_folders"
-                style="@style/Widget.Omniplay.SegmentedButton"
-                android:layout_width="0dp"
-                android:layout_height="38dp"
-                android:layout_weight="1"
-                android:fontFamily="sans-serif-medium"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
-                android:text="@string/filter_folders"
-                android:textSize="13sp"
-                android:visibility="gone" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_filter_artists"
+                    style="@style/Widget.Omniplay.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="@string/filter_artists"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_filter_albums"
+                    style="@style/Widget.Omniplay.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="@string/filter_albums"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_filter_folders"
+                    style="@style/Widget.Omniplay.SegmentedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="@string/filter_folders"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
 
         <!-- Active Filter Banner (Visible when a specific Artist/Album is selected) -->
         <LinearLayout
