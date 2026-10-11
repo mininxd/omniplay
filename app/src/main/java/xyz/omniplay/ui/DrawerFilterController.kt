@@ -35,7 +35,8 @@ class DrawerFilterController(
     private val onUpdateAppTitle: () -> Unit,
     private val onCloseSearchBar: () -> Unit,
     private val onCollapseBottomSheet: () -> Unit,
-    private val onShowSortDialog: () -> Unit = {}
+    private val onShowSortDialog: () -> Unit = {},
+    private val onRescanClicked: () -> Unit = {}
 ) {
 
     var currentFilterMode: LibraryFilterMode = LibraryFilterMode.TRACK
@@ -578,6 +579,16 @@ class DrawerFilterController(
                     )
                 }
             )
+            items.add(
+                FilterItem(
+                    title = activity.getString(R.string.rescan_library),
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isRescan = true,
+                    subtitle = activity.getString(R.string.rescan_footer_hint)
+                )
+            )
             binding.drawerFilterInfoText.visibility = View.GONE
             drawerFilterAdapter?.setItems(items)
             binding.drawerFilterRecyclerView.scrollToPosition(0)
@@ -618,6 +629,16 @@ class DrawerFilterController(
                     )
                 }
             )
+            items.add(
+                FilterItem(
+                    title = activity.getString(R.string.rescan_library),
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isRescan = true,
+                    subtitle = activity.getString(R.string.rescan_footer_hint)
+                )
+            )
             binding.drawerFilterInfoText.text = "Artist: $artistTarget (${artistSongs.size} songs)"
             drawerFilterAdapter?.setItems(items)
             binding.drawerFilterRecyclerView.scrollToPosition(0)
@@ -655,6 +676,16 @@ class DrawerFilterController(
                         isSelected = (currentPlayingId == song.id)
                     )
                 }
+            )
+            items.add(
+                FilterItem(
+                    title = activity.getString(R.string.rescan_library),
+                    count = 0,
+                    isAlbum = false,
+                    isFolder = false,
+                    isRescan = true,
+                    subtitle = activity.getString(R.string.rescan_footer_hint)
+                )
             )
             binding.drawerFilterInfoText.text = "Album: $albumTarget (${albumSongs.size} songs)"
             drawerFilterAdapter?.setItems(items)
@@ -789,6 +820,11 @@ class DrawerFilterController(
     }
 
     private fun onFilterItemSelected(item: FilterItem) {
+        if (item.isRescan) {
+            onRescanClicked()
+            return
+        }
+
         if (item.isBack) {
             when {
                 isAllTracksDrillDown -> {

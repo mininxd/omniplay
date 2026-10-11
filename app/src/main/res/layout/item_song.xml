@@ -5,9 +5,11 @@
     android:id="@+id/song_item_root"
     android:layout_width="match_parent"
     android:layout_height="68dp"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="8dp"
     android:background="?attr/selectableItemBackground"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp">
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp">
 
     <!-- Album Art Thumbnail -->
     <com.google.android.material.card.MaterialCardView

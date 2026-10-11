@@ -939,15 +939,21 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <!-- In-Window Playlist Recycler View -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/songs_recycler_view"
+        <!-- In-Window Playlist Recycler View with Swipe Refresh -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_songs"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:paddingTop="8dp"
-            android:paddingBottom="24dp" />
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/songs_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="8dp"
+                android:paddingBottom="24dp" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
         <!-- Empty State View inside the panel -->
         <LinearLayout
@@ -1334,19 +1340,25 @@
             android:textColor="?attr/colorOutline"
             android:textSize="11.5sp" />
 
-        <!-- Dynamic Filter Sub-List (Artists or Albums) -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/drawer_filter_recycler_view"
+        <!-- Dynamic Filter Sub-List with Swipe Refresh -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipe_refresh_drawer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginStart="14dp"
-            android:layout_marginEnd="14dp"
             android:layout_marginTop="4dp"
-            android:layout_weight="1"
-            android:clipToPadding="false"
-            android:overScrollMode="ifContentScrolls"
-            android:paddingBottom="12dp"
-            android:visibility="visible" />
+            android:layout_marginEnd="14dp"
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/drawer_filter_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:overScrollMode="ifContentScrolls"
+                android:paddingBottom="12dp"
+                android:visibility="visible" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     </LinearLayout>
 

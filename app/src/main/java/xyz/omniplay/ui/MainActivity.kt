@@ -300,7 +300,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
             },
             onCollapseBottomSheet = { playlistPanelController.collapse() },
-            onShowSortDialog = { showSortDialog() }
+            onShowSortDialog = { showSortDialog() },
+            onRescanClicked = { rescanMusic() }
         )
 
         playbackGestureController = PlaybackGestureController(
@@ -440,45 +441,73 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isShowArt = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
-        songAdapter = SongAdapter(showAlbumArt = isShowArt) { song, _ ->
-            if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) {
-                Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
-                return@SongAdapter
-            }
-
-            if (binding.searchBarContainer.visibility == View.VISIBLE) {
-                closeSearchBar(clearQuery = true)
-            }
-
-            val wasPreview = drawerFilterController.isFilterPreviewActive
-            drawerFilterController.isFilterPreviewActive = false
-            drawerFilterController.activeOngoingQueueTitle = drawerFilterController.selectedFilterValue
-            drawerFilterController.activeOngoingFilterMode = drawerFilterController.currentFilterMode
-
-            playlistPanelController.collapse()
-
-            playbackService?.let { service ->
-                val fullList = if (displayedSongs.isNotEmpty()) {
-                    displayedSongs
-                } else if (allScannedSongs.isNotEmpty()) {
-                    SongSortHelper.sortSongs(this, allScannedSongs, currentSortField, isSortAscending)
-                } else {
-                    listOf(song)
+        songAdapter = SongAdapter(
+            showAlbumArt = isShowArt,
+            onSongClicked = { song, _ ->
+                if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) {
+                    Toast.makeText(this, "OmniSync is active: Disconnect from OmniSync to play local media", Toast.LENGTH_SHORT).show()
+                    return@SongAdapter
                 }
-                drawerFilterController.activeOngoingQueue = fullList
 
-                val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
-
-                val queueMatches = !wasPreview &&
-                        service.queue.size == fullList.size &&
-                        service.queue.any { it.id == song.id }
-
-                if (queueMatches) {
-                    service.playSongFromPlaylist(song, startPlaying = true)
-                } else {
-                    service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
+                if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                    closeSearchBar(clearQuery = true)
                 }
+
+                val wasPreview = drawerFilterController.isFilterPreviewActive
+                drawerFilterController.isFilterPreviewActive = false
+                drawerFilterController.activeOngoingQueueTitle = drawerFilterController.selectedFilterValue
+                drawerFilterController.activeOngoingFilterMode = drawerFilterController.currentFilterMode
+
+                playlistPanelController.collapse()
+
+                playbackService?.let { service ->
+                    val fullList = if (displayedSongs.isNotEmpty()) {
+                        displayedSongs
+                    } else if (allScannedSongs.isNotEmpty()) {
+                        SongSortHelper.sortSongs(this, allScannedSongs, currentSortField, isSortAscending)
+                    } else {
+                        listOf(song)
+                    }
+                    drawerFilterController.activeOngoingQueue = fullList
+
+                    val targetIdx = fullList.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+
+                    val queueMatches = !wasPreview &&
+                            service.queue.size == fullList.size &&
+                            service.queue.any { it.id == song.id }
+
+                    if (queueMatches) {
+                        service.playSongFromPlaylist(song, startPlaying = true)
+                    } else {
+                        service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
+                    }
+                }
+            },
+            onRescanClicked = {
+                rescanMusic()
             }
+        )
+
+        binding.swipeRefreshSongs.setColorSchemeColors(
+            ThemeColors.getPrimary(this),
+            ThemeColors.getSecondary(this)
+        )
+        binding.swipeRefreshSongs.setProgressBackgroundColorSchemeColor(
+            ThemeColors.getSurfaceContainerHigh(this)
+        )
+        binding.swipeRefreshSongs.setOnRefreshListener {
+            rescanMusic()
+        }
+
+        binding.swipeRefreshDrawer.setColorSchemeColors(
+            ThemeColors.getPrimary(this),
+            ThemeColors.getSecondary(this)
+        )
+        binding.swipeRefreshDrawer.setProgressBackgroundColorSchemeColor(
+            ThemeColors.getSurfaceContainerHigh(this)
+        )
+        binding.swipeRefreshDrawer.setOnRefreshListener {
+            rescanMusic()
         }
 
         binding.songsRecyclerView.adapter = songAdapter
@@ -713,6 +742,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         lifecycleScope.launch {
             try {
+                if (isRescan) {
+                    binding.swipeRefreshSongs.isRefreshing = true
+                    binding.swipeRefreshDrawer.isRefreshing = true
+                }
+
                 if (!isRescan) {
                     val cachedSongs = withContext(Dispatchers.IO) {
                         musicDatabase.getAllSongs()
@@ -761,6 +795,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } catch (e: Exception) {
                 updateSongList(emptyList())
                 Toast.makeText(this@MainActivity, "Error scanning folders: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                binding.swipeRefreshSongs.isRefreshing = false
+                binding.swipeRefreshDrawer.isRefreshing = false
             }
         }
     }
@@ -859,10 +896,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
+            binding.swipeRefreshSongs.visibility = View.VISIBLE
             binding.songsRecyclerView.visibility = View.VISIBLE
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
+            binding.swipeRefreshSongs.visibility = View.GONE
             binding.songsRecyclerView.visibility = View.GONE
             if (currentSearchQuery.isNotBlank()) {
                 binding.emptyStateText.text = getString(R.string.no_tracks_found_format, currentSearchQuery)
