@@ -98,5 +98,6 @@
     <string name="close_search">Close search</string>
     <string name="search_mode">Search mode</string>
     <string name="no_tracks_found_format">No tracks found matching \"%1$s\"</string>
+    <string name="sort_songs">Sort Songs</string>
 </resources>
 

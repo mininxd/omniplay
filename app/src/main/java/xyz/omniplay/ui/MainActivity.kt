@@ -299,7 +299,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     closeSearchBar(clearQuery = true)
                 }
             },
-            onCollapseBottomSheet = { playlistPanelController.collapse() }
+            onCollapseBottomSheet = { playlistPanelController.collapse() },
+            onShowSortDialog = { showSortDialog() }
         )
 
         playbackGestureController = PlaybackGestureController(
@@ -780,13 +781,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     fun updateAppTitle() {
-        val isBottomSheetOpen = !playlistPanelController.isCollapsed()
-        val isFilterPreviewActive = drawerFilterController.isFilterPreviewActive
-        if (isFilterPreviewActive || isBottomSheetOpen) {
-            binding.appTitleText.text = getString(R.string.music_library)
-        } else {
-            binding.appTitleText.text = getString(R.string.app_name)
-        }
+        binding.appTitleText.text = getString(R.string.app_name)
     }
 
     private fun applyCurrentFilter() {
@@ -969,9 +964,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showSortDialog() {
+        val filterMode = if (drawerFilterController.isAllTracksDrillDown) {
+            LibraryFilterMode.TRACK
+        } else {
+            drawerFilterController.currentFilterMode
+        }
+
         SongSortHelper.showSortDialog(
             activity = this,
-            currentFilterMode = drawerFilterController.currentFilterMode,
+            currentFilterMode = filterMode,
             currentSortField = currentSortField,
             isSortAscending = isSortAscending
         ) { field, ascending ->
@@ -985,6 +986,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 .apply()
 
             applyCurrentFilter()
+            drawerFilterController.updateFilterSubList()
 
             if (!drawerFilterController.isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
                 playbackService?.refreshQueue(displayedSongs)

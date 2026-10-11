@@ -34,7 +34,8 @@ class DrawerFilterController(
     private val onApplyFilterRequested: () -> Unit,
     private val onUpdateAppTitle: () -> Unit,
     private val onCloseSearchBar: () -> Unit,
-    private val onCollapseBottomSheet: () -> Unit
+    private val onCollapseBottomSheet: () -> Unit,
+    private val onShowSortDialog: () -> Unit = {}
 ) {
 
     var currentFilterMode: LibraryFilterMode = LibraryFilterMode.TRACK
@@ -177,6 +178,10 @@ class DrawerFilterController(
             }
         }
 
+        binding.cardAllTracksSortContainer.setOnClickListener {
+            onShowSortDialog()
+        }
+
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             isAllTracksDrillDown = false
@@ -274,6 +279,10 @@ class DrawerFilterController(
             binding.cardAllTracksSubtitle.setBackgroundResource(R.drawable.bg_badge_material_you)
             binding.cardAllTracksSubtitle.setPadding((8 * density).toInt(), (2 * density).toInt(), (8 * density).toInt(), (2 * density).toInt())
 
+            binding.cardAllTracksSortContainer.visibility = View.VISIBLE
+            binding.cardAllTracksSortContainer.setCardBackgroundColor(surfaceContainerHighest)
+            binding.cardAllTracksSort.setColorFilter(primary)
+
             binding.cardAllTracksArrowContainer.setCardBackgroundColor(surfaceContainerHighest)
             binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_down)
             binding.cardAllTracksArrow.setColorFilter(primary)
@@ -286,6 +295,8 @@ class DrawerFilterController(
             val onSurface = ThemeColors.getOnSurface(activity)
             val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(activity)
             val outline = ThemeColors.getOutline(activity)
+
+            binding.cardAllTracksSortContainer.visibility = View.GONE
 
             binding.cardAllTracks.setCardBackgroundColor(surfaceContainer)
             binding.cardAllTracks.strokeColor = outlineVariant
