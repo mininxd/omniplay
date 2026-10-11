@@ -66,7 +66,7 @@ class MusicScanner(private val context: Context) {
      * First queries MediaStore filtered by the folder path for fast retrieval and rich metadata.
      * If MediaStore returns no songs (e.g. unindexed folder, .nomedia), falls back to SAF traversal.
      */
-    suspend fun scanFolder(treeUri: Uri): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun scanFolder(treeUri: Uri, priorityFolderName: String? = null): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
         val folderRelativePath = getRelativePathFromTreeUri(treeUri)
 
@@ -78,7 +78,7 @@ class MusicScanner(private val context: Context) {
             } else {
                 DocumentsContract.getTreeDocumentId(treeUri)
             }
-            scanFolderDocumentsContract(treeUri, rootDocId, rootFolderName, songsList)
+            scanFolderDocumentsContract(treeUri, rootDocId, rootFolderName, songsList, priorityFolderName = priorityFolderName)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -229,12 +229,69 @@ class MusicScanner(private val context: Context) {
         songsList
     }
 
+    /**
+     * Prioritized fast scan for a specific or nested folder.
+     * Queries MediaStore first for instant retrieval, supplemented by SAF for that folder.
+     */
+    suspend fun scanPriorityFolder(
+        folderPath: String,
+        folderUris: List<Uri>
+    ): List<Song> = withContext(Dispatchers.IO) {
+        val prioritySongs = mutableListOf<Song>()
+        val cleanPath = folderPath.trim('/')
+
+        // 1. Fast MediaStore query for this folder path
+        try {
+            val msSongs = scanMediaStoreForFolder(cleanPath)
+            prioritySongs.addAll(msSongs)
+            if (cleanPath.contains('/')) {
+                val lastSeg = cleanPath.substringAfterLast('/')
+                val msLastSeg = scanMediaStoreForFolder(lastSeg)
+                prioritySongs.addAll(msLastSeg)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. Direct SAF query for matching folder files
+        val pLower = cleanPath.substringAfterLast('/').lowercase(Locale.ROOT)
+        for (treeUri in folderUris) {
+            try {
+                val rootFolderName = getRelativePathFromTreeUri(treeUri)?.substringAfterLast('/')?.ifEmpty { "Music" } ?: "Music"
+                val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
+                    DocumentsContract.getDocumentId(treeUri)
+                } else {
+                    DocumentsContract.getTreeDocumentId(treeUri)
+                }
+                val safSongs = mutableListOf<Song>()
+                scanFolderDocumentsContract(
+                    treeUri = treeUri,
+                    parentDocId = rootDocId,
+                    currentFolderName = rootFolderName,
+                    songsList = safSongs,
+                    priorityFolderName = cleanPath
+                )
+                val matchingSaf = safSongs.filter { s ->
+                    val sFolder = s.folderName.lowercase(Locale.ROOT)
+                    val sPath = s.filePath.lowercase(Locale.ROOT)
+                    sFolder.contains(pLower) || sPath.contains(pLower)
+                }
+                prioritySongs.addAll(matchingSaf)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        prioritySongs.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
+    }
+
     private fun scanFolderDocumentsContract(
         treeUri: Uri,
         parentDocId: String,
         currentFolderName: String,
         songsList: MutableList<Song>,
-        visitedDocIds: MutableSet<String> = mutableSetOf()
+        visitedDocIds: MutableSet<String> = mutableSetOf(),
+        priorityFolderName: String? = null
     ) {
         if (!visitedDocIds.add(parentDocId)) return
         val childrenUri = try {
@@ -295,8 +352,18 @@ class MusicScanner(private val context: Context) {
             e.printStackTrace()
         }
 
-        for ((subDirDocId, dirName) in subDirs) {
-            scanFolderDocumentsContract(treeUri, subDirDocId, dirName, songsList, visitedDocIds)
+        val sortedSubDirs = if (!priorityFolderName.isNullOrBlank()) {
+            val pLower = priorityFolderName.lowercase(Locale.ROOT)
+            subDirs.sortedByDescending { (_, dirName) ->
+                val dLower = dirName.lowercase(Locale.ROOT)
+                dLower.endsWith(pLower) || dLower.contains(pLower)
+            }
+        } else {
+            subDirs
+        }
+
+        for ((subDirDocId, dirName) in sortedSubDirs) {
+            scanFolderDocumentsContract(treeUri, subDirDocId, dirName, songsList, visitedDocIds, priorityFolderName)
         }
     }
 

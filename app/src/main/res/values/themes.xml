@@ -112,5 +112,7 @@
         <item name="android:textColor">@color/segmented_button_text</item>
         <item name="iconTint">@color/segmented_button_text</item>
         <item name="strokeColor">@color/segmented_button_stroke</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="rippleColor">?attr/colorControlHighlight</item>
     </style>
 </resources>

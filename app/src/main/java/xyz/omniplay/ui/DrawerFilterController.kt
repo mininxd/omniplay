@@ -239,6 +239,7 @@ class DrawerFilterController(
         }
 
         updateAllTracksCardUI(isActive = false)
+        updateSegmentedButtonsTheming()
     }
 
     /**
@@ -1057,6 +1058,61 @@ class DrawerFilterController(
                 setFilterMode(LibraryFilterMode.ARTIST)
             }
         }
+        updateSegmentedButtonsTheming()
+    }
+
+    /**
+     * Updates the segmented buttons (Artists, Albums, Folders) theming dynamically
+     * to guarantee consistency across all themes and dark/light modes.
+     */
+    fun updateSegmentedButtonsTheming() {
+        val density = activity.resources.displayMetrics.density
+        val primaryContainer = ThemeColors.getPrimaryContainer(activity)
+        val onPrimaryContainer = ThemeColors.getOnPrimaryContainer(activity)
+        val primary = ThemeColors.getPrimary(activity)
+        val surfaceContainer = ThemeColors.getSurfaceContainer(activity)
+        val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(activity)
+        val outlineVariant = ThemeColors.getOutlineVariant(activity)
+        val highlight = ThemeColors.getColorControlHighlight(activity)
+
+        val states = arrayOf(
+            intArrayOf(android.R.attr.state_checked),
+            intArrayOf(android.R.attr.state_selected),
+            intArrayOf()
+        )
+        val bgColors = intArrayOf(primaryContainer, primaryContainer, surfaceContainer)
+        val bgTintList = ColorStateList(states, bgColors)
+
+        val textColors = intArrayOf(onPrimaryContainer, onPrimaryContainer, onSurfaceVariant)
+        val textColorList = ColorStateList(states, textColors)
+
+        val strokeColors = intArrayOf(primary, primary, outlineVariant)
+        val strokeColorList = ColorStateList(states, strokeColors)
+
+        listOf(binding.btnFilterArtists, binding.btnFilterAlbums, binding.btnFilterFolders).forEach { btn ->
+            btn.backgroundTintList = bgTintList
+            btn.setTextColor(textColorList)
+            btn.iconTint = textColorList
+            btn.strokeColor = strokeColorList
+            btn.strokeWidth = (1f * density).toInt()
+            btn.rippleColor = ColorStateList.valueOf(highlight)
+        }
+    }
+
+    /**
+     * Returns the name/path of the folder currently being browsed, if any.
+     */
+    fun getActiveBrowsingFolder(): String? {
+        if (currentFolderNavigationPath.isNotEmpty()) {
+            return currentFolderNavigationPath.last()
+        }
+        if (currentFilterMode == LibraryFilterMode.FOLDER && !selectedFilterValue.isNullOrEmpty()) {
+            return selectedFilterValue
+        }
+        if (activeOngoingFilterMode == LibraryFilterMode.FOLDER && !selectedFilterValue.isNullOrEmpty()) {
+            return selectedFilterValue
+        }
+        return null
     }
 
     fun handleBackPressed(): Boolean {

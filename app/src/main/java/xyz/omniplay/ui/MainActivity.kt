@@ -765,10 +765,27 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     ).show()
                 }
 
+                // Stage 1: Prioritize nested or specific folder if currently being browsed
+                val priorityFolder = drawerFilterController.getActiveBrowsingFolder()
+                if (!priorityFolder.isNullOrBlank() && isRescan) {
+                    val prioritySongs = withContext(Dispatchers.IO) {
+                        musicScanner.scanPriorityFolder(priorityFolder, folderUris)
+                    }
+                    if (prioritySongs.isNotEmpty()) {
+                        val mergedPriority = (prioritySongs + allScannedSongs).distinctBy {
+                            it.filePath.ifEmpty { it.contentUri.toString() }
+                        }
+                        allScannedSongs = mergedPriority
+                        scannedSongs = mergedPriority
+                        applyCurrentFilter()
+                    }
+                }
+
+                // Stage 2: Complete scan across all configured music folders
                 val allSongs = mutableListOf<Song>()
                 for (uri in folderUris) {
                     try {
-                        val folderSongs = musicScanner.scanFolder(uri)
+                        val folderSongs = musicScanner.scanFolder(uri, priorityFolderName = priorityFolder)
                         allSongs.addAll(folderSongs)
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -783,15 +800,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
 
                 updateSongList(distinctSongs)
-
-                if (isUserInitiated) {
-                    val message = if (distinctSongs.isNotEmpty()) {
-                        "Scan complete: ${distinctSongs.size} songs found"
-                    } else {
-                        "No songs found in selected folders"
-                    }
-                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
-                }
             } catch (e: Exception) {
                 updateSongList(emptyList())
                 Toast.makeText(this@MainActivity, "Error scanning folders: ${e.message}", Toast.LENGTH_SHORT).show()
