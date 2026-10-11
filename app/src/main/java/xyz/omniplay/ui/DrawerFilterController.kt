@@ -918,7 +918,7 @@ class DrawerFilterController(
                     val pathDisplay = currentPath.joinToString(" / ")
                     binding.drawerFilterInfoText.text = "$pathDisplay (${matching.size} songs)"
                 } else {
-                    val count = subfolderItems.size + directSongs.size
+                    val count = sortedSubfolderItems.size + directSongItems.size
                     binding.drawerFilterInfoText.text = "Select from $count folders"
                 }
 
