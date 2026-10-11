@@ -132,4 +132,22 @@ object ThemeColors {
             ContextCompat.getColor(context, R.color.slider_cancel_accent)
         )
     }
+
+    @ColorInt
+    fun getSecondary(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            com.google.android.material.R.attr.colorSecondary,
+            getPrimary(context)
+        )
+    }
+
+    @ColorInt
+    fun getColorControlHighlight(context: Context): Int {
+        return MaterialColors.getColor(
+            context,
+            androidx.appcompat.R.attr.colorControlHighlight,
+            0x20FFFFFF
+        )
+    }
 }
