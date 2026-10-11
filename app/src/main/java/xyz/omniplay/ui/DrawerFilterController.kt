@@ -23,6 +23,7 @@ import xyz.omniplay.sync.OmniSyncManager
 import xyz.omniplay.sync.OmniSyncRole
 import xyz.omniplay.util.ThemeColors
 import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import java.util.Locale
 
@@ -40,7 +41,8 @@ class DrawerFilterController(
     private val onCollapseBottomSheet: () -> Unit,
     private val onShowSortDialog: () -> Unit = {},
     private val getCustomSongOrder: () -> List<Long> = { emptyList() },
-    private val onCustomSongOrderChanged: (List<Long>) -> Unit = {}
+    private val onCustomSongOrderChanged: (List<Long>) -> Unit = {},
+    private val onSongLongClicked: (Song, View) -> Boolean = { _, _ -> false }
 ) {
 
     var currentFilterMode: LibraryFilterMode = LibraryFilterMode.TRACK
@@ -208,7 +210,10 @@ class DrawerFilterController(
 
         drawerFilterAdapter = DrawerFilterAdapter(
             onItemClick = { item -> onFilterItemSelected(item) },
-            onStartDragListener = { vh -> itemTouchHelper.startDrag(vh) }
+            onStartDragListener = { vh -> itemTouchHelper.startDrag(vh) },
+            onItemLongClick = { item, view ->
+                item.song?.let { song -> onSongLongClicked(song, view) } ?: false
+            }
         )
         itemTouchHelper.attachToRecyclerView(binding.drawerFilterRecyclerView)
         binding.drawerFilterRecyclerView.layoutManager = LinearLayoutManager(activity)
@@ -425,6 +430,53 @@ class DrawerFilterController(
     fun closeLeftMenu() {
         val drawerWidth = getDrawerWidth()
         animateLeftMenu(toOpen = false, currentTrans = binding.leftDrawerMenu.translationX, drawerWidth = drawerWidth)
+    }
+
+    fun navigateToArtist(artistName: String) {
+        val unknownArtistStr = activity.getString(R.string.unknown_artist)
+        val targetArtist = artistName.trim().ifEmpty { unknownArtistStr }
+        binding.filterToggleGroup.check(R.id.btn_filter_artists)
+        currentFilterMode = LibraryFilterMode.ARTIST
+        currentArtistDrillDown = targetArtist
+        currentAlbumDrillDown = null
+        isAllTracksDrillDown = false
+        currentFolderNavigationPath.clear()
+        updateAllTracksCardUI(isActive = false)
+        updateFilterSubList()
+        openLeftMenu()
+    }
+
+    fun navigateToAlbum(albumName: String) {
+        val unknownAlbumStr = activity.getString(R.string.unknown_album)
+        val targetAlbum = albumName.trim().ifEmpty { unknownAlbumStr }
+        binding.filterToggleGroup.check(R.id.btn_filter_albums)
+        currentFilterMode = LibraryFilterMode.ALBUM
+        currentAlbumDrillDown = targetAlbum
+        currentArtistDrillDown = null
+        isAllTracksDrillDown = false
+        currentFolderNavigationPath.clear()
+        updateAllTracksCardUI(isActive = false)
+        updateFilterSubList()
+        openLeftMenu()
+    }
+
+    fun navigateToSongFolder(song: Song) {
+        val allScannedSongs = getAllScannedSongs()
+        val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
+        val depth = getCommonFolderPrefixDepth(allSongSegs)
+        val segs = getSongFolderSegments(song)
+        val trimmedSegs = if (depth > 0 && segs.size > depth) segs.subList(depth, segs.size) else segs
+
+        binding.filterToggleGroup.check(R.id.btn_filter_folders)
+        currentFilterMode = LibraryFilterMode.FOLDER
+        currentArtistDrillDown = null
+        currentAlbumDrillDown = null
+        isAllTracksDrillDown = false
+        currentFolderNavigationPath.clear()
+        currentFolderNavigationPath.addAll(trimmedSegs)
+        updateAllTracksCardUI(isActive = false)
+        updateFilterSubList()
+        openLeftMenu()
     }
 
     fun animateLeftMenu(toOpen: Boolean, currentTrans: Float, drawerWidth: Float) {

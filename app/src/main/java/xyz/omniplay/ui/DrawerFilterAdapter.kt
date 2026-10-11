@@ -37,7 +37,8 @@ data class FilterItem(
 
 class DrawerFilterAdapter(
     private val onItemClick: (FilterItem) -> Unit,
-    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null
+    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null,
+    private val onItemLongClick: ((FilterItem, View) -> Boolean)? = null
 ) : RecyclerView.Adapter<DrawerFilterAdapter.ViewHolder>() {
 
     private var items: List<FilterItem> = emptyList()
@@ -251,6 +252,14 @@ class DrawerFilterAdapter(
 
             binding.root.setOnClickListener {
                 onItemClick(item)
+            }
+
+            if (item.song != null) {
+                binding.root.setOnLongClickListener {
+                    onItemLongClick?.invoke(item, binding.root) ?: false
+                }
+            } else {
+                binding.root.setOnLongClickListener(null)
             }
         }
     }

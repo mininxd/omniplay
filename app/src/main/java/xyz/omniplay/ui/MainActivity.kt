@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Menu
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -19,6 +20,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
@@ -353,6 +355,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (!drawerFilterController.isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
                     playbackService?.refreshQueue(displayedSongs)
                 }
+            },
+            onSongLongClicked = { song, anchor ->
+                showSongOptionsMenu(anchor, song)
+                true
             }
         )
 
@@ -587,7 +593,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     }
                 }
             },
-            onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) }
+            onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) },
+            onSongLongClicked = { song, anchor ->
+                showSongOptionsMenu(anchor, song)
+                true
+            }
         )
 
         binding.swipeRefreshSongs.setColorSchemeColors(
@@ -1169,6 +1179,101 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun sortSongs(songs: List<Song>, field: SortField, ascending: Boolean): List<Song> {
         return SongSortHelper.sortSongs(this, songs, field, ascending, customSongOrder)
+    }
+
+    fun showSongOptionsMenu(anchor: View, song: Song) {
+        val popup = PopupMenu(this, anchor)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            popup.setForceShowIcon(true)
+        } else {
+            try {
+                val fieldMPopup = popup.javaClass.getDeclaredField("mPopup")
+                fieldMPopup.isAccessible = true
+                val mPopup = fieldMPopup.get(popup)
+                mPopup.javaClass.getMethod("setForceShowIcon", Boolean::class.java).invoke(mPopup, true)
+            } catch (ignored: Exception) {}
+        }
+
+        popup.menu.add(Menu.NONE, 1, 0, "Add to queue").setIcon(R.drawable.ic_add)
+        popup.menu.add(Menu.NONE, 2, 1, "Play next").setIcon(R.drawable.ic_skip_next)
+        popup.menu.add(Menu.NONE, 3, 2, "Go to artist").setIcon(R.drawable.ic_person)
+        popup.menu.add(Menu.NONE, 4, 3, "Go to album").setIcon(R.drawable.ic_album)
+        popup.menu.add(Menu.NONE, 5, 4, "Go to folders").setIcon(R.drawable.ic_folder)
+
+        popup.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                1 -> {
+                    onSongAddedToQueue(song, playNext = false)
+                    true
+                }
+                2 -> {
+                    onSongAddedToQueue(song, playNext = true)
+                    true
+                }
+                3 -> {
+                    playlistPanelController.collapse()
+                    if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                        closeSearchBar(clearQuery = true)
+                    }
+                    drawerFilterController.navigateToArtist(song.artist)
+                    true
+                }
+                4 -> {
+                    playlistPanelController.collapse()
+                    if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                        closeSearchBar(clearQuery = true)
+                    }
+                    drawerFilterController.navigateToAlbum(song.album)
+                    true
+                }
+                5 -> {
+                    playlistPanelController.collapse()
+                    if (binding.searchBarContainer.visibility == View.VISIBLE) {
+                        closeSearchBar(clearQuery = true)
+                    }
+                    drawerFilterController.navigateToSongFolder(song)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun onSongAddedToQueue(song: Song, playNext: Boolean) {
+        val service = playbackService
+        if (service != null) {
+            if (playNext) {
+                service.playNext(song)
+            } else {
+                service.addToQueue(song)
+            }
+        } else {
+            val mutable = displayedSongs.toMutableList()
+            if (playNext) {
+                mutable.add(0.coerceAtMost(mutable.size), song)
+            } else {
+                mutable.add(song)
+            }
+            displayedSongs = mutable
+            songAdapter?.setSongs(mutable)
+        }
+        if (customSongOrder.isNotEmpty()) {
+            val mutable = customSongOrder.toMutableList()
+            mutable.remove(song.id)
+            if (playNext) {
+                val currentId = service?.currentSong?.id
+                val insertIdx = if (currentId != null) (mutable.indexOf(currentId) + 1).coerceIn(0, mutable.size) else 0
+                mutable.add(insertIdx, song.id)
+            } else {
+                mutable.add(song.id)
+            }
+            customSongOrder = mutable
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_CUSTOM_SONG_ORDER, mutable.joinToString(","))
+                .apply()
+        }
     }
 
     // PlaybackListener callbacks

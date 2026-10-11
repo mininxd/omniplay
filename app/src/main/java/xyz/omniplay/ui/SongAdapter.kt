@@ -29,7 +29,8 @@ import xyz.omniplay.util.ThemeColors
 class SongAdapter(
     private var showAlbumArt: Boolean = true,
     private val onSongClicked: (Song, Int) -> Unit,
-    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null
+    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null,
+    private val onSongLongClicked: ((Song, View) -> Boolean)? = null
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     private var songs: List<Song> = emptyList()
@@ -188,6 +189,10 @@ class SongAdapter(
 
             binding.root.setOnClickListener {
                 onSongClicked(song, bindingAdapterPosition)
+            }
+
+            binding.root.setOnLongClickListener {
+                onSongLongClicked?.invoke(song, binding.root) ?: false
             }
         }
     }

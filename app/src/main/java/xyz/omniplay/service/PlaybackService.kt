@@ -501,6 +501,42 @@ class PlaybackService : Service() {
         }
     }
 
+    fun addToQueue(song: Song) {
+        if (queue.isEmpty()) {
+            setSongQueue(listOf(song), startIndex = 0, startPlaying = false)
+            return
+        }
+        val mutable = queue.toMutableList()
+        mutable.add(song)
+        queue = mutable
+        if (!originalQueue.any { it.id == song.id }) {
+            originalQueue = originalQueue + song
+        }
+        listeners.forEach { it.onQueueChanged(queue.toList()) }
+    }
+
+    fun playNext(song: Song) {
+        if (queue.isEmpty()) {
+            setSongQueue(listOf(song), startIndex = 0, startPlaying = false)
+            return
+        }
+        val mutable = queue.toMutableList()
+        val existingIdx = mutable.indexOfFirst { it.id == song.id }
+        if (existingIdx != -1 && existingIdx != currentIndex) {
+            mutable.removeAt(existingIdx)
+            if (existingIdx < currentIndex) {
+                currentIndex--
+            }
+        }
+        val insertIndex = (currentIndex + 1).coerceIn(0, mutable.size)
+        mutable.add(insertIndex, song)
+        queue = mutable
+        if (!originalQueue.any { it.id == song.id }) {
+            originalQueue = originalQueue + song
+        }
+        listeners.forEach { it.onQueueChanged(queue.toList()) }
+    }
+
     /**
      * Refreshes the active queue with newly scanned songs.
      * If the current song is still in the list, its metadata is updated and UI notified without interrupting playback.
