@@ -22,6 +22,7 @@ import xyz.omniplay.model.Song
 import xyz.omniplay.sync.OmniSyncManager
 import xyz.omniplay.sync.OmniSyncRole
 import xyz.omniplay.util.ThemeColors
+import androidx.recyclerview.widget.ItemTouchHelper
 import java.io.File
 import java.util.Locale
 
@@ -37,7 +38,9 @@ class DrawerFilterController(
     private val onUpdateAppTitle: () -> Unit,
     private val onCloseSearchBar: () -> Unit,
     private val onCollapseBottomSheet: () -> Unit,
-    private val onShowSortDialog: () -> Unit = {}
+    private val onShowSortDialog: () -> Unit = {},
+    private val getCustomSongOrder: () -> List<Long> = { emptyList() },
+    private val onCustomSongOrderChanged: (List<Long>) -> Unit = {}
 ) {
 
     var currentFilterMode: LibraryFilterMode = LibraryFilterMode.TRACK
@@ -150,9 +153,64 @@ class DrawerFilterController(
             }
         }
 
-        drawerFilterAdapter = DrawerFilterAdapter { item ->
-            onFilterItemSelected(item)
-        }
+        val itemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun isLongPressDragEnabled(): Boolean = false
+
+            override fun canDropOver(
+                recyclerView: RecyclerView,
+                current: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val targetItem = drawerFilterAdapter?.getItemAt(target.bindingAdapterPosition)
+                return targetItem?.song != null
+            }
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val fromPos = viewHolder.bindingAdapterPosition
+                val toPos = target.bindingAdapterPosition
+                val currentItem = drawerFilterAdapter?.getItemAt(fromPos)
+                val targetItem = drawerFilterAdapter?.getItemAt(toPos)
+                if (currentItem?.song != null && targetItem?.song != null) {
+                    drawerFilterAdapter?.moveItem(fromPos, toPos)
+                    return true
+                }
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    binding.swipeRefreshDrawer.isEnabled = false
+                    viewHolder?.itemView?.alpha = 0.85f
+                    viewHolder?.itemView?.translationZ = 12f
+                }
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                binding.swipeRefreshDrawer.isEnabled = true
+                viewHolder.itemView.alpha = 1.0f
+                viewHolder.itemView.translationZ = 0f
+                val songs = drawerFilterAdapter?.getItems()?.mapNotNull { it.song } ?: emptyList()
+                if (songs.isNotEmpty()) {
+                    onCustomSongOrderChanged(songs.map { it.id })
+                }
+            }
+        })
+
+        drawerFilterAdapter = DrawerFilterAdapter(
+            onItemClick = { item -> onFilterItemSelected(item) },
+            onStartDragListener = { vh -> itemTouchHelper.startDrag(vh) }
+        )
+        itemTouchHelper.attachToRecyclerView(binding.drawerFilterRecyclerView)
         binding.drawerFilterRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.drawerFilterRecyclerView.adapter = drawerFilterAdapter
 
@@ -483,7 +541,7 @@ class DrawerFilterController(
                     segs.subList(0, currentPath.size).map { it.lowercase(Locale.ROOT) } == currentPath.map { it.lowercase(Locale.ROOT) }
         }.map { it.first }
 
-        return SongSortHelper.sortSongs(activity, matchingSongs, getCurrentSortField(), isSortAscending())
+        return SongSortHelper.sortSongs(activity, matchingSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
     }
 
     fun setFilterMode(mode: LibraryFilterMode) {
@@ -575,7 +633,7 @@ class DrawerFilterController(
         val unknownArtistStr = activity.getString(R.string.unknown_artist)
 
         if (isAllTracksDrillDown) {
-            val allSongsSorted = SongSortHelper.sortSongs(activity, allScannedSongs, getCurrentSortField(), isSortAscending())
+            val allSongsSorted = SongSortHelper.sortSongs(activity, allScannedSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             val currentPlayingId = getCurrentPlayingSongId()
             val items = mutableListOf<FilterItem>()
             items.addAll(
@@ -605,7 +663,7 @@ class DrawerFilterController(
             val artistSongs = allScannedSongs.filter {
                 it.artist.trim().ifEmpty { unknownArtistStr }.equals(artistTarget, ignoreCase = true)
             }
-            val sortedArtistSongs = SongSortHelper.sortSongs(activity, artistSongs, getCurrentSortField(), isSortAscending())
+            val sortedArtistSongs = SongSortHelper.sortSongs(activity, artistSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             val currentPlayingId = getCurrentPlayingSongId()
             val items = mutableListOf<FilterItem>()
             items.add(
@@ -643,7 +701,7 @@ class DrawerFilterController(
             val albumSongs = allScannedSongs.filter {
                 it.album.trim().ifEmpty { unknownAlbumStr }.equals(albumTarget, ignoreCase = true)
             }
-            val sortedAlbumSongs = SongSortHelper.sortSongs(activity, albumSongs, getCurrentSortField(), isSortAscending())
+            val sortedAlbumSongs = SongSortHelper.sortSongs(activity, albumSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             val currentPlayingId = getCurrentPlayingSongId()
             val items = mutableListOf<FilterItem>()
             items.add(
@@ -866,7 +924,7 @@ class DrawerFilterController(
                     .filter { (_, segs) -> segs.size == currentPath.size }
                     .map { it.first }
 
-                val sortedDirectSongs = SongSortHelper.sortSongs(activity, directSongsRaw, sortField, ascending)
+                val sortedDirectSongs = SongSortHelper.sortSongs(activity, directSongsRaw, sortField, ascending, getCustomSongOrder())
                 val currentPlayingId = getCurrentPlayingSongId()
                 val directSongItems = sortedDirectSongs.map { song ->
                     FilterItem(
@@ -961,7 +1019,7 @@ class DrawerFilterController(
         val filterValueToSet: String?
 
         if (isAllTracksDrillDown) {
-            val allSorted = SongSortHelper.sortSongs(activity, allScannedSongs, getCurrentSortField(), isSortAscending())
+            val allSorted = SongSortHelper.sortSongs(activity, allScannedSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             queueToSet = if (allSorted.isNotEmpty()) allSorted else listOf(song)
             filterModeToSet = LibraryFilterMode.TRACK
             filterValueToSet = null
@@ -970,7 +1028,7 @@ class DrawerFilterController(
             val artistSongs = allScannedSongs.filter {
                 it.artist.trim().ifEmpty { unknownArtistStr }.equals(currentArtistDrillDown, ignoreCase = true)
             }
-            val sorted = SongSortHelper.sortSongs(activity, artistSongs, getCurrentSortField(), isSortAscending())
+            val sorted = SongSortHelper.sortSongs(activity, artistSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             queueToSet = if (sorted.isNotEmpty()) sorted else listOf(song)
             filterModeToSet = LibraryFilterMode.ARTIST
             filterValueToSet = currentArtistDrillDown
@@ -979,7 +1037,7 @@ class DrawerFilterController(
             val albumSongs = allScannedSongs.filter {
                 it.album.trim().ifEmpty { unknownAlbumStr }.equals(currentAlbumDrillDown, ignoreCase = true)
             }
-            val sorted = SongSortHelper.sortSongs(activity, albumSongs, getCurrentSortField(), isSortAscending())
+            val sorted = SongSortHelper.sortSongs(activity, albumSongs, getCurrentSortField(), isSortAscending(), getCustomSongOrder())
             queueToSet = if (sorted.isNotEmpty()) sorted else listOf(song)
             filterModeToSet = LibraryFilterMode.ALBUM
             filterValueToSet = currentAlbumDrillDown

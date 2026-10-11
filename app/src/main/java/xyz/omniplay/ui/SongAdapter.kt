@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.util.TypedValue
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
@@ -27,7 +28,8 @@ import xyz.omniplay.util.ThemeColors
 
 class SongAdapter(
     private var showAlbumArt: Boolean = true,
-    private val onSongClicked: (Song, Int) -> Unit
+    private val onSongClicked: (Song, Int) -> Unit,
+    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null
 ) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     private var songs: List<Song> = emptyList()
@@ -47,6 +49,16 @@ class SongAdapter(
     }
 
     fun getSongs(): List<Song> = songs
+
+    fun moveItem(fromPosition: Int, toPosition: Int) {
+        if (fromPosition in songs.indices && toPosition in songs.indices) {
+            val mutable = songs.toMutableList()
+            val item = mutable.removeAt(fromPosition)
+            mutable.add(toPosition, item)
+            songs = mutable
+            notifyItemMoved(fromPosition, toPosition)
+        }
+    }
 
     fun setCurrentPlayingSongId(id: Long) {
         val oldId = currentPlayingSongId
@@ -165,6 +177,13 @@ class SongAdapter(
                         }
                     }
                 }
+            }
+
+            binding.dragHandle.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    onStartDragListener?.invoke(this)
+                }
+                false
             }
 
             binding.root.setOnClickListener {

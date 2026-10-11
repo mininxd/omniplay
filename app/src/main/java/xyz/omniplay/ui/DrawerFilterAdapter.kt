@@ -2,6 +2,8 @@ package xyz.omniplay.ui
 
 import android.graphics.Bitmap
 import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
@@ -34,7 +36,8 @@ data class FilterItem(
 )
 
 class DrawerFilterAdapter(
-    private val onItemClick: (FilterItem) -> Unit
+    private val onItemClick: (FilterItem) -> Unit,
+    private val onStartDragListener: ((RecyclerView.ViewHolder) -> Unit)? = null
 ) : RecyclerView.Adapter<DrawerFilterAdapter.ViewHolder>() {
 
     private var items: List<FilterItem> = emptyList()
@@ -43,6 +46,20 @@ class DrawerFilterAdapter(
     fun setItems(newItems: List<FilterItem>) {
         items = newItems
         notifyDataSetChanged()
+    }
+
+    fun getItems(): List<FilterItem> = items
+
+    fun getItemAt(position: Int): FilterItem? = items.getOrNull(position)
+
+    fun moveItem(fromPosition: Int, toPosition: Int) {
+        if (fromPosition in items.indices && toPosition in items.indices) {
+            val mutable = items.toMutableList()
+            val item = mutable.removeAt(fromPosition)
+            mutable.add(toPosition, item)
+            items = mutable
+            notifyItemMoved(fromPosition, toPosition)
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -97,6 +114,19 @@ class DrawerFilterAdapter(
                 binding.filterItemSubtitle.text = item.subtitle
             } else {
                 binding.filterItemSubtitle.visibility = android.view.View.GONE
+            }
+
+            if (item.song != null) {
+                binding.filterDragHandle.visibility = View.VISIBLE
+                binding.filterDragHandle.setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        onStartDragListener?.invoke(this)
+                    }
+                    false
+                }
+            } else {
+                binding.filterDragHandle.visibility = View.GONE
+                binding.filterDragHandle.setOnTouchListener(null)
             }
 
             if (item.isBack) {

@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_FETCH_ONLINE_ARTWORK = "key_fetch_online_artwork"
         const val KEY_SORT_FIELD = "key_sort_field"
         const val KEY_SORT_ASCENDING = "key_sort_ascending"
+        const val KEY_CUSTOM_SONG_ORDER = "key_custom_song_order"
         const val KEY_UNIVERSAL_SEARCH = "key_universal_search"
     }
 
@@ -101,6 +103,45 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private var currentSortField: SortField = SortField.TITLE
     private var isSortAscending: Boolean = true
+    private var customSongOrder: List<Long> = emptyList()
+
+    fun saveCustomSongOrder(order: List<Long>) {
+        val mergedOrder = mergeCustomOrder(customSongOrder, order)
+        customSongOrder = mergedOrder
+        currentSortField = SortField.CUSTOM
+        isSortAscending = true
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_CUSTOM_SONG_ORDER, mergedOrder.joinToString(","))
+            .putString(KEY_SORT_FIELD, SortField.CUSTOM.name)
+            .putBoolean(KEY_SORT_ASCENDING, true)
+            .apply()
+    }
+
+    private fun mergeCustomOrder(baseOrder: List<Long>, newSubsetOrder: List<Long>): List<Long> {
+        val allIds = allScannedSongs.map { it.id }
+        val fullBase = if (baseOrder.isNotEmpty()) {
+            baseOrder + allIds.filterNot { it in baseOrder }
+        } else {
+            allIds
+        }
+        val subsetSet = newSubsetOrder.toSet()
+        var subsetIdx = 0
+        val result = fullBase.map { id ->
+            if (id in subsetSet && subsetIdx < newSubsetOrder.size) {
+                newSubsetOrder[subsetIdx++]
+            } else {
+                id
+            }
+        }.toMutableList()
+        while (subsetIdx < newSubsetOrder.size) {
+            val remainingId = newSubsetOrder[subsetIdx++]
+            if (remainingId !in result) {
+                result.add(remainingId)
+            }
+        }
+        return result
+    }
 
     private val musicScanner by lazy { MusicScanner(this) }
     private val musicDatabase by lazy { MusicDatabase.getInstance(this) }
@@ -225,8 +266,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         setContentView(binding.root)
 
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val customOrderStr = prefs.getString(KEY_CUSTOM_SONG_ORDER, null)
+        customSongOrder = customOrderStr?.split(",")?.mapNotNull { it.trim().toLongOrNull() } ?: emptyList()
+
         currentSortField = try {
-            SortField.valueOf(prefs.getString(KEY_SORT_FIELD, SortField.TITLE.name) ?: SortField.TITLE.name)
+            val field = SortField.valueOf(prefs.getString(KEY_SORT_FIELD, SortField.TITLE.name) ?: SortField.TITLE.name)
+            if (field == SortField.CUSTOM && customSongOrder.isEmpty()) SortField.TITLE else field
         } catch (e: Exception) {
             SortField.TITLE
         }
@@ -300,7 +345,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
             },
             onCollapseBottomSheet = { playlistPanelController.collapse() },
-            onShowSortDialog = { showSortDialog() }
+            onShowSortDialog = { showSortDialog() },
+            getCustomSongOrder = { customSongOrder },
+            onCustomSongOrderChanged = { order ->
+                saveCustomSongOrder(order)
+                applyCurrentFilter()
+                if (!drawerFilterController.isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
+                    playbackService?.refreshQueue(displayedSongs)
+                }
+            }
         )
 
         playbackGestureController = PlaybackGestureController(
@@ -440,6 +493,58 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isShowArt = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
+        val songItemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+        ) {
+            override fun isLongPressDragEnabled(): Boolean = false
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val fromPos = viewHolder.bindingAdapterPosition
+                val toPos = target.bindingAdapterPosition
+                if (fromPos != RecyclerView.NO_POSITION && toPos != RecyclerView.NO_POSITION) {
+                    songAdapter?.moveItem(fromPos, toPos)
+                    return true
+                }
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    binding.swipeRefreshSongs.isEnabled = false
+                    viewHolder?.itemView?.alpha = 0.85f
+                    viewHolder?.itemView?.scaleX = 1.02f
+                    viewHolder?.itemView?.scaleY = 1.02f
+                    viewHolder?.itemView?.translationZ = 16f
+                }
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                binding.swipeRefreshSongs.isEnabled = true
+                viewHolder.itemView.alpha = 1.0f
+                viewHolder.itemView.scaleX = 1.0f
+                viewHolder.itemView.scaleY = 1.0f
+                viewHolder.itemView.translationZ = 0f
+
+                val newSongs = songAdapter?.getSongs() ?: emptyList()
+                if (newSongs.isNotEmpty()) {
+                    displayedSongs = newSongs
+                    saveCustomSongOrder(newSongs.map { it.id })
+                    if (!drawerFilterController.isFilterPreviewActive && playbackService != null) {
+                        playbackService?.refreshQueue(displayedSongs)
+                    }
+                    drawerFilterController.updateFilterSubList()
+                }
+            }
+        })
+
         songAdapter = SongAdapter(
             showAlbumArt = isShowArt,
             onSongClicked = { song, _ ->
@@ -463,7 +568,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val fullList = if (displayedSongs.isNotEmpty()) {
                         displayedSongs
                     } else if (allScannedSongs.isNotEmpty()) {
-                        SongSortHelper.sortSongs(this, allScannedSongs, currentSortField, isSortAscending)
+                        SongSortHelper.sortSongs(this, allScannedSongs, currentSortField, isSortAscending, customSongOrder)
                     } else {
                         listOf(song)
                     }
@@ -481,7 +586,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
                     }
                 }
-            }
+            },
+            onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) }
         )
 
         binding.swipeRefreshSongs.setColorSchemeColors(
@@ -506,6 +612,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             rescanMusic()
         }
 
+        songItemTouchHelper.attachToRecyclerView(binding.songsRecyclerView)
         binding.songsRecyclerView.adapter = songAdapter
         binding.songsRecyclerView.layoutManager = LinearLayoutManager(this)
 
@@ -896,7 +1003,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             baseList
         }
 
-        val filtered = SongSortHelper.sortSongs(this, filteredBySearch, currentSortField, isSortAscending)
+        val filtered = SongSortHelper.sortSongs(this, filteredBySearch, currentSortField, isSortAscending, customSongOrder)
         displayedSongs = filtered
         songAdapter?.setSongs(filtered)
         playbackService?.currentSong?.let { songAdapter?.setCurrentPlayingSongId(it.id) }
@@ -1032,14 +1139,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 else -> LibraryFilterMode.ARTIST
             }
         } else {
-            drawerFilterController.currentFilterMode
+            LibraryFilterMode.TRACK
         }
 
         SongSortHelper.showSortDialog(
             activity = this,
             currentFilterMode = filterMode,
             currentSortField = currentSortField,
-            isSortAscending = isSortAscending
+            isSortAscending = isSortAscending,
+            hasCustomSort = customSongOrder.isNotEmpty()
         ) { field, ascending ->
             currentSortField = field
             isSortAscending = ascending
@@ -1060,7 +1168,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun sortSongs(songs: List<Song>, field: SortField, ascending: Boolean): List<Song> {
-        return SongSortHelper.sortSongs(this, songs, field, ascending)
+        return SongSortHelper.sortSongs(this, songs, field, ascending, customSongOrder)
     }
 
     // PlaybackListener callbacks

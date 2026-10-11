@@ -8,20 +8,37 @@
     android:layout_marginStart="8dp"
     android:layout_marginEnd="8dp"
     android:background="?attr/selectableItemBackground"
-    android:paddingStart="12dp"
+    android:paddingStart="4dp"
     android:paddingEnd="12dp">
+
+    <!-- Drag Handle -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/drag_handle"
+        android:layout_width="28dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Drag to reorder"
+        android:paddingStart="2dp"
+        android:paddingEnd="2dp"
+        android:scaleType="centerInside"
+        android:src="@drawable/ic_drag_indicator"
+        app:tint="?attr/colorOutline"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Album Art Thumbnail -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/thumbnail_card"
         android:layout_width="48dp"
         android:layout_height="48dp"
+        android:layout_marginStart="2dp"
         app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
         app:cardCornerRadius="10dp"
         app:cardElevation="0dp"
         app:strokeWidth="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintStart_toEndOf="@id/drag_handle"
         app:layout_constraintTop_toTopOf="parent">
 
         <androidx.appcompat.widget.AppCompatImageView
@@ -37,8 +54,8 @@
         android:id="@+id/text_container"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="14dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="10dp"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/item_duration_text"
