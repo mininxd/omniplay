@@ -1026,8 +1026,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showSortDialog() {
-        val filterMode = if (drawerFilterController.isAllTracksDrillDown) {
-            LibraryFilterMode.TRACK
+        val filterMode = if (drawerFilterController.isFilterMenuOpen) {
+            when {
+                drawerFilterController.isAllTracksDrillDown -> LibraryFilterMode.TRACK
+                drawerFilterController.currentArtistDrillDown != null -> LibraryFilterMode.TRACK
+                drawerFilterController.currentAlbumDrillDown != null -> LibraryFilterMode.TRACK
+                binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums -> LibraryFilterMode.ALBUM
+                binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders -> LibraryFilterMode.FOLDER
+                else -> LibraryFilterMode.ARTIST
+            }
         } else {
             drawerFilterController.currentFilterMode
         }

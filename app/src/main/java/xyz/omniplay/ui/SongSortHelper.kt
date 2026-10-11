@@ -74,35 +74,54 @@ object SongSortHelper {
         onSortSelected: (SortField, Boolean) -> Unit
     ) {
         val options = mutableListOf<SortOption>()
-        options.add(SortOption("Title (A → Z)", SortField.TITLE, true))
-        options.add(SortOption("Title (Z → A)", SortField.TITLE, false))
-        options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
-        options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
 
-        when (currentFilterMode) {
-            LibraryFilterMode.TRACK, LibraryFilterMode.FOLDER -> {
+        val title = when (currentFilterMode) {
+            LibraryFilterMode.ARTIST -> {
                 options.add(SortOption("Artist (A → Z)", SortField.ARTIST, true))
                 options.add(SortOption("Artist (Z → A)", SortField.ARTIST, false))
-                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
-                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
-            }
-            LibraryFilterMode.ARTIST -> {
-                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
-                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
+                options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
+                options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
+                "Sort Artists"
             }
             LibraryFilterMode.ALBUM -> {
+                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
+                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
                 options.add(SortOption("Artist (A → Z)", SortField.ARTIST, true))
                 options.add(SortOption("Artist (Z → A)", SortField.ARTIST, false))
+                options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
+                options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
+                "Sort Albums"
+            }
+            LibraryFilterMode.FOLDER -> {
+                options.add(SortOption("Folder Name (A → Z)", SortField.TITLE, true))
+                options.add(SortOption("Folder Name (Z → A)", SortField.TITLE, false))
+                options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
+                options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
+                "Sort Folders"
+            }
+            LibraryFilterMode.TRACK -> {
+                options.add(SortOption("Title (A → Z)", SortField.TITLE, true))
+                options.add(SortOption("Title (Z → A)", SortField.TITLE, false))
+                options.add(SortOption("Date Added (Newest)", SortField.DATE, false))
+                options.add(SortOption("Date Added (Oldest)", SortField.DATE, true))
+                options.add(SortOption("Artist (A → Z)", SortField.ARTIST, true))
+                options.add(SortOption("Artist (Z → A)", SortField.ARTIST, false))
+                options.add(SortOption("Album (A → Z)", SortField.ALBUM, true))
+                options.add(SortOption("Album (Z → A)", SortField.ALBUM, false))
+                activity.getString(R.string.sort_songs)
             }
         }
 
         val checkedIndex = options.indexOfFirst { it.field == currentSortField && it.ascending == isSortAscending }
-            .let { if (it >= 0) it else 0 }
+            .let { idx ->
+                if (idx >= 0) idx
+                else options.indexOfFirst { it.ascending == isSortAscending }.let { if (it >= 0) it else 0 }
+            }
 
         val labels = options.map { it.label }.toTypedArray()
 
         MaterialAlertDialogBuilder(activity)
-            .setTitle(R.string.sort_queue)
+            .setTitle(title)
             .setSingleChoiceItems(labels, checkedIndex) { dialog, which ->
                 val selected = options[which]
                 onSortSelected(selected.field, selected.ascending)

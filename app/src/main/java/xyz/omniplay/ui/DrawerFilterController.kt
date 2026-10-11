@@ -713,6 +713,9 @@ class DrawerFilterController(
             else -> LibraryFilterMode.ARTIST
         }
 
+        val sortField = getCurrentSortField()
+        val ascending = isSortAscending()
+
         val items = when (browseMode) {
             LibraryFilterMode.ARTIST -> {
                 val artistGroups = allScannedSongs
@@ -726,13 +729,38 @@ class DrawerFilterController(
                             representativeSong = songs.firstOrNull()
                         )
                     }
-                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+
+                val sortedArtistGroups = when (sortField) {
+                    SortField.DATE -> {
+                        val artistDates = allScannedSongs
+                            .groupBy { it.artist.trim().ifEmpty { unknownArtistStr } }
+                            .mapValues { (_, songs) -> songs.maxOfOrNull { it.dateModified } ?: 0L }
+                        artistGroups.sortedWith(Comparator { a, b ->
+                            val da = artistDates[a.title] ?: 0L
+                            val db = artistDates[b.title] ?: 0L
+                            val res = da.compareTo(db)
+                            if (res != 0) {
+                                if (ascending) res else -res
+                            } else {
+                                a.title.compareTo(b.title, ignoreCase = true)
+                            }
+                        })
+                    }
+                    else -> {
+                        if (ascending) {
+                            artistGroups.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        } else {
+                            artistGroups.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        }
+                    }
+                }
+
                 if (activeOngoingFilterMode == LibraryFilterMode.ARTIST && !selectedFilterValue.isNullOrEmpty()) {
                     binding.drawerFilterInfoText.text = "Filtered by artist: $selectedFilterValue"
                 } else {
-                    binding.drawerFilterInfoText.text = "Select from ${artistGroups.size} artists"
+                    binding.drawerFilterInfoText.text = "Select from ${sortedArtistGroups.size} artists"
                 }
-                artistGroups
+                sortedArtistGroups
             }
             LibraryFilterMode.ALBUM -> {
                 val albumGroups = allScannedSongs
@@ -746,13 +774,53 @@ class DrawerFilterController(
                             representativeSong = songs.firstOrNull()
                         )
                     }
-                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+
+                val sortedAlbumGroups = when (sortField) {
+                    SortField.ARTIST -> {
+                        val albumArtists = allScannedSongs
+                            .groupBy { it.album.trim().ifEmpty { unknownAlbumStr } }
+                            .mapValues { (_, songs) -> songs.firstOrNull()?.artist?.trim()?.ifEmpty { unknownArtistStr } ?: unknownArtistStr }
+                        albumGroups.sortedWith(Comparator { a, b ->
+                            val artA = albumArtists[a.title] ?: ""
+                            val artB = albumArtists[b.title] ?: ""
+                            val res = artA.compareTo(artB, ignoreCase = true)
+                            if (res != 0) {
+                                if (ascending) res else -res
+                            } else {
+                                a.title.compareTo(b.title, ignoreCase = true)
+                            }
+                        })
+                    }
+                    SortField.DATE -> {
+                        val albumDates = allScannedSongs
+                            .groupBy { it.album.trim().ifEmpty { unknownAlbumStr } }
+                            .mapValues { (_, songs) -> songs.maxOfOrNull { it.dateModified } ?: 0L }
+                        albumGroups.sortedWith(Comparator { a, b ->
+                            val da = albumDates[a.title] ?: 0L
+                            val db = albumDates[b.title] ?: 0L
+                            val res = da.compareTo(db)
+                            if (res != 0) {
+                                if (ascending) res else -res
+                            } else {
+                                a.title.compareTo(b.title, ignoreCase = true)
+                            }
+                        })
+                    }
+                    else -> {
+                        if (ascending) {
+                            albumGroups.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        } else {
+                            albumGroups.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        }
+                    }
+                }
+
                 if (activeOngoingFilterMode == LibraryFilterMode.ALBUM && !selectedFilterValue.isNullOrEmpty()) {
                     binding.drawerFilterInfoText.text = "Filtered by album: $selectedFilterValue"
                 } else {
-                    binding.drawerFilterInfoText.text = "Select from ${albumGroups.size} albums"
+                    binding.drawerFilterInfoText.text = "Select from ${sortedAlbumGroups.size} albums"
                 }
-                albumGroups
+                sortedAlbumGroups
             }
             LibraryFilterMode.FOLDER -> {
                 val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
@@ -796,27 +864,55 @@ class DrawerFilterController(
                         isFolder = true,
                         representativeSong = pairs.firstOrNull()?.first
                     )
-                }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                }
 
-                itemsList.addAll(subfolderItems)
-
-                val directSongs = matching
-                    .filter { (_, segs) -> segs.size == currentPath.size }
-                    .map { (song, _) ->
-                        FilterItem(
-                            title = song.title,
-                            count = 0,
-                            isAlbum = false,
-                            isFolder = false,
-                            song = song,
-                            representativeSong = song,
-                            subtitle = song.artist.trim().ifEmpty { unknownArtistStr },
-                            isSelected = (getCurrentPlayingSongId() == song.id)
-                        )
+                val sortedSubfolderItems = when (sortField) {
+                    SortField.DATE -> {
+                        val folderDates = subfolders.mapValues { (_, pairs) ->
+                            pairs.map { it.first }.maxOfOrNull { it.dateModified } ?: 0L
+                        }
+                        subfolderItems.sortedWith(Comparator { a, b ->
+                            val da = folderDates[a.title] ?: 0L
+                            val db = folderDates[b.title] ?: 0L
+                            val res = da.compareTo(db)
+                            if (res != 0) {
+                                if (ascending) res else -res
+                            } else {
+                                a.title.compareTo(b.title, ignoreCase = true)
+                            }
+                        })
                     }
-                    .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                    else -> {
+                        if (ascending) {
+                            subfolderItems.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        } else {
+                            subfolderItems.sortedWith(compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title })
+                        }
+                    }
+                }
 
-                itemsList.addAll(directSongs)
+                itemsList.addAll(sortedSubfolderItems)
+
+                val directSongsRaw = matching
+                    .filter { (_, segs) -> segs.size == currentPath.size }
+                    .map { it.first }
+
+                val sortedDirectSongs = SongSortHelper.sortSongs(activity, directSongsRaw, sortField, ascending)
+                val currentPlayingId = getCurrentPlayingSongId()
+                val directSongItems = sortedDirectSongs.map { song ->
+                    FilterItem(
+                        title = song.title,
+                        count = 0,
+                        isAlbum = false,
+                        isFolder = false,
+                        song = song,
+                        representativeSong = song,
+                        subtitle = song.artist.trim().ifEmpty { unknownArtistStr },
+                        isSelected = (currentPlayingId == song.id)
+                    )
+                }
+
+                itemsList.addAll(directSongItems)
 
                 if (currentPath.isNotEmpty()) {
                     val pathDisplay = currentPath.joinToString(" / ")

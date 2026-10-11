@@ -29,12 +29,12 @@ object UpdateChecker {
     )
 
     fun getAppVersion(context: Context?): String {
-        if (context == null) return "0.8.2"
+        if (context == null) return "0.8.3"
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "0.8.2"
+            packageInfo.versionName ?: "0.8.3"
         } catch (e: Exception) {
-            "0.8.2"
+            "0.8.3"
         }
     }
 
