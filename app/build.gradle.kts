@@ -11,8 +11,8 @@ android {
         applicationId = "xyz.omniplay"
         minSdk = 21
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.8"
+        versionCode = 12
+        versionName = "0.8.1"
 
         vectorDrawables {
             useSupportLibrary = true
