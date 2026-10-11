@@ -202,10 +202,6 @@ class DrawerFilterController(
         }
 
         binding.btnFilterArtists.setOnClickListener {
-            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_artists && !isAllTracksDrillDown && currentArtistDrillDown == null) {
-                onShowSortDialog()
-                return@setOnClickListener
-            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -214,14 +210,12 @@ class DrawerFilterController(
                 updateAllTracksCardUI(isActive = false)
                 binding.browseByContainer.visibility = View.VISIBLE
                 setFilterMode(LibraryFilterMode.ARTIST)
+            } else if (currentFilterMode != LibraryFilterMode.ARTIST) {
+                setFilterMode(LibraryFilterMode.ARTIST)
             }
         }
 
         binding.btnFilterAlbums.setOnClickListener {
-            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums && !isAllTracksDrillDown && currentAlbumDrillDown == null) {
-                onShowSortDialog()
-                return@setOnClickListener
-            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -230,14 +224,12 @@ class DrawerFilterController(
                 updateAllTracksCardUI(isActive = false)
                 binding.browseByContainer.visibility = View.VISIBLE
                 setFilterMode(LibraryFilterMode.ALBUM)
+            } else if (currentFilterMode != LibraryFilterMode.ALBUM) {
+                setFilterMode(LibraryFilterMode.ALBUM)
             }
         }
 
         binding.btnFilterFolders.setOnClickListener {
-            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders && !isAllTracksDrillDown && currentFolderNavigationPath.isEmpty()) {
-                onShowSortDialog()
-                return@setOnClickListener
-            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -246,7 +238,13 @@ class DrawerFilterController(
                 updateAllTracksCardUI(isActive = false)
                 binding.browseByContainer.visibility = View.VISIBLE
                 setFilterMode(LibraryFilterMode.FOLDER)
+            } else if (currentFilterMode != LibraryFilterMode.FOLDER) {
+                setFilterMode(LibraryFilterMode.FOLDER)
             }
+        }
+
+        binding.btnBrowseSort.setOnClickListener {
+            onShowSortDialog()
         }
 
         binding.btnClearFilter.setOnClickListener {
@@ -1106,7 +1104,6 @@ class DrawerFilterController(
         val strokeColorList = ColorStateList(states, strokeColors)
 
         val checkedId = binding.filterToggleGroup.checkedButtonId
-        val sortIcon = ContextCompat.getDrawable(activity, R.drawable.ic_sort)
 
         listOf(binding.btnFilterArtists, binding.btnFilterAlbums, binding.btnFilterFolders).forEach { btn ->
             btn.backgroundTintList = bgTintList
@@ -1116,16 +1113,14 @@ class DrawerFilterController(
             val isChecked = (btn.id == checkedId)
             btn.strokeWidth = ((if (isChecked) 1.5f else 1f) * density).toInt()
             btn.rippleColor = ColorStateList.valueOf(highlight)
-
-            if (isChecked) {
-                btn.icon = sortIcon
-                btn.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_END
-                btn.iconSize = (14 * density).toInt()
-                btn.iconPadding = (4 * density).toInt()
-            } else {
-                btn.icon = null
-            }
+            btn.icon = null
         }
+
+        binding.btnBrowseSort.setCardBackgroundColor(surfaceContainer)
+        binding.btnBrowseSort.strokeColor = outlineVariant
+        binding.btnBrowseSort.strokeWidth = (1f * density).toInt()
+        binding.browseSortIcon.setColorFilter(primary)
+        binding.btnBrowseSort.rippleColor = ColorStateList.valueOf(highlight)
     }
 
     /**

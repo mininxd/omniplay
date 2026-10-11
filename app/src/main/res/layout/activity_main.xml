@@ -1230,70 +1230,95 @@
                 android:textColor="?attr/colorOutline"
                 android:textSize="11sp" />
 
-            <!-- Filter Toggle Group: Artists vs Albums -->
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/filter_toggle_group"
+            <!-- Row: Filter Toggle Group + Circle Sort Button -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:layout_marginTop="8dp"
                 android:layout_marginEnd="16dp"
-                app:checkedButton="@id/btn_filter_artists"
-                app:selectionRequired="true"
-                app:singleSelection="true">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_filter_artists"
-                    style="@style/Widget.Omniplay.SegmentedButton"
+                <!-- Filter Toggle Group: Artists vs Albums -->
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/filter_toggle_group"
                     android:layout_width="0dp"
-                    android:layout_height="38dp"
+                    android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
-                    android:text="@string/filter_artists"
-                    android:textSize="13sp"
-                    app:iconGravity="textEnd"
-                    app:iconPadding="4dp"
-                    app:iconSize="14dp" />
+                    app:checkedButton="@id/btn_filter_artists"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_filter_albums"
-                    style="@style/Widget.Omniplay.SegmentedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
-                    android:text="@string/filter_albums"
-                    android:textSize="13sp"
-                    app:iconGravity="textEnd"
-                    app:iconPadding="4dp"
-                    app:iconSize="14dp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_filter_artists"
+                        style="@style/Widget.Omniplay.SegmentedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="@string/filter_artists"
+                        android:textSize="13sp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_filter_folders"
-                    style="@style/Widget.Omniplay.SegmentedButton"
-                    android:layout_width="0dp"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_filter_albums"
+                        style="@style/Widget.Omniplay.SegmentedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="@string/filter_albums"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_filter_folders"
+                        style="@style/Widget.Omniplay.SegmentedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:paddingStart="4dp"
+                        android:paddingEnd="4dp"
+                        android:text="@string/filter_folders"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <!-- Circle Sort Button for Browse -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/btn_browse_sort"
+                    android:layout_width="38dp"
                     android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:paddingStart="4dp"
-                    android:paddingEnd="4dp"
-                    android:text="@string/filter_folders"
-                    android:textSize="13sp"
-                    android:visibility="gone"
-                    app:iconGravity="textEnd"
-                    app:iconPadding="4dp"
-                    app:iconSize="14dp" />
-            </com.google.android.material.button.MaterialButtonToggleGroup>
+                    android:layout_marginStart="8dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                    app:cardCornerRadius="19dp"
+                    app:cardElevation="0dp"
+                    app:rippleColor="?attr/colorControlHighlight"
+                    app:strokeColor="?attr/colorOutlineVariant"
+                    app:strokeWidth="1dp">
+
+                    <ImageView
+                        android:id="@+id/browse_sort_icon"
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/sort_songs"
+                        android:src="@drawable/ic_sort"
+                        app:tint="?attr/colorPrimary" />
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Active Filter Banner (Visible when a specific Artist/Album is selected) -->
