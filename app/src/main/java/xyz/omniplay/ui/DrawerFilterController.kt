@@ -311,7 +311,7 @@ class DrawerFilterController(
             binding.cardAllTracksSubtitle.background = null
             binding.cardAllTracksSubtitle.setPadding(0, 0, 0, 0)
 
-            binding.cardAllTracksArrowContainer.setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
+            binding.cardAllTracksArrowContainer.setCardBackgroundColor(surfaceContainerHigh)
             binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_right)
             binding.cardAllTracksArrow.setColorFilter(outline)
         }

@@ -3,7 +3,10 @@ package xyz.omniplay.util
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.text.method.LinkMovementMethod
+import androidx.core.widget.NestedScrollView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textview.MaterialTextView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,12 +29,12 @@ object UpdateChecker {
     )
 
     fun getAppVersion(context: Context?): String {
-        if (context == null) return "0.7"
+        if (context == null) return "0.8"
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "0.7"
+            packageInfo.versionName ?: "0.8"
         } catch (e: Exception) {
-            "0.7"
+            "0.8"
         }
     }
 
@@ -132,15 +135,35 @@ object UpdateChecker {
     fun showUpdateDialog(context: Context, release: ReleaseInfo) {
         val displayTag = if (release.tagName.startsWith("v", ignoreCase = true)) release.tagName else "v${release.tagName}"
         val changelogTrimmed = release.changelog.trim()
-        val message = if (changelogTrimmed.isNotBlank()) {
-            context.getString(R.string.update_available_format, displayTag) + "\n\n" + changelogTrimmed.take(400)
-        } else {
-            context.getString(R.string.update_available_format, displayTag)
+        val updatePrompt = context.getString(R.string.update_available_format, displayTag)
+
+        val density = context.resources.displayMetrics.density
+        val paddingHorizontal = (24 * density).toInt()
+        val paddingTop = (8 * density).toInt()
+        val paddingBottom = (8 * density).toInt()
+
+        val scrollView = NestedScrollView(context).apply {
+            setPadding(paddingHorizontal, paddingTop, paddingHorizontal, paddingBottom)
+            clipToPadding = false
         }
+
+        val fullMarkdown = if (changelogTrimmed.isNotBlank()) {
+            "**$updatePrompt**\n\n$changelogTrimmed"
+        } else {
+            updatePrompt
+        }
+
+        val textView = MaterialTextView(context).apply {
+            textSize = 14f
+            movementMethod = LinkMovementMethod.getInstance()
+            text = MarkdownRenderer.render(fullMarkdown)
+        }
+
+        scrollView.addView(textView)
 
         MaterialAlertDialogBuilder(context)
             .setTitle(R.string.update_available_title)
-            .setMessage(message)
+            .setView(scrollView)
             .setPositiveButton(R.string.download) { _, _ ->
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl)).apply {

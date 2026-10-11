@@ -1098,13 +1098,13 @@
             app:cardBackgroundColor="?attr/colorSurfaceContainer"
             app:cardCornerRadius="20dp"
             app:cardElevation="0dp"
+            app:rippleColor="?attr/colorControlHighlight"
             app:strokeColor="?attr/colorOutlineVariant"
             app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="58dp"
-                android:background="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingStart="12dp"
@@ -1162,7 +1162,7 @@
                     android:id="@+id/card_all_tracks_arrow_container"
                     android:layout_width="32dp"
                     android:layout_height="32dp"
-                    app:cardBackgroundColor="@android:color/transparent"
+                    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
                     app:strokeWidth="0dp">
