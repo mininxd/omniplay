@@ -45,9 +45,6 @@ import xyz.omniplay.util.ThemeHelper
 import xyz.omniplay.util.UpdateChecker
 import java.util.Locale
 
-typealias LibraryFilterMode = xyz.omniplay.ui.LibraryFilterMode
-typealias SortField = xyz.omniplay.ui.SortField
-
 class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     companion object {
