@@ -300,8 +300,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
             },
             onCollapseBottomSheet = { playlistPanelController.collapse() },
-            onShowSortDialog = { showSortDialog() },
-            onRescanClicked = { rescanMusic() }
+            onShowSortDialog = { showSortDialog() }
         )
 
         playbackGestureController = PlaybackGestureController(
@@ -482,9 +481,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
                     }
                 }
-            },
-            onRescanClicked = {
-                rescanMusic()
             }
         )
 

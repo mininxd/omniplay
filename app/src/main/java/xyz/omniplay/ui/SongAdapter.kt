@@ -20,7 +20,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.R
-import xyz.omniplay.databinding.ItemRescanFooterBinding
 import xyz.omniplay.databinding.ItemSongBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AlbumArtLoader
@@ -28,14 +27,8 @@ import xyz.omniplay.util.ThemeColors
 
 class SongAdapter(
     private var showAlbumArt: Boolean = true,
-    private val onSongClicked: (Song, Int) -> Unit,
-    private val onRescanClicked: (() -> Unit)? = null
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-
-    companion object {
-        private const val VIEW_TYPE_SONG = 0
-        private const val VIEW_TYPE_RESCAN_FOOTER = 1
-    }
+    private val onSongClicked: (Song, Int) -> Unit
+) : RecyclerView.Adapter<SongAdapter.SongViewHolder>() {
 
     private var songs: List<Song> = emptyList()
     private var currentPlayingSongId: Long = -1L
@@ -64,49 +57,25 @@ class SongAdapter(
         if (newIndex != -1) notifyItemChanged(newIndex)
     }
 
-    override fun getItemViewType(position: Int): Int {
-        return if (position < songs.size) VIEW_TYPE_SONG else VIEW_TYPE_RESCAN_FOOTER
+    override fun getItemCount(): Int = songs.size
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {
+        val binding = ItemSongBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
+        return SongViewHolder(binding)
     }
 
-    override fun getItemCount(): Int {
-        return if (songs.isEmpty()) 0 else if (onRescanClicked != null) songs.size + 1 else songs.size
+    override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
+        val song = songs[position]
+        holder.bind(song, song.id == currentPlayingSongId)
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val inflater = LayoutInflater.from(parent.context)
-        return if (viewType == VIEW_TYPE_RESCAN_FOOTER) {
-            val binding = ItemRescanFooterBinding.inflate(inflater, parent, false)
-            RescanFooterViewHolder(binding)
-        } else {
-            val binding = ItemSongBinding.inflate(inflater, parent, false)
-            SongViewHolder(binding)
-        }
-    }
-
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        if (holder is SongViewHolder) {
-            val song = songs[position]
-            holder.bind(song, song.id == currentPlayingSongId)
-        } else if (holder is RescanFooterViewHolder) {
-            holder.bind()
-        }
-    }
-
-    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+    override fun onViewRecycled(holder: SongViewHolder) {
         super.onViewRecycled(holder)
-        if (holder is SongViewHolder) {
-            holder.cancelLoading()
-        }
-    }
-
-    inner class RescanFooterViewHolder(private val binding: ItemRescanFooterBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-
-        fun bind() {
-            binding.cardRescanFooter.setOnClickListener {
-                onRescanClicked?.invoke()
-            }
-        }
+        holder.cancelLoading()
     }
 
     inner class SongViewHolder(private val binding: ItemSongBinding) :

@@ -30,8 +30,7 @@ data class FilterItem(
     val isBack: Boolean = false,
     val song: Song? = null,
     val subtitle: String? = null,
-    val folderPath: String? = null,
-    val isRescan: Boolean = false
+    val folderPath: String? = null
 )
 
 class DrawerFilterAdapter(
@@ -100,7 +99,7 @@ class DrawerFilterAdapter(
                 binding.filterItemSubtitle.visibility = android.view.View.GONE
             }
 
-            if (item.isBack || item.isRescan) {
+            if (item.isBack) {
                 binding.filterItemCount.visibility = android.view.View.GONE
             } else if (item.song != null) {
                 binding.filterItemCount.visibility = android.view.View.VISIBLE
@@ -126,7 +125,6 @@ class DrawerFilterAdapter(
                 binding.filterItemIcon.setPadding(pad, pad, pad, pad)
                 binding.filterItemIcon.setImageResource(
                     when {
-                        item.isRescan -> R.drawable.ic_refresh
                         item.isBack -> R.drawable.ic_arrow_back
                         item.isFolder -> R.drawable.ic_folder
                         item.song != null -> R.drawable.ic_music_note
@@ -134,17 +132,16 @@ class DrawerFilterAdapter(
                         else -> R.drawable.ic_person
                     }
                 )
-                val tintColor = if (item.isSelected || item.isRescan) {
+                val tintColor = if (item.isSelected) {
                     ThemeColors.getPrimary(context)
                 } else {
                     ThemeColors.getOnSurfaceVariant(context)
                 }
                 binding.filterItemIcon.setColorFilter(tintColor)
-                binding.filterItemIcon.alpha = if (item.isSelected || item.isRescan) 1.0f else 0.7f
+                binding.filterItemIcon.alpha = if (item.isSelected) 1.0f else 0.7f
             }
 
             val cachedArt = when {
-                item.isRescan -> null
                 item.isBack -> null
                 item.song != null -> AlbumArtLoader.getCachedAlbumArt(item.song)
                 item.isFolder -> null
