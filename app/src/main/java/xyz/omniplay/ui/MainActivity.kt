@@ -356,7 +356,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     playbackService?.refreshQueue(displayedSongs)
                 }
             },
-            onSongLongClicked = { song, anchor ->
+            onSongLongClicked = { song: Song, anchor: View ->
                 showSongOptionsMenu(anchor, song)
                 true
             }
@@ -594,7 +594,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
             },
             onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) },
-            onSongLongClicked = { song, anchor ->
+            onSongLongClicked = { song: Song, anchor: View ->
                 showSongOptionsMenu(anchor, song)
                 true
             }
