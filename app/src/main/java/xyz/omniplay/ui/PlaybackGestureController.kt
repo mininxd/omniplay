@@ -28,10 +28,10 @@ class PlaybackGestureController(
     private val binding: ActivityMainBinding,
     private val getPlaybackService: () -> PlaybackService?,
     private val lyricsController: LyricsController,
+    private val drawerFilterController: DrawerFilterController,
     private val onSkipNext: () -> Unit,
     private val onSkipPrevious: () -> Unit,
-    private val onAlbumArtTap: () -> Unit,
-    private val onOpenDrawerRequested: () -> Unit
+    private val onAlbumArtTap: () -> Unit
 ) {
 
     fun setup() {
@@ -427,11 +427,23 @@ class PlaybackGestureController(
             .start()
     }
 
+    /**
+     * Handles double tap in the empty space left and right of the song titles to seek 5 seconds,
+     * and horizontal slide/swipe to the right in the titles area to open the left filter library menu.
+     * The slide tracks the user's finger in real-time 1:1 without sudden snapping.
+     */
     private fun setupTitleDoubleTapGestures() {
+        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+        var startX = 0f
+        var startY = 0f
+        var isDraggingDrawer = false
+        var velocityTracker: VelocityTracker? = null
+
         val gestureDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
 
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isDraggingDrawer) return false
                 val width = binding.titleGestureArea.width.toFloat().coerceAtLeast(1f)
                 if (e.x <= width * 0.40f) {
                     seekRelative(-5000L)
@@ -442,16 +454,163 @@ class PlaybackGestureController(
                 }
                 return true
             }
-
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                onOpenDrawerRequested()
-                return true
-            }
         })
 
-        binding.titleGestureArea.setOnTouchListener { _, event ->
-            gestureDetector.onTouchEvent(event)
-            true
+        binding.titleGestureArea.setOnTouchListener { v, event ->
+            if (drawerFilterController.isFilterMenuOpen) {
+                return@setOnTouchListener false
+            }
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    drawerFilterController.cancelFilterDrawerAnimator()
+                    startX = event.rawX
+                    startY = event.rawY
+                    isDraggingDrawer = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    gestureDetector.onTouchEvent(event)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    velocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - startX
+                    val deltaY = event.rawY - startY
+
+                    if (!isDraggingDrawer) {
+                        // Slide trigger has generous space across titles area
+                        val titleAreaWidth = v.width.toFloat().coerceAtLeast(1f)
+                        val touchXInView = event.x - deltaX
+                        val inTriggerZone = touchXInView <= titleAreaWidth * 0.85f
+
+                        if (inTriggerZone && deltaX > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
+                            isDraggingDrawer = true
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                            val drawerWidth = drawerFilterController.getDrawerWidth()
+                            binding.leftDrawerMenu.translationX = -drawerWidth
+                            binding.leftDrawerMenu.visibility = View.VISIBLE
+                            binding.filterDrawerScrim.visibility = View.VISIBLE
+                        } else {
+                            gestureDetector.onTouchEvent(event)
+                        }
+                    }
+
+                    if (isDraggingDrawer) {
+                        val drawerWidth = drawerFilterController.getDrawerWidth()
+                        val targetTranslation = (-drawerWidth + deltaX).coerceIn(-drawerWidth, 0f)
+                        binding.leftDrawerMenu.translationX = targetTranslation
+                        val progress = ((targetTranslation + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                        binding.filterDrawerScrim.alpha = progress * 0.6f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isDraggingDrawer) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = velocityTracker?.xVelocity ?: 0f
+                        val drawerWidth = drawerFilterController.getDrawerWidth()
+                        val currentTrans = binding.leftDrawerMenu.translationX
+                        val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+
+                        // Trigger open if flung right (>700) or dragged towards center UI (~55%-60% progress)
+                        val shouldOpen = when {
+                            xVel > 700f -> true
+                            xVel < -700f -> false
+                            else -> progress >= 0.55f
+                        }
+                        drawerFilterController.animateLeftMenu(toOpen = shouldOpen, currentTrans = currentTrans, drawerWidth = drawerWidth)
+                        isDraggingDrawer = false
+                    } else {
+                        gestureDetector.onTouchEvent(event)
+                        if (event.actionMasked == MotionEvent.ACTION_UP) {
+                            v.performClick()
+                        }
+                    }
+                    velocityTracker?.recycle()
+                    velocityTracker = null
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // Slide to right in the top Omniplay title bar or press to open
+        var titleStartX = 0f
+        var titleStartY = 0f
+        var isTitleDragging = false
+        var titleVelocityTracker: VelocityTracker? = null
+
+        binding.appTitleText.setOnTouchListener { v, event ->
+            if (drawerFilterController.isFilterMenuOpen) {
+                return@setOnTouchListener false
+            }
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    drawerFilterController.cancelFilterDrawerAnimator()
+                    titleStartX = event.rawX
+                    titleStartY = event.rawY
+                    isTitleDragging = false
+                    titleVelocityTracker?.recycle()
+                    titleVelocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    titleVelocityTracker?.addMovement(event)
+                    val deltaX = event.rawX - titleStartX
+                    val deltaY = event.rawY - titleStartY
+
+                    if (!isTitleDragging && deltaX > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.1f) {
+                        isTitleDragging = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        val drawerWidth = drawerFilterController.getDrawerWidth()
+                        binding.leftDrawerMenu.translationX = -drawerWidth
+                        binding.leftDrawerMenu.visibility = View.VISIBLE
+                        binding.filterDrawerScrim.visibility = View.VISIBLE
+                    }
+
+                    if (isTitleDragging) {
+                        val drawerWidth = drawerFilterController.getDrawerWidth()
+                        val targetTranslation = (-drawerWidth + deltaX).coerceIn(-drawerWidth, 0f)
+                        binding.leftDrawerMenu.translationX = targetTranslation
+                        val progress = ((targetTranslation + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+                        binding.filterDrawerScrim.alpha = progress * 0.6f
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    titleVelocityTracker?.addMovement(event)
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+
+                    if (isTitleDragging) {
+                        titleVelocityTracker?.computeCurrentVelocity(1000)
+                        val xVel = titleVelocityTracker?.xVelocity ?: 0f
+                        val drawerWidth = drawerFilterController.getDrawerWidth()
+                        val currentTrans = binding.leftDrawerMenu.translationX
+                        val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
+
+                        val shouldOpen = when {
+                            xVel > 700f -> true
+                            xVel < -700f -> false
+                            else -> progress >= 0.55f
+                        }
+                        drawerFilterController.animateLeftMenu(toOpen = shouldOpen, currentTrans = currentTrans, drawerWidth = drawerWidth)
+                        isTitleDragging = false
+                    } else if (event.actionMasked == MotionEvent.ACTION_UP) {
+                        drawerFilterController.openLeftMenu()
+                    }
+                    titleVelocityTracker?.recycle()
+                    titleVelocityTracker = null
+                    true
+                }
+                else -> false
+            }
         }
     }
 }

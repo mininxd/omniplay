@@ -307,10 +307,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding = binding,
             getPlaybackService = { playbackService },
             lyricsController = lyricsController,
+            drawerFilterController = drawerFilterController,
             onSkipNext = { playbackService?.skipNext(forceNext = true) },
             onSkipPrevious = { playbackService?.skipPrevious(forcePrevious = false) },
-            onAlbumArtTap = { playlistPanelController.expand() },
-            onOpenDrawerRequested = { drawerFilterController.openLeftMenu() }
+            onAlbumArtTap = { playlistPanelController.expand() }
         )
     }
 

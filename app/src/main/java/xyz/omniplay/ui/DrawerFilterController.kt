@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -162,6 +163,7 @@ class DrawerFilterController(
                 currentFolderNavigationPath.clear()
                 updateAllTracksCardUI(isActive = false)
                 binding.browseByContainer.visibility = View.VISIBLE
+                binding.drawerFilterInfoText.visibility = View.VISIBLE
                 updateFilterSubList()
             } else {
                 // Activate All Tracks
@@ -235,7 +237,7 @@ class DrawerFilterController(
 
     /**
      * Updates the "All Tracks" button UI with Material 3 Expressive styling.
-     * When active, uses primary container colors, expressive active badge, and checkmark.
+     * When active, uses primary container colors, expressive active badge, and downward chevron without border.
      * When inactive, uses standard tonal surface container styling.
      */
     fun updateAllTracksCardUI(isActive: Boolean) {
@@ -250,8 +252,7 @@ class DrawerFilterController(
             val onPrimary = ThemeColors.getOnPrimary(activity)
 
             binding.cardAllTracks.setCardBackgroundColor(primaryContainer)
-            binding.cardAllTracks.strokeColor = primary
-            binding.cardAllTracks.strokeWidth = (1.5f * density).toInt()
+            binding.cardAllTracks.strokeWidth = 0
 
             binding.cardAllTracksIconContainer.setCardBackgroundColor(primary)
             binding.cardAllTracksIconContainer.strokeColor = primary
@@ -261,9 +262,9 @@ class DrawerFilterController(
 
             binding.cardAllTracksTitle.setTextColor(onPrimaryContainer)
             binding.cardAllTracksSubtitle.setTextColor(onPrimaryContainer)
-            binding.cardAllTracksSubtitle.text = "$totalSongs tracks • Active"
+            binding.cardAllTracksSubtitle.text = "$totalSongs tracks"
 
-            binding.cardAllTracksArrow.setImageResource(R.drawable.ic_check)
+            binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_down)
             binding.cardAllTracksArrow.setColorFilter(onPrimaryContainer)
         } else {
             // Material 3 Expressive Inactive State
@@ -299,13 +300,22 @@ class DrawerFilterController(
         return if (width > 0f) width else (320 * activity.resources.displayMetrics.density)
     }
 
+    fun cancelFilterDrawerAnimator() {
+        filterDrawerAnimator?.cancel()
+    }
+
     fun openLeftMenu() {
+        if (isFilterMenuOpen) return
+        binding.appTitleText.text = activity.getString(R.string.music_library)
         val drawer = binding.leftDrawerMenu
         drawer.visibility = View.VISIBLE
         binding.filterDrawerScrim.visibility = View.VISIBLE
         val drawerWidth = getDrawerWidth()
         val currentTrans = drawer.translationX.coerceAtMost(0f)
         animateLeftMenu(toOpen = true, currentTrans = currentTrans, drawerWidth = drawerWidth)
+        try {
+            binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        } catch (ignored: Exception) {}
     }
 
     fun closeLeftMenu() {
@@ -318,6 +328,10 @@ class DrawerFilterController(
         val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
         val remaining = if (toOpen) (1f - progress) else progress
         val duration = (260L * remaining).toLong().coerceIn(80L, 260L)
+
+        if (toOpen) {
+            binding.appTitleText.text = activity.getString(R.string.music_library)
+        }
 
         filterDrawerAnimator?.cancel()
         filterDrawerAnimator = ValueAnimator.ofFloat(currentTrans, targetX).apply {
@@ -522,16 +536,6 @@ class DrawerFilterController(
             val allSongsSorted = SongSortHelper.sortSongs(activity, allScannedSongs, getCurrentSortField(), isSortAscending())
             val currentPlayingId = getCurrentPlayingSongId()
             val items = mutableListOf<FilterItem>()
-            items.add(
-                FilterItem(
-                    title = "..",
-                    count = 0,
-                    isAlbum = false,
-                    isFolder = false,
-                    isBack = true,
-                    subtitle = "Back to Browse Categories"
-                )
-            )
             items.addAll(
                 allSongsSorted.map { song ->
                     FilterItem(
@@ -546,11 +550,13 @@ class DrawerFilterController(
                     )
                 }
             )
-            binding.drawerFilterInfoText.text = "All Tracks (${allScannedSongs.size} songs)"
+            binding.drawerFilterInfoText.visibility = View.GONE
             drawerFilterAdapter?.setItems(items)
             binding.drawerFilterRecyclerView.scrollToPosition(0)
             return
         }
+
+        binding.drawerFilterInfoText.visibility = View.VISIBLE
 
         val artistTarget = currentArtistDrillDown
         if (artistTarget != null) {
@@ -997,6 +1003,7 @@ class DrawerFilterController(
                 isAllTracksDrillDown = false
                 updateAllTracksCardUI(isActive = false)
                 binding.browseByContainer.visibility = View.VISIBLE
+                binding.drawerFilterInfoText.visibility = View.VISIBLE
                 updateFilterSubList()
                 return true
             }
