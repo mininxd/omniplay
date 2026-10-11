@@ -747,14 +747,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.swipeRefreshDrawer.isRefreshing = true
                 }
 
-                if (!isRescan) {
-                    val cachedSongs = withContext(Dispatchers.IO) {
-                        musicDatabase.getAllSongs()
-                    }
-                    if (cachedSongs.isNotEmpty()) {
-                        updateSongList(cachedSongs)
-                        return@launch
-                    }
+                val cachedSongs = withContext(Dispatchers.IO) {
+                    musicDatabase.getAllSongs()
+                }
+
+                if (!isRescan && cachedSongs.isNotEmpty()) {
+                    updateSongList(cachedSongs)
+                    return@launch
                 }
 
                 if (isUserInitiated) {
@@ -769,7 +768,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 val priorityFolder = drawerFilterController.getActiveBrowsingFolder()
                 if (!priorityFolder.isNullOrBlank() && isRescan) {
                     val prioritySongs = withContext(Dispatchers.IO) {
-                        musicScanner.scanPriorityFolder(priorityFolder, folderUris)
+                        musicScanner.scanPriorityFolder(priorityFolder, folderUris, cachedSongs = cachedSongs)
                     }
                     if (prioritySongs.isNotEmpty()) {
                         val mergedPriority = (prioritySongs + allScannedSongs).distinctBy {
@@ -785,7 +784,23 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 val allSongs = mutableListOf<Song>()
                 for (uri in folderUris) {
                     try {
-                        val folderSongs = musicScanner.scanFolder(uri, priorityFolderName = priorityFolder)
+                        val folderSongs = musicScanner.scanFolder(
+                            treeUri = uri,
+                            priorityFolderName = priorityFolder,
+                            cachedSongs = cachedSongs,
+                            onProgressBatch = { batch ->
+                                lifecycleScope.launch(Dispatchers.Main) {
+                                    if (batch.isNotEmpty()) {
+                                        val merged = (batch + allScannedSongs).distinctBy {
+                                            it.filePath.ifEmpty { it.contentUri.toString() }
+                                        }
+                                        allScannedSongs = merged
+                                        scannedSongs = merged
+                                        applyCurrentFilter()
+                                    }
+                                }
+                            }
+                        )
                         allSongs.addAll(folderSongs)
                     } catch (e: Exception) {
                         e.printStackTrace()

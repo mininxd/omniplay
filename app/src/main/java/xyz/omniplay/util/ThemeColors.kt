@@ -11,7 +11,7 @@ object ThemeColors {
     fun getPrimary(context: Context): Int {
         return MaterialColors.getColor(
             context,
-            androidx.appcompat.R.attr.colorPrimary,
+            com.google.android.material.R.attr.colorPrimary,
             ContextCompat.getColor(context, R.color.primary_accent)
         )
     }
@@ -128,7 +128,7 @@ object ThemeColors {
     fun getError(context: Context): Int {
         return MaterialColors.getColor(
             context,
-            androidx.appcompat.R.attr.colorError,
+            com.google.android.material.R.attr.colorError,
             ContextCompat.getColor(context, R.color.slider_cancel_accent)
         )
     }

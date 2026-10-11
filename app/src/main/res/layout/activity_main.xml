@@ -1254,7 +1254,10 @@
                     android:paddingStart="4dp"
                     android:paddingEnd="4dp"
                     android:text="@string/filter_artists"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    app:iconGravity="textEnd"
+                    app:iconPadding="4dp"
+                    app:iconSize="14dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_filter_albums"
@@ -1268,7 +1271,10 @@
                     android:paddingStart="4dp"
                     android:paddingEnd="4dp"
                     android:text="@string/filter_albums"
-                    android:textSize="13sp" />
+                    android:textSize="13sp"
+                    app:iconGravity="textEnd"
+                    app:iconPadding="4dp"
+                    app:iconSize="14dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_filter_folders"
@@ -1283,7 +1289,10 @@
                     android:paddingEnd="4dp"
                     android:text="@string/filter_folders"
                     android:textSize="13sp"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    app:iconGravity="textEnd"
+                    app:iconPadding="4dp"
+                    app:iconSize="14dp" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
         </LinearLayout>
 

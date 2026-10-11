@@ -13,7 +13,9 @@ import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.button.MaterialButton
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.model.Song
@@ -196,9 +198,14 @@ class DrawerFilterController(
                 R.id.btn_filter_albums -> setFilterMode(LibraryFilterMode.ALBUM)
                 R.id.btn_filter_folders -> setFilterMode(LibraryFilterMode.FOLDER)
             }
+            updateSegmentedButtonsTheming()
         }
 
         binding.btnFilterArtists.setOnClickListener {
+            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_artists && !isAllTracksDrillDown && currentArtistDrillDown == null) {
+                onShowSortDialog()
+                return@setOnClickListener
+            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -211,6 +218,10 @@ class DrawerFilterController(
         }
 
         binding.btnFilterAlbums.setOnClickListener {
+            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_albums && !isAllTracksDrillDown && currentAlbumDrillDown == null) {
+                onShowSortDialog()
+                return@setOnClickListener
+            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -223,6 +234,10 @@ class DrawerFilterController(
         }
 
         binding.btnFilterFolders.setOnClickListener {
+            if (binding.filterToggleGroup.checkedButtonId == R.id.btn_filter_folders && !isAllTracksDrillDown && currentFolderNavigationPath.isEmpty()) {
+                onShowSortDialog()
+                return@setOnClickListener
+            }
             if (isAllTracksDrillDown || currentArtistDrillDown != null || currentAlbumDrillDown != null || currentFolderNavigationPath.isNotEmpty()) {
                 isAllTracksDrillDown = false
                 currentArtistDrillDown = null
@@ -1064,13 +1079,14 @@ class DrawerFilterController(
     /**
      * Updates the segmented buttons (Artists, Albums, Folders) theming dynamically
      * to guarantee consistency across all themes and dark/light modes.
+     * The active button uses surfaceContainerHigh (subtle, non-bright) with primary stroke and text,
+     * and shows a sort icon immediately following the label text.
      */
     fun updateSegmentedButtonsTheming() {
         val density = activity.resources.displayMetrics.density
-        val primaryContainer = ThemeColors.getPrimaryContainer(activity)
-        val onPrimaryContainer = ThemeColors.getOnPrimaryContainer(activity)
-        val primary = ThemeColors.getPrimary(activity)
+        val surfaceContainerHigh = ThemeColors.getSurfaceContainerHigh(activity)
         val surfaceContainer = ThemeColors.getSurfaceContainer(activity)
+        val primary = ThemeColors.getPrimary(activity)
         val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(activity)
         val outlineVariant = ThemeColors.getOutlineVariant(activity)
         val highlight = ThemeColors.getColorControlHighlight(activity)
@@ -1080,22 +1096,35 @@ class DrawerFilterController(
             intArrayOf(android.R.attr.state_selected),
             intArrayOf()
         )
-        val bgColors = intArrayOf(primaryContainer, primaryContainer, surfaceContainer)
+        val bgColors = intArrayOf(surfaceContainerHigh, surfaceContainerHigh, surfaceContainer)
         val bgTintList = ColorStateList(states, bgColors)
 
-        val textColors = intArrayOf(onPrimaryContainer, onPrimaryContainer, onSurfaceVariant)
+        val textColors = intArrayOf(primary, primary, onSurfaceVariant)
         val textColorList = ColorStateList(states, textColors)
 
         val strokeColors = intArrayOf(primary, primary, outlineVariant)
         val strokeColorList = ColorStateList(states, strokeColors)
+
+        val checkedId = binding.filterToggleGroup.checkedButtonId
+        val sortIcon = ContextCompat.getDrawable(activity, R.drawable.ic_sort)
 
         listOf(binding.btnFilterArtists, binding.btnFilterAlbums, binding.btnFilterFolders).forEach { btn ->
             btn.backgroundTintList = bgTintList
             btn.setTextColor(textColorList)
             btn.iconTint = textColorList
             btn.strokeColor = strokeColorList
-            btn.strokeWidth = (1f * density).toInt()
+            val isChecked = (btn.id == checkedId)
+            btn.strokeWidth = ((if (isChecked) 1.5f else 1f) * density).toInt()
             btn.rippleColor = ColorStateList.valueOf(highlight)
+
+            if (isChecked) {
+                btn.icon = sortIcon
+                btn.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_END
+                btn.iconSize = (14 * density).toInt()
+                btn.iconPadding = (4 * density).toInt()
+            } else {
+                btn.icon = null
+            }
         }
     }
 

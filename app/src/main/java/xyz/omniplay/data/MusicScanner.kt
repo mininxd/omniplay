@@ -11,6 +11,9 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AudioInfoExtractor
@@ -62,15 +65,136 @@ class MusicScanner(private val context: Context) {
     }
 
     /**
-     * Scans a user-selected folder tree.
-     * First queries MediaStore filtered by the folder path for fast retrieval and rich metadata.
-     * If MediaStore returns no songs (e.g. unindexed folder, .nomedia), falls back to SAF traversal.
+     * Unindexed file info for deferred parallel extraction.
      */
-    suspend fun scanFolder(treeUri: Uri, priorityFolderName: String? = null): List<Song> = withContext(Dispatchers.IO) {
+    private data class UnindexedFileInfo(
+        val uri: Uri,
+        val name: String,
+        val ext: String,
+        val size: Long,
+        val lastMod: Long,
+        val folderName: String
+    )
+
+    private fun findCachedSong(
+        uriStr: String,
+        name: String,
+        size: Long,
+        lastMod: Long,
+        currentFolderName: String,
+        cachedByUri: Map<String, Song>,
+        cachedByName: Map<String, List<Song>>
+    ): Song? {
+        val byUri = cachedByUri[uriStr]
+        if (byUri != null) {
+            val sizeMatch = byUri.fileSize <= 0L || size <= 0L || byUri.fileSize == size
+            val modMatch = byUri.dateModified <= 0L || lastMod <= 0L ||
+                    byUri.dateModified == lastMod || kotlin.math.abs(byUri.dateModified - lastMod) <= 1000L
+            if (sizeMatch && modMatch) {
+                return byUri
+            }
+        }
+
+        val candidates = cachedByName[name.lowercase(Locale.ROOT)] ?: return null
+        if (candidates.size == 1) {
+            val c = candidates.first()
+            val sizeMatch = c.fileSize <= 0L || size <= 0L || c.fileSize == size
+            val modMatch = c.dateModified <= 0L || lastMod <= 0L ||
+                    c.dateModified == lastMod || kotlin.math.abs(c.dateModified - lastMod) <= 1000L
+            if (sizeMatch && modMatch) {
+                return c
+            }
+        } else {
+            for (c in candidates) {
+                val sizeMatch = c.fileSize <= 0L || size <= 0L || c.fileSize == size
+                val modMatch = c.dateModified <= 0L || lastMod <= 0L ||
+                        c.dateModified == lastMod || kotlin.math.abs(c.dateModified - lastMod) <= 1000L
+                val folderMatch = currentFolderName.isEmpty() ||
+                        c.folderName.contains(currentFolderName, ignoreCase = true) ||
+                        c.filePath.contains(currentFolderName, ignoreCase = true)
+                if (sizeMatch && modMatch && folderMatch) {
+                    return c
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findMediaStoreSong(
+        name: String,
+        size: Long,
+        currentFolderName: String,
+        mediaStoreByPath: Map<String, Song>,
+        mediaStoreByName: Map<String, List<Song>>
+    ): Song? {
+        val candidates = mediaStoreByName[name.lowercase(Locale.ROOT)] ?: return null
+        if (candidates.size == 1) {
+            val c = candidates.first()
+            val sizeMatch = c.fileSize <= 0L || size <= 0L ||
+                    c.fileSize == size || kotlin.math.abs(c.fileSize - size) < 4096L
+            if (sizeMatch) return c
+        } else {
+            for (c in candidates) {
+                val sizeMatch = c.fileSize <= 0L || size <= 0L ||
+                        c.fileSize == size || kotlin.math.abs(c.fileSize - size) < 4096L
+                val folderMatch = currentFolderName.isEmpty() ||
+                        c.folderName.contains(currentFolderName, ignoreCase = true) ||
+                        c.filePath.contains(currentFolderName, ignoreCase = true)
+                if (sizeMatch && folderMatch) return c
+            }
+        }
+        return null
+    }
+
+    private suspend fun extractUnindexedBatch(
+        unindexedFiles: List<UnindexedFileInfo>
+    ): List<Song> = coroutineScope {
+        if (unindexedFiles.isEmpty()) return@coroutineScope emptyList()
+        val parallelDispatcher = Dispatchers.IO.limitedParallelism(4)
+        unindexedFiles.map { info ->
+            async(parallelDispatcher) {
+                extractSongFromUri(
+                    uri = info.uri,
+                    displayName = info.name,
+                    ext = info.ext,
+                    size = info.size,
+                    dateModified = info.lastMod,
+                    folderName = info.folderName
+                )
+            }
+        }.awaitAll()
+    }
+
+    /**
+     * Scans a user-selected folder tree with MediaStore fast-path, incremental delta cache matching,
+     * parallel metadata extraction, and progressive updates.
+     */
+    suspend fun scanFolder(
+        treeUri: Uri,
+        priorityFolderName: String? = null,
+        cachedSongs: List<Song> = emptyList(),
+        onProgressBatch: ((List<Song>) -> Unit)? = null
+    ): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
         val folderRelativePath = getRelativePathFromTreeUri(treeUri)
 
-        // 1. Direct SAF traversal using DocumentsContract to discover all actual files on disk
+        // 1. MediaStore-First Fast Path:
+        // Pre-query MediaStore for this folder tree. MediaStore has all audio metadata pre-indexed in SQLite.
+        val mediaStoreSongs = if (!folderRelativePath.isNullOrEmpty()) {
+            scanMediaStoreForFolder(folderRelativePath)
+        } else {
+            emptyList()
+        }
+
+        val mediaStoreByPath = mediaStoreSongs.associateBy { it.filePath.lowercase(Locale.ROOT) }
+        val mediaStoreByName = mediaStoreSongs.groupBy { File(it.filePath).name.lowercase(Locale.ROOT) }
+
+        // 2. Incremental Delta Scanning:
+        // Build fast lookup caches from Room database cached songs
+        val cachedByUri = cachedSongs.associateBy { it.contentUri.toString() }
+        val cachedByName = cachedSongs.groupBy { (if (it.filePath.isNotEmpty()) File(it.filePath).name else it.title).lowercase(Locale.ROOT) }
+
+        // 3. Direct SAF traversal using DocumentsContract to discover all actual files on disk
         val rootFolderName = folderRelativePath?.substringAfterLast('/')?.ifEmpty { "Music" } ?: "Music"
         try {
             val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
@@ -78,76 +202,58 @@ class MusicScanner(private val context: Context) {
             } else {
                 DocumentsContract.getTreeDocumentId(treeUri)
             }
-            scanFolderDocumentsContract(treeUri, rootDocId, rootFolderName, songsList, priorityFolderName = priorityFolderName)
+            scanFolderDocumentsContract(
+                treeUri = treeUri,
+                parentDocId = rootDocId,
+                currentFolderName = rootFolderName,
+                songsList = songsList,
+                cachedByUri = cachedByUri,
+                cachedByName = cachedByName,
+                mediaStoreByPath = mediaStoreByPath,
+                mediaStoreByName = mediaStoreByName,
+                priorityFolderName = priorityFolderName,
+                onProgressBatch = onProgressBatch
+            )
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        // 2. Fallback to DocumentFile traversal if DocumentsContract returned empty
+        // 4. Fallback to DocumentFile traversal if DocumentsContract returned empty
         if (songsList.isEmpty()) {
             try {
                 val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
                 if (rootDoc != null) {
                     val rootName = rootDoc.name ?: rootFolderName
-                    scanDocumentFileRecursive(rootDoc, rootName, songsList)
+                    scanDocumentFileRecursive(
+                        directory = rootDoc,
+                        currentFolderName = rootName,
+                        songsList = songsList,
+                        cachedByUri = cachedByUri,
+                        cachedByName = cachedByName,
+                        mediaStoreByPath = mediaStoreByPath,
+                        mediaStoreByName = mediaStoreByName,
+                        onProgressBatch = onProgressBatch
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
 
-        // 3. Query MediaStore for this folder path with relaxed filter
-        val mediaStoreSongs = if (!folderRelativePath.isNullOrEmpty()) {
-            scanMediaStoreForFolder(folderRelativePath)
-        } else {
-            emptyList()
-        }
-
-        // Merge SAF-discovered songs with MediaStore songs (ensuring files like 04. Basket Case.flac are never omitted)
+        // 5. Merge any MediaStore tracks that SAF might have missed (e.g. unindexed subdirectories)
         val finalSongs = if (songsList.isNotEmpty()) {
             if (mediaStoreSongs.isNotEmpty()) {
-                val mediaStoreByPath = mediaStoreSongs.associateBy { it.filePath.lowercase(Locale.ROOT) }
-                val mediaStoreByName = mediaStoreSongs.groupBy { File(it.filePath).name.lowercase(Locale.ROOT) }
-
-                songsList.map { safSong ->
-                    val safFileName = File(safSong.filePath).name.lowercase(Locale.ROOT)
-                    val match = (if (safSong.filePath.isNotBlank()) mediaStoreByPath[safSong.filePath.lowercase(Locale.ROOT)] else null)
-                        ?: run {
-                            val candidateList = mediaStoreByName[safFileName]
-                            if (candidateList != null && candidateList.size == 1) {
-                                val candidate = candidateList.first()
-                                val sizeMatches = safSong.fileSize <= 0L || candidate.fileSize <= 0L ||
-                                        kotlin.math.abs(safSong.fileSize - candidate.fileSize) < 4096
-                                val durationMatches = safSong.duration <= 0L || candidate.duration <= 0L ||
-                                        kotlin.math.abs(safSong.duration - candidate.duration) < 3000
-                                if (sizeMatches && durationMatches) candidate else null
-                            } else null
-                        }
-
-                    if (match != null) {
-                        val resolvedFolder = if (safSong.folderName.isNotEmpty()) {
-                            safSong.folderName
-                        } else if (match.folderName.isNotEmpty()) {
-                            match.folderName
-                        } else {
-                            File(match.filePath).parentFile?.name ?: ""
-                        }
-                        safSong.copy(
-                            albumArtUri = safSong.albumArtUri ?: (if (match.album != "Unknown Album") match.albumArtUri else null),
-                            title = if (safSong.title == safSong.filePath.substringBeforeLast('.')) match.title else safSong.title,
-                            artist = if (safSong.artist == "Unknown Artist") match.artist else safSong.artist,
-                            album = if (safSong.album == "Unknown Album") match.album else safSong.album,
-                            duration = if (safSong.duration > 0L) safSong.duration else match.duration,
-                            dateModified = if (match.dateModified > 0L) match.dateModified else safSong.dateModified,
-                            folderName = resolvedFolder
-                        )
-                    } else {
-                        safSong
-                    }
+                val existingNames = songsList.map {
+                    (if (it.filePath.isNotEmpty()) File(it.filePath).name else it.title).lowercase(Locale.ROOT)
+                }.toSet()
+                val missingFromSaf = mediaStoreSongs.filter {
+                    File(it.filePath).name.lowercase(Locale.ROOT) !in existingNames
                 }
-            } else {
-                songsList
+                if (missingFromSaf.isNotEmpty()) {
+                    songsList.addAll(missingFromSaf)
+                }
             }
+            songsList
         } else if (mediaStoreSongs.isNotEmpty()) {
             mediaStoreSongs
         } else if (folderRelativePath.isNullOrEmpty()) {
@@ -235,23 +341,32 @@ class MusicScanner(private val context: Context) {
      */
     suspend fun scanPriorityFolder(
         folderPath: String,
-        folderUris: List<Uri>
+        folderUris: List<Uri>,
+        cachedSongs: List<Song> = emptyList()
     ): List<Song> = withContext(Dispatchers.IO) {
         val prioritySongs = mutableListOf<Song>()
         val cleanPath = folderPath.trim('/')
 
         // 1. Fast MediaStore query for this folder path
-        try {
-            val msSongs = scanMediaStoreForFolder(cleanPath)
-            prioritySongs.addAll(msSongs)
+        val msSongs = try {
+            val list = mutableListOf<Song>()
+            list.addAll(scanMediaStoreForFolder(cleanPath))
             if (cleanPath.contains('/')) {
                 val lastSeg = cleanPath.substringAfterLast('/')
-                val msLastSeg = scanMediaStoreForFolder(lastSeg)
-                prioritySongs.addAll(msLastSeg)
+                list.addAll(scanMediaStoreForFolder(lastSeg))
             }
+            list.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
         } catch (e: Exception) {
             e.printStackTrace()
+            emptyList()
         }
+        prioritySongs.addAll(msSongs)
+
+        val mediaStoreByPath = msSongs.associateBy { it.filePath.lowercase(Locale.ROOT) }
+        val mediaStoreByName = msSongs.groupBy { File(it.filePath).name.lowercase(Locale.ROOT) }
+
+        val cachedByUri = cachedSongs.associateBy { it.contentUri.toString() }
+        val cachedByName = cachedSongs.groupBy { (if (it.filePath.isNotEmpty()) File(it.filePath).name else it.title).lowercase(Locale.ROOT) }
 
         // 2. Direct SAF query for matching folder files
         val pLower = cleanPath.substringAfterLast('/').lowercase(Locale.ROOT)
@@ -269,6 +384,10 @@ class MusicScanner(private val context: Context) {
                     parentDocId = rootDocId,
                     currentFolderName = rootFolderName,
                     songsList = safSongs,
+                    cachedByUri = cachedByUri,
+                    cachedByName = cachedByName,
+                    mediaStoreByPath = mediaStoreByPath,
+                    mediaStoreByName = mediaStoreByName,
                     priorityFolderName = cleanPath
                 )
                 val matchingSaf = safSongs.filter { s ->
@@ -285,13 +404,18 @@ class MusicScanner(private val context: Context) {
         prioritySongs.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
     }
 
-    private fun scanFolderDocumentsContract(
+    private suspend fun scanFolderDocumentsContract(
         treeUri: Uri,
         parentDocId: String,
         currentFolderName: String,
         songsList: MutableList<Song>,
+        cachedByUri: Map<String, Song>,
+        cachedByName: Map<String, List<Song>>,
+        mediaStoreByPath: Map<String, Song>,
+        mediaStoreByName: Map<String, List<Song>>,
         visitedDocIds: MutableSet<String> = mutableSetOf(),
-        priorityFolderName: String? = null
+        priorityFolderName: String? = null,
+        onProgressBatch: ((List<Song>) -> Unit)? = null
     ) {
         if (!visitedDocIds.add(parentDocId)) return
         val childrenUri = try {
@@ -304,10 +428,13 @@ class MusicScanner(private val context: Context) {
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE,
-            DocumentsContract.Document.COLUMN_SIZE
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
         )
 
         val subDirs = mutableListOf<Pair<String, String>>()
+        val dirUnindexed = mutableListOf<UnindexedFileInfo>()
+        val startSongCount = songsList.size
 
         try {
             context.contentResolver.query(
@@ -342,14 +469,55 @@ class MusicScanner(private val context: Context) {
                                 (mime == "application/octet-stream" && ext in supportedExtensions)
                         if (isAudio) {
                             val fileDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-                            val song = extractSongFromUri(fileDocUri, name, ext.ifEmpty { "audio" }, size, lastMod, currentFolderName)
-                            songsList.add(song)
+                            val cached = findCachedSong(fileDocUri.toString(), name, size, lastMod, currentFolderName, cachedByUri, cachedByName)
+                            if (cached != null) {
+                                songsList.add(
+                                    cached.copy(
+                                        contentUri = fileDocUri,
+                                        folderName = if (currentFolderName.isNotEmpty()) currentFolderName else cached.folderName,
+                                        fileSize = if (size > 0L) size else cached.fileSize,
+                                        dateModified = if (lastMod > 0L) lastMod else cached.dateModified
+                                    )
+                                )
+                            } else {
+                                val msMatch = findMediaStoreSong(name, size, currentFolderName, mediaStoreByPath, mediaStoreByName)
+                                if (msMatch != null) {
+                                    songsList.add(
+                                        msMatch.copy(
+                                            contentUri = fileDocUri,
+                                            folderName = if (currentFolderName.isNotEmpty()) currentFolderName else msMatch.folderName,
+                                            fileSize = if (size > 0L) size else msMatch.fileSize,
+                                            dateModified = if (lastMod > 0L) lastMod else msMatch.dateModified
+                                        )
+                                    )
+                                } else {
+                                    dirUnindexed.add(
+                                        UnindexedFileInfo(
+                                            uri = fileDocUri,
+                                            name = name,
+                                            ext = ext.ifEmpty { "audio" },
+                                            size = size,
+                                            lastMod = lastMod,
+                                            folderName = currentFolderName
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        if (dirUnindexed.isNotEmpty()) {
+            val newlyExtracted = extractUnindexedBatch(dirUnindexed)
+            songsList.addAll(newlyExtracted)
+        }
+
+        if (onProgressBatch != null && songsList.size > startSongCount) {
+            onProgressBatch(songsList.toList())
         }
 
         val sortedSubDirs = if (!priorityFolderName.isNullOrBlank()) {
@@ -363,31 +531,107 @@ class MusicScanner(private val context: Context) {
         }
 
         for ((subDirDocId, dirName) in sortedSubDirs) {
-            scanFolderDocumentsContract(treeUri, subDirDocId, dirName, songsList, visitedDocIds, priorityFolderName)
+            scanFolderDocumentsContract(
+                treeUri = treeUri,
+                parentDocId = subDirDocId,
+                currentFolderName = dirName,
+                songsList = songsList,
+                cachedByUri = cachedByUri,
+                cachedByName = cachedByName,
+                mediaStoreByPath = mediaStoreByPath,
+                mediaStoreByName = mediaStoreByName,
+                visitedDocIds = visitedDocIds,
+                priorityFolderName = priorityFolderName,
+                onProgressBatch = onProgressBatch
+            )
         }
     }
 
-    private fun scanDocumentFileRecursive(directory: DocumentFile, currentFolderName: String, songsList: MutableList<Song>) {
+    private suspend fun scanDocumentFileRecursive(
+        directory: DocumentFile,
+        currentFolderName: String,
+        songsList: MutableList<Song>,
+        cachedByUri: Map<String, Song>,
+        cachedByName: Map<String, List<Song>>,
+        mediaStoreByPath: Map<String, Song>,
+        mediaStoreByName: Map<String, List<Song>>,
+        onProgressBatch: ((List<Song>) -> Unit)? = null
+    ) {
         val files = directory.listFiles()
+        val dirUnindexed = mutableListOf<UnindexedFileInfo>()
+        val startSongCount = songsList.size
+
         for (file in files) {
             if (file.isDirectory) {
                 val dirName = file.name ?: ""
                 val nextDir = if (currentFolderName.isNotEmpty()) "$currentFolderName/$dirName" else dirName
-                scanDocumentFileRecursive(file, nextDir, songsList)
+                scanDocumentFileRecursive(
+                    directory = file,
+                    currentFolderName = nextDir,
+                    songsList = songsList,
+                    cachedByUri = cachedByUri,
+                    cachedByName = cachedByName,
+                    mediaStoreByPath = mediaStoreByPath,
+                    mediaStoreByName = mediaStoreByName,
+                    onProgressBatch = onProgressBatch
+                )
             } else if (file.isFile) {
                 val name = file.name ?: ""
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
                 val mime = file.type ?: ""
                 val isAudio = ext in supportedExtensions ||
-                                mime.startsWith("audio/") ||
-                                mime.contains("flac", ignoreCase = true) ||
-                                mime.contains("ogg", ignoreCase = true) ||
-                                (mime == "application/octet-stream" && ext in supportedExtensions)
+                        mime.startsWith("audio/") ||
+                        mime.contains("flac", ignoreCase = true) ||
+                        mime.contains("ogg", ignoreCase = true) ||
+                        (mime == "application/octet-stream" && ext in supportedExtensions)
                 if (isAudio) {
-                    val song = extractSongFromUri(file.uri, name, ext.ifEmpty { "audio" }, file.length(), file.lastModified(), currentFolderName)
-                    songsList.add(song)
+                    val size = file.length()
+                    val lastMod = file.lastModified()
+                    val cached = findCachedSong(file.uri.toString(), name, size, lastMod, currentFolderName, cachedByUri, cachedByName)
+                    if (cached != null) {
+                        songsList.add(
+                            cached.copy(
+                                contentUri = file.uri,
+                                folderName = if (currentFolderName.isNotEmpty()) currentFolderName else cached.folderName,
+                                fileSize = if (size > 0L) size else cached.fileSize,
+                                dateModified = if (lastMod > 0L) lastMod else cached.dateModified
+                            )
+                        )
+                    } else {
+                        val msMatch = findMediaStoreSong(name, size, currentFolderName, mediaStoreByPath, mediaStoreByName)
+                        if (msMatch != null) {
+                            songsList.add(
+                                msMatch.copy(
+                                    contentUri = file.uri,
+                                    folderName = if (currentFolderName.isNotEmpty()) currentFolderName else msMatch.folderName,
+                                    fileSize = if (size > 0L) size else msMatch.fileSize,
+                                    dateModified = if (lastMod > 0L) lastMod else msMatch.dateModified
+                                )
+                            )
+                        } else {
+                            dirUnindexed.add(
+                                UnindexedFileInfo(
+                                    uri = file.uri,
+                                    name = name,
+                                    ext = ext.ifEmpty { "audio" },
+                                    size = size,
+                                    lastMod = lastMod,
+                                    folderName = currentFolderName
+                                )
+                            )
+                        }
+                    }
                 }
             }
+        }
+
+        if (dirUnindexed.isNotEmpty()) {
+            val newlyExtracted = extractUnindexedBatch(dirUnindexed)
+            songsList.addAll(newlyExtracted)
+        }
+
+        if (onProgressBatch != null && songsList.size > startSongCount) {
+            onProgressBatch(songsList.toList())
         }
     }
 
