@@ -237,7 +237,7 @@ class DrawerFilterController(
 
     /**
      * Updates the "All Tracks" button UI with Material 3 Expressive styling.
-     * When active, uses primary container colors, expressive active badge, and downward chevron without border.
+     * When active, morphs into a connected header with tonal surface elevation, pill badge, and action container.
      * When inactive, uses standard tonal surface container styling.
      */
     fun updateAllTracksCardUI(isActive: Boolean) {
@@ -245,27 +245,38 @@ class DrawerFilterController(
         val totalSongs = getAllScannedSongs().size
 
         if (isActive) {
-            // Material 3 Expressive Active State
+            // Material 3 Expressive Active State (Connected Header)
+            val surfaceContainerHigh = ThemeColors.getSurfaceContainerHigh(activity)
+            val surfaceContainerHighest = ThemeColors.getSurfaceContainerHighest(activity)
             val primaryContainer = ThemeColors.getPrimaryContainer(activity)
-            val onPrimaryContainer = ThemeColors.getOnPrimaryContainer(activity)
             val primary = ThemeColors.getPrimary(activity)
-            val onPrimary = ThemeColors.getOnPrimary(activity)
+            val onSurface = ThemeColors.getOnSurface(activity)
 
-            binding.cardAllTracks.setCardBackgroundColor(primaryContainer)
+            binding.cardAllTracks.setCardBackgroundColor(surfaceContainerHigh)
             binding.cardAllTracks.strokeWidth = 0
 
-            binding.cardAllTracksIconContainer.setCardBackgroundColor(primary)
-            binding.cardAllTracksIconContainer.strokeColor = primary
+            // Expressive shape morphing: top rounded, bottom connects cleanly to the song list
+            binding.cardAllTracks.shapeAppearanceModel = binding.cardAllTracks.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(20f * density)
+                .setTopRightCornerSize(20f * density)
+                .setBottomLeftCornerSize(4f * density)
+                .setBottomRightCornerSize(4f * density)
+                .build()
+
+            binding.cardAllTracksIconContainer.setCardBackgroundColor(primaryContainer)
             binding.cardAllTracksIconContainer.strokeWidth = 0
+            binding.cardAllTracksIcon.setColorFilter(primary)
 
-            binding.cardAllTracksIcon.setColorFilter(onPrimary)
+            binding.cardAllTracksTitle.setTextColor(onSurface)
 
-            binding.cardAllTracksTitle.setTextColor(onPrimaryContainer)
-            binding.cardAllTracksSubtitle.setTextColor(onPrimaryContainer)
+            binding.cardAllTracksSubtitle.setTextColor(primary)
             binding.cardAllTracksSubtitle.text = "$totalSongs tracks"
+            binding.cardAllTracksSubtitle.setBackgroundResource(R.drawable.bg_badge_material_you)
+            binding.cardAllTracksSubtitle.setPadding((8 * density).toInt(), (2 * density).toInt(), (8 * density).toInt(), (2 * density).toInt())
 
+            binding.cardAllTracksArrowContainer.setCardBackgroundColor(surfaceContainerHighest)
             binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_down)
-            binding.cardAllTracksArrow.setColorFilter(onPrimaryContainer)
+            binding.cardAllTracksArrow.setColorFilter(primary)
         } else {
             // Material 3 Expressive Inactive State
             val surfaceContainer = ThemeColors.getSurfaceContainer(activity)
@@ -280,16 +291,27 @@ class DrawerFilterController(
             binding.cardAllTracks.strokeColor = outlineVariant
             binding.cardAllTracks.strokeWidth = (1f * density).toInt()
 
+            // Restore all 4 rounded corners
+            binding.cardAllTracks.shapeAppearanceModel = binding.cardAllTracks.shapeAppearanceModel.toBuilder()
+                .setTopLeftCornerSize(20f * density)
+                .setTopRightCornerSize(20f * density)
+                .setBottomLeftCornerSize(20f * density)
+                .setBottomRightCornerSize(20f * density)
+                .build()
+
             binding.cardAllTracksIconContainer.setCardBackgroundColor(surfaceContainerHigh)
             binding.cardAllTracksIconContainer.strokeColor = outlineVariant
             binding.cardAllTracksIconContainer.strokeWidth = (1f * density).toInt()
-
             binding.cardAllTracksIcon.setColorFilter(primary)
 
             binding.cardAllTracksTitle.setTextColor(onSurface)
+
             binding.cardAllTracksSubtitle.setTextColor(onSurfaceVariant)
             binding.cardAllTracksSubtitle.text = "$totalSongs songs"
+            binding.cardAllTracksSubtitle.background = null
+            binding.cardAllTracksSubtitle.setPadding(0, 0, 0, 0)
 
+            binding.cardAllTracksArrowContainer.setCardBackgroundColor(android.graphics.Color.TRANSPARENT)
             binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_right)
             binding.cardAllTracksArrow.setColorFilter(outline)
         }
@@ -306,7 +328,6 @@ class DrawerFilterController(
 
     fun openLeftMenu() {
         if (isFilterMenuOpen) return
-        binding.appTitleText.text = activity.getString(R.string.music_library)
         val drawer = binding.leftDrawerMenu
         drawer.visibility = View.VISIBLE
         binding.filterDrawerScrim.visibility = View.VISIBLE
@@ -328,10 +349,6 @@ class DrawerFilterController(
         val progress = ((currentTrans + drawerWidth) / drawerWidth).coerceIn(0f, 1f)
         val remaining = if (toOpen) (1f - progress) else progress
         val duration = (260L * remaining).toLong().coerceIn(80L, 260L)
-
-        if (toOpen) {
-            binding.appTitleText.text = activity.getString(R.string.music_library)
-        }
 
         filterDrawerAnimator?.cancel()
         filterDrawerAnimator = ValueAnimator.ofFloat(currentTrans, targetX).apply {

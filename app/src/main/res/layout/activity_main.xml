@@ -1090,9 +1090,9 @@
             android:id="@+id/card_all_tracks"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginTop="14dp"
-            android:layout_marginEnd="16dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="14dp"
             android:clickable="true"
             android:focusable="true"
             app:cardBackgroundColor="?attr/colorSurfaceContainer"
@@ -1103,28 +1103,28 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="68dp"
+                android:layout_height="58dp"
                 android:background="?attr/selectableItemBackground"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="14dp"
-                android:paddingEnd="16dp">
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
 
                 <!-- Expressive Icon Container -->
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/card_all_tracks_icon_container"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                    app:cardCornerRadius="14dp"
+                    app:cardCornerRadius="12dp"
                     app:cardElevation="0dp"
                     app:strokeColor="?attr/colorOutlineVariant"
                     app:strokeWidth="1dp">
 
                     <ImageView
                         android:id="@+id/card_all_tracks_icon"
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:src="@drawable/ic_music_note"
                         app:tint="?attr/colorPrimary" />
@@ -1133,8 +1133,9 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="14dp"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
+                    android:gravity="center_vertical"
                     android:orientation="vertical">
 
                     <TextView
@@ -1144,24 +1145,36 @@
                         android:fontFamily="sans-serif-medium"
                         android:text="@string/all_tracks"
                         android:textColor="?attr/colorOnSurface"
-                        android:textSize="15.5sp" />
+                        android:textSize="15sp" />
 
                     <TextView
                         android:id="@+id/card_all_tracks_subtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
+                        android:layout_marginTop="1dp"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="12sp"
+                        android:textSize="11.5sp"
                         tools:text="0 songs" />
                 </LinearLayout>
 
-                <ImageView
-                    android:id="@+id/card_all_tracks_arrow"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:src="@drawable/ic_chevron_right"
-                    app:tint="?attr/colorOutline" />
+                <!-- Expressive Action Arrow Container -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/card_all_tracks_arrow_container"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    app:cardBackgroundColor="@android:color/transparent"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="0dp"
+                    app:strokeWidth="0dp">
+
+                    <ImageView
+                        android:id="@+id/card_all_tracks_arrow"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="?attr/colorOutline" />
+                </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -1301,6 +1314,8 @@
             android:id="@+id/drawer_filter_recycler_view"
             android:layout_width="match_parent"
             android:layout_height="0dp"
+            android:layout_marginStart="14dp"
+            android:layout_marginEnd="14dp"
             android:layout_marginTop="4dp"
             android:layout_weight="1"
             android:clipToPadding="false"

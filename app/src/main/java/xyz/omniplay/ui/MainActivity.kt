@@ -781,9 +781,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     fun updateAppTitle() {
         val isBottomSheetOpen = !playlistPanelController.isCollapsed()
-        val isFilterMenuOpen = drawerFilterController.isFilterMenuOpen
         val isFilterPreviewActive = drawerFilterController.isFilterPreviewActive
-        if (isFilterMenuOpen || isFilterPreviewActive || isBottomSheetOpen) {
+        if (isFilterPreviewActive || isBottomSheetOpen) {
             binding.appTitleText.text = getString(R.string.music_library)
         } else {
             binding.appTitleText.text = getString(R.string.app_name)
