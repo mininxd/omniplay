@@ -504,6 +504,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isShowArt = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
+        var isDragging = false
+
         val songItemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
             ItemTouchHelper.UP or ItemTouchHelper.DOWN,
             ItemTouchHelper.RIGHT
@@ -535,7 +537,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (direction == ItemTouchHelper.RIGHT) {
                     val pos = viewHolder.bindingAdapterPosition
                     if (pos != RecyclerView.NO_POSITION) {
-                        removeSongFromQueueAt(pos)
+                        binding.songsRecyclerView.post {
+                            removeSongFromQueueAt(pos)
+                        }
                     }
                 }
             }
@@ -543,11 +547,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                 super.onSelectedChanged(viewHolder, actionState)
                 if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+                    isDragging = true
                     binding.swipeRefreshSongs.isEnabled = false
                     viewHolder?.itemView?.alpha = 0.85f
                     viewHolder?.itemView?.scaleX = 1.02f
                     viewHolder?.itemView?.scaleY = 1.02f
                     viewHolder?.itemView?.translationZ = 16f
+                } else if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
+                    isDragging = false
+                    binding.swipeRefreshSongs.isEnabled = false
+                } else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
+                    binding.swipeRefreshSongs.isEnabled = true
                 }
             }
 
@@ -559,14 +569,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 viewHolder.itemView.scaleY = 1.0f
                 viewHolder.itemView.translationZ = 0f
 
-                val newSongs = songAdapter?.getSongs() ?: emptyList()
-                if (newSongs.isNotEmpty()) {
-                    displayedSongs = newSongs
-                    saveCustomSongOrder(newSongs.map { it.id })
-                    if (!drawerFilterController.isFilterPreviewActive && playbackService != null) {
-                        playbackService?.refreshQueue(displayedSongs)
+                if (isDragging) {
+                    isDragging = false
+                    val newSongs = songAdapter?.getSongs() ?: emptyList()
+                    if (newSongs.isNotEmpty()) {
+                        displayedSongs = newSongs
+                        saveCustomSongOrder(newSongs.map { it.id })
+                        if (!drawerFilterController.isFilterPreviewActive && playbackService != null) {
+                            playbackService?.refreshQueue(displayedSongs)
+                        }
+                        drawerFilterController.updateFilterSubList()
                     }
-                    drawerFilterController.updateFilterSubList()
                 }
             }
         })
@@ -735,6 +748,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     saveCustomSongOrder(customSongOrder.filter { it != songToRemove.id })
                 }
                 service.removeSongAt(position)
+                displayedSongs = service.queue.toList()
+                binding.songCountText.text = "${service.queue.size} songs"
+                if (service.queue.isEmpty()) {
+                    binding.emptyStateLayout.visibility = View.VISIBLE
+                    binding.songsRecyclerView.visibility = View.GONE
+                }
             }
         } else {
             val mutable = displayedSongs.toMutableList()

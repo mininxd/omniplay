@@ -68,6 +68,7 @@ class SongAdapter(
             val item = mutable.removeAt(position)
             songs = mutable
             notifyItemRemoved(position)
+            notifyItemRangeChanged(position, songs.size - position)
             return item
         }
         return null
