@@ -62,6 +62,17 @@ class SongAdapter(
         }
     }
 
+    fun removeItem(position: Int): Song? {
+        if (position in songs.indices) {
+            val mutable = songs.toMutableList()
+            val item = mutable.removeAt(position)
+            songs = mutable
+            notifyItemRemoved(position)
+            return item
+        }
+        return null
+    }
+
     fun setCurrentPlayingSongId(id: Long) {
         val oldId = currentPlayingSongId
         currentPlayingSongId = id

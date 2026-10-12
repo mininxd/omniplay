@@ -6,10 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import com.google.android.material.color.MaterialColors
 import android.text.Editable
 import android.text.SpannableString
 import android.text.Spanned
@@ -505,9 +509,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             .getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
 
         val songItemTouchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
-            ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            ItemTouchHelper.RIGHT
         ) {
             override fun isLongPressDragEnabled(): Boolean = false
+
+            override fun getSwipeDirs(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                if (drawerFilterController.isFilterPreviewActive || currentSearchQuery.isNotBlank()) {
+                    return 0
+                }
+                return ItemTouchHelper.RIGHT
+            }
 
             override fun onMove(
                 recyclerView: RecyclerView,
@@ -523,7 +535,55 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 return false
             }
 
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                if (direction == ItemTouchHelper.RIGHT) {
+                    val pos = viewHolder.bindingAdapterPosition
+                    if (pos != RecyclerView.NO_POSITION) {
+                        removeSongFromQueueAt(pos)
+                    }
+                }
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+                    val itemView = viewHolder.itemView
+                    val icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_delete)
+                    val iconMargin = (itemView.height - (icon?.intrinsicHeight ?: 0)) / 2
+                    val iconTop = itemView.top + (itemView.height - (icon?.intrinsicHeight ?: 0)) / 2
+                    val iconBottom = iconTop + (icon?.intrinsicHeight ?: 0)
+                    val iconLeft = itemView.left + iconMargin
+                    val iconRight = iconLeft + (icon?.intrinsicWidth ?: 0)
+
+                    val bgColor = MaterialColors.getColor(
+                        this@MainActivity,
+                        com.google.android.material.R.attr.colorErrorContainer,
+                        Color.parseColor("#B00020")
+                    )
+                    val background = ColorDrawable(bgColor)
+                    background.setBounds(itemView.left, itemView.top, itemView.left + dX.toInt(), itemView.bottom)
+                    background.draw(c)
+
+                    if (dX > iconMargin && icon != null) {
+                        val iconColor = MaterialColors.getColor(
+                            this@MainActivity,
+                            com.google.android.material.R.attr.colorOnErrorContainer,
+                            Color.WHITE
+                        )
+                        DrawableCompat.setTint(icon, iconColor)
+                        icon.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                        icon.draw(c)
+                    }
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
 
             override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
                 super.onSelectedChanged(viewHolder, actionState)
@@ -600,7 +660,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             },
             onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) },
             onSongLongClicked = { song: Song, anchor: View ->
-                showSongOptionsMenu(anchor, song)
+                showSongOptionsMenu(anchor, song, isFromQueue = true)
                 true
             }
         )
@@ -707,6 +767,34 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 playlistPanelController.expand()
             }
             showSortDialog()
+        }
+    }
+
+    private fun removeSongFromQueueAt(position: Int) {
+        val removed = songAdapter?.removeItem(position)
+        val service = playbackService
+        if (service != null && service.queue.isNotEmpty()) {
+            if (position in service.queue.indices) {
+                val songToRemove = service.queue[position]
+                if (customSongOrder.isNotEmpty()) {
+                    saveCustomSongOrder(customSongOrder.filter { it != songToRemove.id })
+                }
+                service.removeSongAt(position)
+            }
+        } else {
+            val mutable = displayedSongs.toMutableList()
+            if (position in mutable.indices) {
+                val songToRemove = mutable.removeAt(position)
+                displayedSongs = mutable
+                binding.songCountText.text = "${mutable.size} songs"
+                if (customSongOrder.isNotEmpty()) {
+                    saveCustomSongOrder(customSongOrder.filter { it != songToRemove.id })
+                }
+                if (mutable.isEmpty()) {
+                    binding.emptyStateLayout.visibility = View.VISIBLE
+                    binding.songsRecyclerView.visibility = View.GONE
+                }
+            }
         }
     }
 
@@ -1144,7 +1232,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun showSortDialog() {
-        val filterMode = if (drawerFilterController.isFilterMenuOpen) {
+        val isDrawerSorting = drawerFilterController.isFilterMenuOpen
+        val filterMode = if (isDrawerSorting) {
             when {
                 drawerFilterController.isAllTracksDrillDown -> LibraryFilterMode.TRACK
                 drawerFilterController.currentArtistDrillDown != null -> LibraryFilterMode.TRACK
@@ -1173,11 +1262,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 .putBoolean(KEY_SORT_ASCENDING, isSortAscending)
                 .apply()
 
-            applyCurrentFilter()
-            drawerFilterController.updateFilterSubList()
+            if (isDrawerSorting) {
+                drawerFilterController.updateFilterSubList()
+            } else {
+                val currentQueue = playbackService?.queue?.takeIf { it.isNotEmpty() }
+                    ?: displayedSongs.takeIf { it.isNotEmpty() }
+                    ?: allScannedSongs
 
-            if (!drawerFilterController.isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
-                playbackService?.refreshQueue(displayedSongs)
+                val sortedQueue = SongSortHelper.sortSongs(this, currentQueue, field, ascending, customSongOrder)
+                displayedSongs = sortedQueue
+                songAdapter?.setSongs(sortedQueue)
+                binding.songCountText.text = "${sortedQueue.size} songs"
+                playbackService?.refreshQueue(sortedQueue)
+                drawerFilterController.activeOngoingQueue = sortedQueue
             }
         }
     }
@@ -1186,7 +1283,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         return SongSortHelper.sortSongs(this, songs, field, ascending, customSongOrder)
     }
 
-    fun showSongOptionsMenu(anchor: View, song: Song) {
+    fun showSongOptionsMenu(anchor: View, song: Song, isFromQueue: Boolean = false) {
         val themedContext = ContextThemeWrapper(this, R.style.ThemeOverlay_Omniplay_PopupMenu)
         val popup = PopupMenu(themedContext, anchor)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -1214,11 +1311,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         }
 
-        addMenuItem(1, 0, "Add to queue", R.drawable.ic_add)
-        addMenuItem(2, 1, "Play next", R.drawable.ic_skip_next)
-        addMenuItem(3, 2, "Go to artist", R.drawable.ic_person)
-        addMenuItem(4, 3, "Go to album", R.drawable.ic_album)
-        addMenuItem(5, 4, "Go to folders", R.drawable.ic_folder)
+        var order = 0
+        if (!isFromQueue) {
+            addMenuItem(1, order++, "Add to queue", R.drawable.ic_add)
+            addMenuItem(2, order++, "Play next", R.drawable.ic_skip_next)
+        }
+        addMenuItem(3, order++, "Go to artist", R.drawable.ic_person)
+        addMenuItem(4, order++, "Go to album", R.drawable.ic_album)
+        addMenuItem(5, order++, "Go to folders", R.drawable.ic_folder)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -1403,7 +1503,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     override fun onQueueChanged(queue: List<Song>) {
         runOnUiThread {
             if (!::binding.isInitialized) return@runOnUiThread
-            songAdapter?.setSongs(queue)
+            displayedSongs = queue
+            if (songAdapter?.getSongs() != queue) {
+                songAdapter?.setSongs(queue)
+            }
             binding.songCountText.text = "${queue.size} songs"
             if (queue.isNotEmpty()) {
                 binding.emptyStateLayout.visibility = View.GONE

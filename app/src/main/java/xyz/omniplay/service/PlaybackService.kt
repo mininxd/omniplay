@@ -537,6 +537,57 @@ class PlaybackService : Service() {
         listeners.forEach { it.onQueueChanged(queue.toList()) }
     }
 
+    fun removeSongAt(position: Int) {
+        if (position !in queue.indices) return
+        val removedSong = queue[position]
+        val isRemovingCurrent = (position == currentIndex)
+        val wasPlaying = isPlaying()
+
+        queue.removeAt(position)
+        originalQueue = originalQueue.filter { it.id != removedSong.id }
+
+        if (queue.isEmpty()) {
+            isExternalSongActive = false
+            currentIndex = -1
+            currentSong = null
+            currentAlbumArt = null
+            try {
+                player?.stop()
+                player?.clearMediaItems()
+            } catch (e: Exception) {}
+            stopProgressTracker()
+            updatePlaybackState(PlaybackStateCompat.STATE_NONE)
+            mediaSession?.setMetadata(null)
+            updateNotification(isPlaying = false)
+            listeners.forEach {
+                try {
+                    it.onTrackChanged(null)
+                    it.onQueueChanged(emptyList())
+                    it.onPlaybackStateChanged(false)
+                } catch (e: Exception) {}
+            }
+            return
+        }
+
+        if (isRemovingCurrent) {
+            val nextIndex = position.coerceAtMost(queue.size - 1)
+            currentIndex = nextIndex
+            val nextSong = queue[nextIndex]
+            playSong(nextSong, startPlaying = wasPlaying)
+        } else if (position < currentIndex) {
+            currentIndex--
+        }
+
+        listeners.forEach { it.onQueueChanged(queue.toList()) }
+    }
+
+    fun removeSong(song: Song) {
+        val idx = queue.indexOfFirst { it.id == song.id }
+        if (idx != -1) {
+            removeSongAt(idx)
+        }
+    }
+
     /**
      * Refreshes the active queue with newly scanned songs.
      * If the current song is still in the list, its metadata is updated and UI notified without interrupting playback.
