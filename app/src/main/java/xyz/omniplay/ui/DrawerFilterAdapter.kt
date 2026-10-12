@@ -138,8 +138,6 @@ class DrawerFilterAdapter(
         fun cancelPulse() {
             pulseAnimator?.cancel()
             pulseAnimator = null
-            binding.root.scaleX = 1.0f
-            binding.root.scaleY = 1.0f
         }
 
         fun startPulse(item: FilterItem) {
@@ -151,11 +149,9 @@ class DrawerFilterAdapter(
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             } catch (ignored: Exception) {}
 
-            val scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 1.0f, 1.045f, 0.99f, 1.035f, 1.0f)
-            val scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.0f, 1.045f, 0.99f, 1.035f, 1.0f)
-            val scaleAnim = ObjectAnimator.ofPropertyValuesHolder(binding.root, scaleX, scaleY)
-
             val colorAnim = ValueAnimator.ofFloat(0f, 1f, 0.25f, 0.85f, 0f).apply {
+                duration = 1100L
+                interpolator = AccelerateDecelerateInterpolator()
                 addUpdateListener { anim ->
                     val fraction = anim.animatedValue as Float
                     val alphaColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.25f * fraction).toInt())
@@ -185,13 +181,8 @@ class DrawerFilterAdapter(
                 })
             }
 
-            val set = AnimatorSet().apply {
-                playTogether(scaleAnim, colorAnim)
-                duration = 1100L
-                interpolator = AccelerateDecelerateInterpolator()
-            }
-            pulseAnimator = set
-            set.start()
+            pulseAnimator = colorAnim
+            colorAnim.start()
         }
 
         fun bind(item: FilterItem) {
