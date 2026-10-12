@@ -29,12 +29,19 @@ object UpdateChecker {
     )
 
     fun getAppVersion(context: Context?): String {
-        if (context == null) return "0.9"
         return try {
-            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "0.9"
-        } catch (e: Exception) {
-            "0.9"
+            xyz.omniplay.BuildConfig.VERSION_NAME
+        } catch (e: Throwable) {
+            if (context != null) {
+                try {
+                    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                    packageInfo.versionName ?: "0.9.1"
+                } catch (ignored: Exception) {
+                    "0.9.1"
+                }
+            } else {
+                "0.9.1"
+            }
         }
     }
 
@@ -45,69 +52,103 @@ object UpdateChecker {
             val url = URL(GITHUB_API_URL)
             connection = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 10000
-                readTimeout = 15000
+                connectTimeout = 8000
+                readTimeout = 10000
                 setRequestProperty("Accept", "application/vnd.github.v3+json")
                 setRequestProperty("User-Agent", "Omniplay/$currentVersion")
             }
 
-            if (connection.responseCode !in 200..299) {
-                return@withContext null
-            }
+            if (connection.responseCode in 200..299) {
+                val response = connection.inputStream.bufferedReader().use(BufferedReader::readText)
+                val json = JSONObject(response)
 
-            val response = connection.inputStream.bufferedReader().use(BufferedReader::readText)
-            val json = JSONObject(response)
+                val tagName = json.optString("tag_name", "")
+                val name = json.optString("name", tagName)
+                val body = json.optString("body", "")
+                val htmlUrl = json.optString("html_url", "https://github.com/mininxd/omniplay/releases")
 
-            val tagName = json.optString("tag_name", "")
-            val name = json.optString("name", tagName)
-            val body = json.optString("body", "")
-            val htmlUrl = json.optString("html_url", "https://github.com/mininxd/omniplay/releases")
+                var downloadUrl = htmlUrl
+                val assets = json.optJSONArray("assets")
+                if (assets != null && assets.length() > 0) {
+                    var chosenApkUrl: String? = null
+                    var fallbackApkUrl: String? = null
 
-            var downloadUrl = htmlUrl
-            val assets = json.optJSONArray("assets")
-            if (assets != null && assets.length() > 0) {
-                var chosenApkUrl: String? = null
-                var fallbackApkUrl: String? = null
-
-                for (i in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(i)
-                    val assetName = asset.optString("name", "").lowercase()
-                    val browserUrl = asset.optString("browser_download_url", "")
-                    if (assetName.endsWith(".apk")) {
-                        if (fallbackApkUrl == null) {
-                            fallbackApkUrl = browserUrl
-                        }
-                        if (android.os.Build.VERSION.SDK_INT >= 26) {
-                            if (!assetName.contains("legacy")) {
-                                chosenApkUrl = browserUrl
-                                break
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(i)
+                        val assetName = asset.optString("name", "").lowercase()
+                        val browserUrl = asset.optString("browser_download_url", "")
+                        if (assetName.endsWith(".apk")) {
+                            if (fallbackApkUrl == null) {
+                                fallbackApkUrl = browserUrl
                             }
-                        } else {
-                            if (assetName.contains("legacy")) {
-                                chosenApkUrl = browserUrl
-                                break
+                            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                                if (!assetName.contains("legacy")) {
+                                    chosenApkUrl = browserUrl
+                                    break
+                                }
+                            } else {
+                                if (assetName.contains("legacy")) {
+                                    chosenApkUrl = browserUrl
+                                    break
+                                }
                             }
                         }
                     }
+                    downloadUrl = chosenApkUrl ?: fallbackApkUrl ?: htmlUrl
                 }
-                downloadUrl = chosenApkUrl ?: fallbackApkUrl ?: htmlUrl
-            }
 
-            val isNewer = isNewerVersion(currentVersion, tagName)
-            ReleaseInfo(
-                tagName = tagName,
-                name = name,
-                changelog = body,
-                downloadUrl = downloadUrl,
-                releasePageUrl = htmlUrl,
-                isNewer = isNewer
-            )
+                val isNewer = isNewerVersion(currentVersion, tagName)
+                return@withContext ReleaseInfo(
+                    tagName = tagName,
+                    name = name,
+                    changelog = body,
+                    downloadUrl = downloadUrl,
+                    releasePageUrl = htmlUrl,
+                    isNewer = isNewer
+                )
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            null
         } finally {
             connection?.disconnect()
         }
+
+        // Fallback: If GitHub REST API fails or is rate-limited, inspect latest release redirect
+        return@withContext checkViaHtmlRedirect(currentVersion)
+    }
+
+    private fun checkViaHtmlRedirect(currentVersion: String): ReleaseInfo? {
+        var connection: HttpURLConnection? = null
+        try {
+            val url = URL("https://github.com/mininxd/omniplay/releases/latest")
+            connection = (url.openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+            }
+            val location = connection.getHeaderField("Location")
+            if (!location.isNullOrEmpty() && location.contains("/releases/tag/")) {
+                val tagName = location.substringAfterLast("/releases/tag/").substringBefore("?").substringBefore("#")
+                val isNewer = isNewerVersion(currentVersion, tagName)
+                val isLegacy = android.os.Build.VERSION.SDK_INT < 26
+                val apkName = if (isLegacy) "app_release_legacy.apk" else "app_release.apk"
+                val apkUrl = "https://github.com/mininxd/omniplay/releases/download/$tagName/$apkName"
+                return ReleaseInfo(
+                    tagName = tagName,
+                    name = tagName,
+                    changelog = "",
+                    downloadUrl = apkUrl,
+                    releasePageUrl = location,
+                    isNewer = isNewer
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            connection?.disconnect()
+        }
+        return null
     }
 
     fun isNewerVersion(currentVersion: String, remoteVersion: String): Boolean {

@@ -143,6 +143,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         // 5. Check for Updates
+        val currentVersion = UpdateChecker.getAppVersion(this)
+        binding.settingCheckUpdateSubtitle.text = getString(R.string.current_version_format, currentVersion)
+
         binding.settingCheckUpdate.setOnClickListener {
             checkAppUpdate(isManual = true)
         }
@@ -150,25 +153,31 @@ class SettingsActivity : AppCompatActivity() {
         prepareResult()
     }
 
+    private var isCheckingUpdate = false
+
     private fun checkAppUpdate(isManual: Boolean) {
+        if (isCheckingUpdate) return
+        isCheckingUpdate = true
         binding.settingCheckUpdateSubtitle.setText(R.string.checking_updates)
         lifecycleScope.launch {
+            val currentVersion = UpdateChecker.getAppVersion(this@SettingsActivity)
             val release = UpdateChecker.checkLatestRelease(this@SettingsActivity)
+            isCheckingUpdate = false
             if (isFinishing || isDestroyed) return@launch
 
             if (release != null) {
+                val displayTag = release.tagName.removePrefix("v").removePrefix("V")
                 if (release.isNewer) {
-                    binding.settingCheckUpdateSubtitle.text = getString(R.string.update_available_format, release.tagName)
+                    binding.settingCheckUpdateSubtitle.text = getString(R.string.update_available_format, displayTag)
                     UpdateChecker.showUpdateDialog(this@SettingsActivity, release)
                 } else {
-                    val displayTag = if (release.tagName.startsWith("v", ignoreCase = true)) release.tagName.drop(1) else release.tagName
-                    binding.settingCheckUpdateSubtitle.text = getString(R.string.up_to_date_format, displayTag)
+                    binding.settingCheckUpdateSubtitle.text = getString(R.string.current_version_format, currentVersion)
                     if (isManual) {
                         Toast.makeText(this@SettingsActivity, R.string.latest_version_installed, Toast.LENGTH_SHORT).show()
                     }
                 }
             } else {
-                binding.settingCheckUpdateSubtitle.setText(R.string.check_for_updates_desc)
+                binding.settingCheckUpdateSubtitle.text = getString(R.string.current_version_format, currentVersion)
                 if (isManual) {
                     Toast.makeText(this@SettingsActivity, R.string.check_update_failed, Toast.LENGTH_SHORT).show()
                 }
