@@ -548,22 +548,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 super.onSelectedChanged(viewHolder, actionState)
                 if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
                     isDragging = true
-                    binding.swipeRefreshSongs.isEnabled = false
                     viewHolder?.itemView?.alpha = 0.85f
                     viewHolder?.itemView?.scaleX = 1.02f
                     viewHolder?.itemView?.scaleY = 1.02f
                     viewHolder?.itemView?.translationZ = 16f
                 } else if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
                     isDragging = false
-                    binding.swipeRefreshSongs.isEnabled = false
-                } else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
-                    binding.swipeRefreshSongs.isEnabled = true
                 }
             }
 
             override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
                 super.clearView(recyclerView, viewHolder)
-                binding.swipeRefreshSongs.isEnabled = true
                 viewHolder.itemView.alpha = 1.0f
                 viewHolder.itemView.scaleX = 1.0f
                 viewHolder.itemView.scaleY = 1.0f
@@ -633,17 +628,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
         )
 
-        binding.swipeRefreshSongs.setColorSchemeColors(
-            ThemeColors.getPrimary(this),
-            ThemeColors.getSecondary(this)
-        )
-        binding.swipeRefreshSongs.setProgressBackgroundColorSchemeColor(
-            ThemeColors.getSurfaceContainerHigh(this)
-        )
-        binding.swipeRefreshSongs.setOnRefreshListener {
-            rescanMusic()
-        }
-
         binding.swipeRefreshDrawer.setColorSchemeColors(
             ThemeColors.getPrimary(this),
             ThemeColors.getSecondary(this)
@@ -658,6 +642,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         songItemTouchHelper.attachToRecyclerView(binding.songsRecyclerView)
         binding.songsRecyclerView.adapter = songAdapter
         binding.songsRecyclerView.layoutManager = LinearLayoutManager(this)
+        binding.songsRecyclerView.isNestedScrollingEnabled = true
 
         binding.songsRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
@@ -923,7 +908,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         lifecycleScope.launch {
             try {
                 if (isRescan) {
-                    binding.swipeRefreshSongs.isRefreshing = true
                     binding.swipeRefreshDrawer.isRefreshing = true
                 }
 
@@ -999,7 +983,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 updateSongList(emptyList())
                 Toast.makeText(this@MainActivity, "Error scanning folders: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
-                binding.swipeRefreshSongs.isRefreshing = false
                 binding.swipeRefreshDrawer.isRefreshing = false
             }
         }
@@ -1099,12 +1082,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (filtered.isNotEmpty()) {
             binding.songCountText.text = "${filtered.size} songs"
             binding.emptyStateLayout.visibility = View.GONE
-            binding.swipeRefreshSongs.visibility = View.VISIBLE
             binding.songsRecyclerView.visibility = View.VISIBLE
         } else {
             binding.songCountText.text = "0 songs"
             binding.emptyStateLayout.visibility = View.VISIBLE
-            binding.swipeRefreshSongs.visibility = View.GONE
             binding.songsRecyclerView.visibility = View.GONE
             if (currentSearchQuery.isNotBlank()) {
                 binding.emptyStateText.text = getString(R.string.no_tracks_found_format, currentSearchQuery)

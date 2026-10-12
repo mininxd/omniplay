@@ -939,21 +939,15 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <!-- In-Window Playlist Recycler View with Swipe Refresh -->
-        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-            android:id="@+id/swipe_refresh_songs"
+        <!-- In-Window Playlist Recycler View -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/songs_recycler_view"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/songs_recycler_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:clipToPadding="false"
-                android:paddingTop="8dp"
-                android:paddingBottom="24dp" />
-        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingTop="8dp"
+            android:paddingBottom="24dp" />
 
         <!-- Empty State View inside the panel -->
         <LinearLayout
