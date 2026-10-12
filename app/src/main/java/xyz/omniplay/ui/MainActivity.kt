@@ -562,21 +562,13 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val iconLeft = itemView.left + iconMargin
                     val iconRight = iconLeft + (icon?.intrinsicWidth ?: 0)
 
-                    val bgColor = MaterialColors.getColor(
-                        this@MainActivity,
-                        com.google.android.material.R.attr.colorErrorContainer,
-                        Color.parseColor("#B00020")
-                    )
+                    val bgColor = ThemeColors.getSurface(this@MainActivity)
                     val background = ColorDrawable(bgColor)
                     background.setBounds(itemView.left, itemView.top, itemView.left + dX.toInt(), itemView.bottom)
                     background.draw(c)
 
                     if (dX > iconMargin && icon != null) {
-                        val iconColor = MaterialColors.getColor(
-                            this@MainActivity,
-                            com.google.android.material.R.attr.colorOnErrorContainer,
-                            Color.WHITE
-                        )
+                        val iconColor = ThemeColors.getOnSurface(this@MainActivity)
                         DrawableCompat.setTint(icon, iconColor)
                         icon.setBounds(iconLeft, iconTop, iconRight, iconBottom)
                         icon.draw(c)
