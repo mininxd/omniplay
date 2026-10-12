@@ -73,7 +73,7 @@
 
     <!-- Updates -->
     <string name="check_for_updates">Check for updates</string>
-    <string name="check_for_updates_desc">Current version 0.9.1</string>
+    <string name="check_for_updates_desc">Current version 0.9.2</string>
     <string name="current_version_format">Current version %1$s</string>
     <string name="checking_updates">Checking for updates…</string>
     <string name="latest_version_installed">You are using the latest version</string>

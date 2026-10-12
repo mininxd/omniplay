@@ -243,13 +243,8 @@ object AudioDetailsHelper {
                 binding.badgeQuality.visibility = View.GONE
             }
 
-            if (isHiRes) {
-                binding.badgeHires.visibility = View.VISIBLE
-                hasAnyBadge = true
-            } else {
-                binding.badgeHires.visibility = View.GONE
-            }
-
+            // Completely remove Hi-Res badge when acting as listener
+            binding.badgeHires.visibility = View.GONE
             binding.badgeBitPerfect.visibility = View.GONE
 
             val latency = syncManager.currentLatencyMs
@@ -353,7 +348,7 @@ object AudioDetailsHelper {
             val outputModeStr = "Android AudioTrack ($outputEncodingDesc)"
 
             val sourceResolution = syncManager.currentSourceQuality.ifEmpty {
-                quality.ifEmpty { if (isHiRes) "24-bit PCM" else "16-bit PCM" }
+                quality.ifEmpty { "16-bit PCM" }
             }
 
             val details = """

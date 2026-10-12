@@ -285,16 +285,11 @@ class OmniSyncManager private constructor(private val context: Context) {
         }
         val resolution = if (srText.isNotEmpty()) "${bitDepth}bit/$srText" else "${bitDepth}bit"
 
-        // Hi-Res badge logic:
-        // Must depend strictly on the host source fidelity (if the host is playing a Hi-Res song).
-        // The listener running a 32-bit float rendering pipeline does NOT make a non-Hi-Res song Hi-Res!
-        val hostSourceIsHiRes = currentSourceIsHiRes || AudioDetailsHelper.isQualityStringHiRes(currentSourceQuality)
-        val isHiRes = (streamQuality == OmniSyncQuality.HIGH) && hostSourceIsHiRes
-
+        // Hi-Res badge is completely removed in listener mode as requested
         currentTrackQuality = resolution
-        currentTrackIsHiRes = isHiRes
+        currentTrackIsHiRes = false
         mainHandler.post {
-            listeners.forEach { it.onTrackAudioInfoChanged(currentTrackFormat, resolution, isHiRes) }
+            listeners.forEach { it.onTrackAudioInfoChanged(currentTrackFormat, resolution, false) }
         }
     }
 

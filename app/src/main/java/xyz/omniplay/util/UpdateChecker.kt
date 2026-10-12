@@ -35,12 +35,12 @@ object UpdateChecker {
             if (context != null) {
                 try {
                     val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                    packageInfo.versionName ?: "0.9.1"
+                    packageInfo.versionName ?: "0.9.2"
                 } catch (ignored: Exception) {
-                    "0.9.1"
+                    "0.9.2"
                 }
             } else {
-                "0.9.1"
+                "0.9.2"
             }
         }
     }
