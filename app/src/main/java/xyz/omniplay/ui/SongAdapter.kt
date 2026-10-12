@@ -163,17 +163,17 @@ class SongAdapter(
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             } catch (ignored: Exception) {}
 
-            val colorAnim = ValueAnimator.ofFloat(0f, 1f, 0.25f, 0.85f, 0f).apply {
-                duration = 1100L
+            val colorAnim = ValueAnimator.ofFloat(0f, 1f, 0f).apply {
+                duration = 1800L
                 interpolator = AccelerateDecelerateInterpolator()
                 addUpdateListener { anim ->
                     val fraction = anim.animatedValue as Float
-                    val alphaColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.25f * fraction).toInt())
-                    val strokeColor = ColorUtils.setAlphaComponent(primaryColor, (255 * fraction).toInt())
+                    val alphaColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.20f * fraction).toInt())
+                    val strokeColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.50f * fraction).toInt())
                     val shape = GradientDrawable().apply {
                         setColor(alphaColor)
                         cornerRadius = 14 * context.resources.displayMetrics.density
-                        setStroke((2 * context.resources.displayMetrics.density).toInt(), strokeColor)
+                        setStroke((1.5f * context.resources.displayMetrics.density).toInt(), strokeColor)
                     }
                     binding.root.background = shape
                 }
