@@ -31,6 +31,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import xyz.omniplay.model.Song
+import xyz.omniplay.ui.AudioDetailsHelper
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -159,19 +160,88 @@ class OmniSyncManager private constructor(private val context: Context) {
         private set
 
     @Volatile
-    private var listenerSampleRate: Int = 44100
+    var currentSourceQuality: String = ""
+        private set
 
     @Volatile
-    private var listenerNativeBitDepth: Int = 16
+    var currentSourceIsHiRes: Boolean = false
+        private set
+
+    @Volatile
+    var listenerSampleRate: Int = 0
+        private set
+
+    @Volatile
+    var listenerNativeBitDepth: Int = 16
+        private set
+
+    fun isAudioFloatSupported(): Boolean = AudioDetailsHelper.isAudioFloatSupported()
+
+    fun getDeviceNativeSampleRate(): Int = AudioDetailsHelper.getDeviceNativeSampleRate(context)
+
+    fun getRenderingBitDepth(quality: OmniSyncQuality): Int {
+        return when (quality) {
+            OmniSyncQuality.HIGH -> {
+                if (isAudioFloatSupported()) {
+                    32
+                } else if (listenerNativeBitDepth > 16) {
+                    listenerNativeBitDepth
+                } else {
+                    16
+                }
+            }
+            OmniSyncQuality.LOW -> {
+                16
+            }
+        }
+    }
+
+    fun getStreamQualityDescription(quality: OmniSyncQuality): String {
+        return when (quality) {
+            OmniSyncQuality.HIGH -> {
+                val bitDepth = getRenderingBitDepth(OmniSyncQuality.HIGH)
+                if (isAudioFloatSupported()) {
+                    "High Quality • $bitDepth-bit Float Engine"
+                } else {
+                    "High Quality • $bitDepth-bit Native Engine"
+                }
+            }
+            OmniSyncQuality.LOW -> {
+                val bitDepth = getRenderingBitDepth(OmniSyncQuality.LOW)
+                "Low Quality • $bitDepth-bit Standard PCM"
+            }
+        }
+    }
+
+    fun parseIncomingQualityMetadata(quality: String) {
+        val qNorm = quality.lowercase(Locale.ROOT)
+        when {
+            qNorm.contains("384") -> listenerSampleRate = 384000
+            qNorm.contains("352.8") -> listenerSampleRate = 352800
+            qNorm.contains("192") -> listenerSampleRate = 192000
+            qNorm.contains("176.4") -> listenerSampleRate = 176400
+            qNorm.contains("96") -> listenerSampleRate = 96000
+            qNorm.contains("88.2") -> listenerSampleRate = 88200
+            qNorm.contains("48") -> listenerSampleRate = 48000
+            qNorm.contains("44.1") -> listenerSampleRate = 44100
+        }
+        when {
+            qNorm.contains("32bit") || qNorm.contains("32-bit") || qNorm.contains("32/") -> listenerNativeBitDepth = 32
+            qNorm.contains("24bit") || qNorm.contains("24-bit") || qNorm.contains("24/") -> listenerNativeBitDepth = 24
+            qNorm.contains("16bit") || qNorm.contains("16-bit") || qNorm.contains("16/") -> listenerNativeBitDepth = 16
+        }
+    }
 
     fun updateListenerAudioResolution() {
         if (currentRole != OmniSyncRole.LISTENER) return
-        val sr = if (listenerSampleRate > 0) listenerSampleRate else 44100
-        val srText = if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
-        val isLowFloat = streamQuality == OmniSyncQuality.LOW
-        val bitDepth = if (isLowFloat) 32 else listenerNativeBitDepth
-        val resolution = "${bitDepth}bit/$srText"
-        val isHiRes = (bitDepth > 16 || sr > 48000) && !isLowFloat
+        val hardwareSr = getDeviceNativeSampleRate()
+        val sr = if (listenerSampleRate > 0) listenerSampleRate else hardwareSr
+        val srText = if (sr <= 0) "" else if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
+
+        val bitDepth = getRenderingBitDepth(streamQuality)
+        val resolution = if (srText.isNotEmpty()) "${bitDepth}bit/$srText" else "${bitDepth}bit"
+        val isHiRes = streamQuality == OmniSyncQuality.HIGH &&
+                (bitDepth > 16 || sr > 48000 || currentSourceIsHiRes)
 
         currentTrackQuality = resolution
         currentTrackIsHiRes = isHiRes
@@ -825,11 +895,18 @@ class OmniSyncManager private constructor(private val context: Context) {
             val isHostPlaying = initialStatus.optBoolean("isPlaying", false)
             val rName = initialStatus.optString("hostName", host.name)
             val format = initialStatus.optString("format", "").ifEmpty { initialStatus.optString("songFormat", "") }
+            val quality = initialStatus.optString("quality", "").ifEmpty { initialStatus.optString("songQuality", "") }
+            val isHiRes = initialStatus.optBoolean("isHiRes", false)
             currentHostRoomName = rName
 
             if (format.isNotEmpty()) {
                 currentTrackFormat = format
             }
+            if (quality.isNotEmpty()) {
+                currentSourceQuality = quality
+                parseIncomingQualityMetadata(quality)
+            }
+            currentSourceIsHiRes = isHiRes
             updateListenerAudioResolution()
 
             if (title.isNotEmpty()) {
@@ -951,6 +1028,8 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val songTitle = json.optString("songTitle", json.optString("title", "OmniSync Track"))
                 val songArtist = json.optString("songArtist", json.optString("artist", "Host Broadcast"))
                 val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
+                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
+                val isHiRes = json.optBoolean("isHiRes", false)
                 val songDuration = json.optLong("songDuration", json.optLong("durationMs", 0L))
                 val isHostPlaying = json.optBoolean("isPlaying", true)
                 val hostTimestamp = json.optLong("timestamp", 0L)
@@ -958,6 +1037,11 @@ class OmniSyncManager private constructor(private val context: Context) {
                 if (songFormat.isNotEmpty()) {
                     currentTrackFormat = songFormat
                 }
+                if (songQuality.isNotEmpty()) {
+                    currentSourceQuality = songQuality
+                    parseIncomingQualityMetadata(songQuality)
+                }
+                currentSourceIsHiRes = isHiRes
                 updateListenerAudioResolution()
 
                 val formattedHost = if (streamIp.contains(":") && !streamIp.startsWith("[")) "[$streamIp]" else streamIp
@@ -990,9 +1074,16 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
             "AUDIO_INFO" -> {
                 val songFormat = json.optString("songFormat").ifEmpty { json.optString("format") }
+                val songQuality = json.optString("songQuality").ifEmpty { json.optString("quality") }
+                val isHiRes = json.optBoolean("isHiRes", false)
                 if (songFormat.isNotEmpty()) {
                     currentTrackFormat = songFormat
                 }
+                if (songQuality.isNotEmpty()) {
+                    currentSourceQuality = songQuality
+                    parseIncomingQualityMetadata(songQuality)
+                }
+                currentSourceIsHiRes = isHiRes
                 updateListenerAudioResolution()
             }
             "STOP" -> {
@@ -1057,7 +1148,7 @@ class OmniSyncManager private constructor(private val context: Context) {
             .build()
 
         val renderersFactory = DefaultRenderersFactory(context)
-            .setEnableAudioFloatOutput(streamQuality == OmniSyncQuality.LOW)
+            .setEnableAudioFloatOutput(streamQuality == OmniSyncQuality.HIGH && isAudioFloatSupported())
             .setEnableAudioTrackPlaybackParams(true)
 
         val player = ExoPlayer.Builder(context, renderersFactory)
@@ -1308,8 +1399,10 @@ class OmniSyncManager private constructor(private val context: Context) {
             notifyRoleChanged(OmniSyncRole.IDLE)
             notifyPlaybackState(false)
             notifyTrackInfo("", "")
-            listenerSampleRate = 44100
+            listenerSampleRate = getDeviceNativeSampleRate()
             listenerNativeBitDepth = 16
+            currentSourceQuality = ""
+            currentSourceIsHiRes = false
             notifyTrackAudioInfo("", "", false)
             if (!reason.isNullOrEmpty()) {
                 notifyError(reason)

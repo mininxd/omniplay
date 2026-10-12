@@ -40,6 +40,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.model.Song
+import xyz.omniplay.ui.AudioDetailsHelper
 import xyz.omniplay.ui.MainActivity
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -266,43 +267,7 @@ class PlaybackService : Service() {
         private set
 
     fun getAudioOutputDeviceInfo(): String {
-        return try {
-            val devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
-            val usbDevice = devices.find {
-                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
-            }
-            if (usbDevice != null) {
-                val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    usbDevice.productName?.toString()?.takeIf { it.isNotBlank() }
-                } else null
-                prodName ?: "USB DAC / External Audio Device"
-            } else {
-                val btDevice = devices.find {
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                }
-                if (btDevice != null) {
-                    val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        btDevice.productName?.toString()?.takeIf { it.isNotBlank() }
-                    } else null
-                    prodName ?: "Bluetooth Audio (Wireless A2DP)"
-                } else {
-                    val wired = devices.find {
-                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
-                    }
-                    if (wired != null) {
-                        "Wired Headphones (3.5mm Analog Output)"
-                    } else {
-                        "Built-in Device Speaker"
-                    }
-                }
-            }
-        } catch (e: Throwable) {
-            "Default Audio Output"
-        }
+        return AudioDetailsHelper.getAudioOutputDeviceInfo(applicationContext)
     }
 
     /**

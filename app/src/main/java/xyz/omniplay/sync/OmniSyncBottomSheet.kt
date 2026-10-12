@@ -79,14 +79,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     private fun updateStreamQualityUI(quality: OmniSyncQuality) {
         if (_binding == null) return
-        when (quality) {
-            OmniSyncQuality.HIGH -> {
-                binding.streamQualityDescText.text = "High Quality"
-            }
-            OmniSyncQuality.LOW -> {
-                binding.streamQualityDescText.text = "Low Quality"
-            }
-        }
+        binding.streamQualityDescText.text = syncManager.getStreamQualityDescription(quality)
     }
 
     private fun setupTabs() {
@@ -345,6 +338,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.streamQualityToggleGroup.check(targetBtnId)
             }
             updateStreamQualityUI(quality)
+        }
+    }
+
+    override fun onTrackAudioInfoChanged(format: String, quality: String, isHiRes: Boolean) {
+        if (_binding != null) {
+            updateStreamQualityUI(syncManager.streamQuality)
         }
     }
 

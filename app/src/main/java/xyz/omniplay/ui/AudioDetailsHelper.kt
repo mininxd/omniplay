@@ -1,6 +1,11 @@
 package xyz.omniplay.ui
 
 import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+import android.os.Build
 import android.view.View
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -15,6 +20,71 @@ import xyz.omniplay.util.AudioTrackInfo
 import java.util.Locale
 
 object AudioDetailsHelper {
+
+    fun isAudioFloatSupported(): Boolean {
+        return try {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+                    AudioTrack.getMinBufferSize(
+                        48000,
+                        AudioFormat.CHANNEL_OUT_STEREO,
+                        AudioFormat.ENCODING_PCM_FLOAT
+                    ) > 0
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    fun getDeviceNativeSampleRate(context: Context): Int {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            val prop = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+            prop?.toIntOrNull()?.takeIf { it > 0 } ?: 48000
+        } catch (e: Throwable) {
+            48000
+        }
+    }
+
+    fun getAudioOutputDeviceInfo(context: Context): String {
+        return try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                ?: return "Default Audio Output"
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            val usbDevice = devices.find {
+                it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
+            }
+            if (usbDevice != null) {
+                val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    usbDevice.productName?.toString()?.takeIf { it.isNotBlank() }
+                } else null
+                prodName ?: "USB DAC / External Audio Device"
+            } else {
+                val btDevice = devices.find {
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                }
+                if (btDevice != null) {
+                    val prodName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        btDevice.productName?.toString()?.takeIf { it.isNotBlank() }
+                    } else null
+                    prodName ?: "Bluetooth Audio (Wireless A2DP)"
+                } else {
+                    val wired = devices.find {
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                        it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                    }
+                    if (wired != null) {
+                        "Wired Headphones (3.5mm Analog Output)"
+                    } else {
+                        "Built-in Device Speaker"
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            "Default Audio Output"
+        }
+    }
 
     fun isHiResAudio(
         song: Song?,
@@ -170,22 +240,52 @@ object AudioDetailsHelper {
             val isHiRes = syncManager.currentTrackIsHiRes
             val latency = syncManager.currentLatencyMs
             val hostName = syncManager.currentHostRoomName ?: syncManager.currentHost?.name ?: "Host"
-            val streamQualityStr = if (syncManager.streamQuality == OmniSyncQuality.LOW) "Low (32-bit Float Direct)" else "High (Native)"
+            val outputDevice = playbackService?.getAudioOutputDeviceInfo() ?: getAudioOutputDeviceInfo(context)
+
+            val isHighQuality = syncManager.streamQuality == OmniSyncQuality.HIGH
+            val streamQualityStr = if (isHighQuality) {
+                if (isAudioFloatSupported()) "High (32-bit Float Audio Engine)" else "High (Native Engine)"
+            } else {
+                "Low (16-bit Standard PCM Engine)"
+            }
+
+            val pipelineStr = if (isHighQuality) {
+                if (isAudioFloatSupported()) "Direct 32-bit Float Pipeline" else "Native Bitstream Pipeline"
+            } else {
+                "Standard 16-bit Integer PCM Pipeline"
+            }
+
+            val outputModeStr = if (isHighQuality) {
+                if (isAudioFloatSupported()) "Android AudioTrack (High-Res 32-bit Float Engine)" else "Android AudioTrack (Native Engine)"
+            } else {
+                "Android AudioTrack (Standard 16-bit PCM Engine)"
+            }
+
+            val sourceResolution = syncManager.currentSourceQuality.ifEmpty {
+                quality.ifEmpty { if (isHiRes) "24-bit PCM" else "16-bit PCM" }
+            }
+
+            val renderingBitDepth = syncManager.getRenderingBitDepth(syncManager.streamQuality)
+            val sr = if (syncManager.listenerSampleRate > 0) syncManager.listenerSampleRate else getDeviceNativeSampleRate(context)
+            val khz = if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
+            val renderedResolution = "${renderingBitDepth}bit/$khz"
 
             val details = """
                 AUDIO INPUT
                 Source Format: $format
-                Resolution: ${quality.ifEmpty { if (isHiRes) "24-bit PCM" else "16-bit PCM" }}
+                Resolution: $sourceResolution
                 Stream Quality: $streamQualityStr
                 Broadcast Host: $hostName
 
                 PROCESSING PIPELINE
                 Audio Engine: OmniSync Ultra-Low-Latency Audio Engine
                 Latency: ${latency}ms
-                Pipeline: ${if (syncManager.streamQuality == OmniSyncQuality.LOW) "Direct 32-bit Float Pipeline" else "Native Bitstream Pipeline"}
+                Pipeline: $pipelineStr
 
                 AUDIO OUTPUT
-                Output Mode: Android AudioTrack (${if (syncManager.streamQuality == OmniSyncQuality.LOW) "32-bit Float Engine" else "Native Engine"})
+                Active Device: $outputDevice
+                Output: $renderedResolution
+                Output Mode: $outputModeStr
             """.trimIndent()
 
             MaterialAlertDialogBuilder(context)
@@ -207,7 +307,7 @@ object AudioDetailsHelper {
         val quality = info?.formatQualityString()?.takeIf { it.isNotEmpty() } ?: song.audioQuality
         val isHiRes = isHiResAudio(song, info, format, quality)
         val isBitPerfect = info?.isBitPerfect == true || playbackService?.isBitPerfectActive == true
-        val outputDevice = playbackService?.getAudioOutputDeviceInfo() ?: "Default Audio Output"
+        val outputDevice = playbackService?.getAudioOutputDeviceInfo() ?: getAudioOutputDeviceInfo(context)
 
         val inputResolution = when {
             format.startsWith("DSD") -> {
@@ -257,15 +357,26 @@ object AudioDetailsHelper {
                 else -> "Bit-Exact Pass-Through"
             }
         } else {
-            "16bit/48khz"
+            val nativeSr = getDeviceNativeSampleRate(context)
+            val nativeKhz = if (nativeSr % 1000 == 0) "${nativeSr / 1000}khz" else String.format(Locale.US, "%.1fkhz", nativeSr / 1000.0)
+            if (isAudioFloatSupported()) {
+                val outKhz = if (info != null && info.sampleRate > 0) {
+                    if (info.sampleRate % 1000 == 0) "${info.sampleRate / 1000}khz" else String.format(Locale.US, "%.1fkhz", info.sampleRate / 1000.0)
+                } else nativeKhz
+                "32bit/$outKhz (Float Engine)"
+            } else {
+                "16bit/$nativeKhz"
+            }
         }
 
         val outputMode = if (isBitPerfect) {
             "Direct HAL / USB Hardware Pass-Through"
-        } else if (isHiRes) {
+        } else if (isAudioFloatSupported() && (isHiRes || (info != null && info.bitDepth > 16))) {
             "Android AudioTrack (High-Res 32-bit Float Engine)"
-        } else {
+        } else if (isAudioFloatSupported()) {
             "Android AudioTrack (Direct 32-bit Float Engine)"
+        } else {
+            "Android AudioTrack (Standard 16-bit PCM Engine)"
         }
 
         val details = """
