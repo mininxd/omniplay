@@ -1284,7 +1284,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (binding.searchBarContainer.visibility == View.VISIBLE) {
                         closeSearchBar(clearQuery = true)
                     }
-                    drawerFilterController.navigateToArtist(song.artist)
+                    drawerFilterController.navigateToArtist(song.artist, song.id)
                     true
                 }
                 4 -> {
@@ -1292,7 +1292,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (binding.searchBarContainer.visibility == View.VISIBLE) {
                         closeSearchBar(clearQuery = true)
                     }
-                    drawerFilterController.navigateToAlbum(song.album)
+                    drawerFilterController.navigateToAlbum(song.album, song.id)
                     true
                 }
                 5 -> {
@@ -1300,7 +1300,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (binding.searchBarContainer.visibility == View.VISIBLE) {
                         closeSearchBar(clearQuery = true)
                     }
-                    drawerFilterController.navigateToSongFolder(song)
+                    drawerFilterController.navigateToSongFolder(song, song.id)
                     true
                 }
                 else -> false

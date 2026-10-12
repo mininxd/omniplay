@@ -432,7 +432,7 @@ class DrawerFilterController(
         animateLeftMenu(toOpen = false, currentTrans = binding.leftDrawerMenu.translationX, drawerWidth = drawerWidth)
     }
 
-    fun navigateToArtist(artistName: String) {
+    fun navigateToArtist(artistName: String, targetSongId: Long? = null) {
         val unknownArtistStr = activity.getString(R.string.unknown_artist)
         val targetArtist = artistName.trim().ifEmpty { unknownArtistStr }
         binding.filterToggleGroup.check(R.id.btn_filter_artists)
@@ -444,9 +444,14 @@ class DrawerFilterController(
         updateAllTracksCardUI(isActive = false)
         updateFilterSubList()
         openLeftMenu()
+        if (targetSongId != null) {
+            binding.drawerFilterRecyclerView.postDelayed({
+                drawerFilterAdapter?.pulseHighlightSong(targetSongId, binding.drawerFilterRecyclerView)
+            }, 220L)
+        }
     }
 
-    fun navigateToAlbum(albumName: String) {
+    fun navigateToAlbum(albumName: String, targetSongId: Long? = null) {
         val unknownAlbumStr = activity.getString(R.string.unknown_album)
         val targetAlbum = albumName.trim().ifEmpty { unknownAlbumStr }
         binding.filterToggleGroup.check(R.id.btn_filter_albums)
@@ -458,9 +463,14 @@ class DrawerFilterController(
         updateAllTracksCardUI(isActive = false)
         updateFilterSubList()
         openLeftMenu()
+        if (targetSongId != null) {
+            binding.drawerFilterRecyclerView.postDelayed({
+                drawerFilterAdapter?.pulseHighlightSong(targetSongId, binding.drawerFilterRecyclerView)
+            }, 220L)
+        }
     }
 
-    fun navigateToSongFolder(song: Song) {
+    fun navigateToSongFolder(song: Song, targetSongId: Long? = song.id) {
         val allScannedSongs = getAllScannedSongs()
         val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
         val depth = getCommonFolderPrefixDepth(allSongSegs)
@@ -477,6 +487,10 @@ class DrawerFilterController(
         updateAllTracksCardUI(isActive = false)
         updateFilterSubList()
         openLeftMenu()
+        val highlightId = targetSongId ?: song.id
+        binding.drawerFilterRecyclerView.postDelayed({
+            drawerFilterAdapter?.pulseHighlightSong(highlightId, binding.drawerFilterRecyclerView)
+        }, 220L)
     }
 
     fun animateLeftMenu(toOpen: Boolean, currentTrans: Float, drawerWidth: Float) {

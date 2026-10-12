@@ -1,12 +1,23 @@
 package xyz.omniplay.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
+import android.graphics.drawable.GradientDrawable
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +54,29 @@ class DrawerFilterAdapter(
 
     private var items: List<FilterItem> = emptyList()
     private val adapterScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var pendingPulseSongId: Long? = null
+
+    fun pulseHighlightSong(songId: Long, recyclerView: RecyclerView) {
+        val pos = items.indexOfFirst { it.song?.id == songId }
+        if (pos == -1) return
+        pendingPulseSongId = songId
+
+        val lm = recyclerView.layoutManager as? LinearLayoutManager
+        val itemHeight = (54 * recyclerView.context.resources.displayMetrics.density).toInt()
+        val offset = (recyclerView.height / 2) - (itemHeight / 2)
+        lm?.scrollToPositionWithOffset(pos, offset.coerceAtLeast(0))
+
+        recyclerView.postDelayed({
+            val holder = recyclerView.findViewHolderForAdapterPosition(pos) as? ViewHolder
+            if (holder != null) {
+                val item = items.getOrNull(pos) ?: return@postDelayed
+                holder.startPulse(item)
+                pendingPulseSongId = null
+            } else {
+                notifyItemChanged(pos)
+            }
+        }, 150L)
+    }
 
     fun setItems(newItems: List<FilterItem>) {
         items = newItems
@@ -74,11 +108,18 @@ class DrawerFilterAdapter(
         holder.cancelPendingLoad()
         val item = items[position]
         holder.bind(item)
+        if (pendingPulseSongId != null && item.song?.id == pendingPulseSongId) {
+            pendingPulseSongId = null
+            holder.itemView.post {
+                holder.startPulse(item)
+            }
+        }
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
         super.onViewRecycled(holder)
         holder.cancelPendingLoad()
+        holder.cancelPulse()
     }
 
     override fun getItemCount(): Int = items.size
@@ -87,13 +128,74 @@ class DrawerFilterAdapter(
         RecyclerView.ViewHolder(binding.root) {
 
         private var loadJob: Job? = null
+        private var pulseAnimator: Animator? = null
 
         fun cancelPendingLoad() {
             loadJob?.cancel()
             loadJob = null
         }
 
+        fun cancelPulse() {
+            pulseAnimator?.cancel()
+            pulseAnimator = null
+            binding.root.scaleX = 1.0f
+            binding.root.scaleY = 1.0f
+        }
+
+        fun startPulse(item: FilterItem) {
+            cancelPulse()
+            val context = binding.root.context
+            val primaryColor = ThemeColors.getPrimary(context)
+
+            try {
+                binding.root.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            } catch (ignored: Exception) {}
+
+            val scaleX = PropertyValuesHolder.ofFloat(View.SCALE_X, 1.0f, 1.045f, 0.99f, 1.035f, 1.0f)
+            val scaleY = PropertyValuesHolder.ofFloat(View.SCALE_Y, 1.0f, 1.045f, 0.99f, 1.035f, 1.0f)
+            val scaleAnim = ObjectAnimator.ofPropertyValuesHolder(binding.root, scaleX, scaleY)
+
+            val colorAnim = ValueAnimator.ofFloat(0f, 1f, 0.25f, 0.85f, 0f).apply {
+                addUpdateListener { anim ->
+                    val fraction = anim.animatedValue as Float
+                    val alphaColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.25f * fraction).toInt())
+                    val strokeColor = ColorUtils.setAlphaComponent(primaryColor, (255 * fraction).toInt())
+                    val shape = GradientDrawable().apply {
+                        setColor(alphaColor)
+                        cornerRadius = 14 * context.resources.displayMetrics.density
+                        setStroke((2 * context.resources.displayMetrics.density).toInt(), strokeColor)
+                    }
+                    binding.root.background = shape
+                }
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        if (item.isSelected) {
+                            val bgAlphaColor = ColorUtils.setAlphaComponent(primaryColor, (255 * 0.10f).toInt())
+                            val shape = GradientDrawable().apply {
+                                setColor(bgAlphaColor)
+                                cornerRadius = 14 * context.resources.displayMetrics.density
+                            }
+                            binding.root.background = shape
+                        } else {
+                            val typedValue = android.util.TypedValue()
+                            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, typedValue, true)
+                            binding.root.setBackgroundResource(typedValue.resourceId)
+                        }
+                    }
+                })
+            }
+
+            val set = AnimatorSet().apply {
+                playTogether(scaleAnim, colorAnim)
+                duration = 1100L
+                interpolator = AccelerateDecelerateInterpolator()
+            }
+            pulseAnimator = set
+            set.start()
+        }
+
         fun bind(item: FilterItem) {
+            cancelPulse()
             val context = binding.root.context
             val displayTitle = if (item.isBack) {
                 ".."
