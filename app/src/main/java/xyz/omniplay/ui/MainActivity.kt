@@ -6,14 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import com.google.android.material.color.MaterialColors
 import android.text.Editable
 import android.text.SpannableString
 import android.text.Spanned
@@ -542,39 +538,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         removeSongFromQueueAt(pos)
                     }
                 }
-            }
-
-            override fun onChildDraw(
-                c: Canvas,
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                dX: Float,
-                dY: Float,
-                actionState: Int,
-                isCurrentlyActive: Boolean
-            ) {
-                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
-                    val itemView = viewHolder.itemView
-                    val icon = ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_delete)
-                    val iconMargin = (itemView.height - (icon?.intrinsicHeight ?: 0)) / 2
-                    val iconTop = itemView.top + (itemView.height - (icon?.intrinsicHeight ?: 0)) / 2
-                    val iconBottom = iconTop + (icon?.intrinsicHeight ?: 0)
-                    val iconLeft = itemView.left + iconMargin
-                    val iconRight = iconLeft + (icon?.intrinsicWidth ?: 0)
-
-                    val bgColor = ThemeColors.getSurface(this@MainActivity)
-                    val background = ColorDrawable(bgColor)
-                    background.setBounds(itemView.left, itemView.top, itemView.left + dX.toInt(), itemView.bottom)
-                    background.draw(c)
-
-                    if (dX > iconMargin && icon != null) {
-                        val iconColor = ThemeColors.getOnSurface(this@MainActivity)
-                        DrawableCompat.setTint(icon, iconColor)
-                        icon.setBounds(iconLeft, iconTop, iconRight, iconBottom)
-                        icon.draw(c)
-                    }
-                }
-                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
             }
 
             override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
