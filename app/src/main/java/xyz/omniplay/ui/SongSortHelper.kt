@@ -111,7 +111,7 @@ object SongSortHelper {
             }
             LibraryFilterMode.FOLDER -> {
                 if (hasCustomSort) {
-                    options.add(SortOption("Custom", SortField.CUSTOM, true))
+                    options.add(SortOption("Custom (recent sort)", SortField.CUSTOM, true))
                 }
                 options.add(SortOption("Folder Name (A → Z)", SortField.TITLE, true))
                 options.add(SortOption("Folder Name (Z → A)", SortField.TITLE, false))
@@ -121,7 +121,7 @@ object SongSortHelper {
             }
             LibraryFilterMode.TRACK -> {
                 if (hasCustomSort) {
-                    options.add(SortOption("Custom", SortField.CUSTOM, true))
+                    options.add(SortOption("Custom (recent sort)", SortField.CUSTOM, true))
                 }
                 options.add(SortOption("Title (A → Z)", SortField.TITLE, true))
                 options.add(SortOption("Title (Z → A)", SortField.TITLE, false))

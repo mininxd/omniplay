@@ -20,11 +20,11 @@
         android:layout_width="24dp"
         android:layout_height="36dp"
         android:layout_marginEnd="2dp"
-        android:contentDescription="Drag to reorder"
+        android:contentDescription="Drag handle"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_drag_indicator"
+        android:src="@drawable/ic_drag_handle"
         android:visibility="gone"
-        app:tint="?attr/colorOutline" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/filter_item_card"

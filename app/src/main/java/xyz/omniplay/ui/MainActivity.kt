@@ -11,7 +11,10 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.text.Editable
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.TextWatcher
+import android.text.style.ForegroundColorSpan
 import android.view.Menu
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -20,8 +23,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -1182,7 +1187,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     fun showSongOptionsMenu(anchor: View, song: Song) {
-        val popup = PopupMenu(this, anchor)
+        val themedContext = ContextThemeWrapper(this, R.style.ThemeOverlay_Omniplay_PopupMenu)
+        val popup = PopupMenu(themedContext, anchor)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             popup.setForceShowIcon(true)
         } else {
@@ -1194,11 +1200,25 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } catch (ignored: Exception) {}
         }
 
-        popup.menu.add(Menu.NONE, 1, 0, "Add to queue").setIcon(R.drawable.ic_add)
-        popup.menu.add(Menu.NONE, 2, 1, "Play next").setIcon(R.drawable.ic_skip_next)
-        popup.menu.add(Menu.NONE, 3, 2, "Go to artist").setIcon(R.drawable.ic_person)
-        popup.menu.add(Menu.NONE, 4, 3, "Go to album").setIcon(R.drawable.ic_album)
-        popup.menu.add(Menu.NONE, 5, 4, "Go to folders").setIcon(R.drawable.ic_folder)
+        val iconColor = ThemeColors.getPrimary(this)
+        val textColor = ThemeColors.getOnSurface(this)
+
+        fun addMenuItem(id: Int, order: Int, title: String, iconRes: Int) {
+            val spanTitle = SpannableString(title).apply {
+                setSpan(ForegroundColorSpan(textColor), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            val item = popup.menu.add(Menu.NONE, id, order, spanTitle)
+            ContextCompat.getDrawable(this, iconRes)?.mutate()?.let { drawable ->
+                DrawableCompat.setTint(drawable, iconColor)
+                item.icon = drawable
+            }
+        }
+
+        addMenuItem(1, 0, "Add to queue", R.drawable.ic_add)
+        addMenuItem(2, 1, "Play next", R.drawable.ic_skip_next)
+        addMenuItem(3, 2, "Go to artist", R.drawable.ic_person)
+        addMenuItem(4, 3, "Go to album", R.drawable.ic_album)
+        addMenuItem(5, 4, "Go to folders", R.drawable.ic_folder)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {

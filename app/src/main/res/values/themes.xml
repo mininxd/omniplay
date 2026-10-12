@@ -16,6 +16,8 @@
         <item name="colorOutline">@color/text_tertiary</item>
         <item name="colorOutlineVariant">@color/badge_stroke</item>
         <item name="bottomSheetDialogTheme">@style/BottomSheetDialogTheme</item>
+        <item name="popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>
+        <item name="android:popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>
 
         <item name="android:windowBackground">?attr/colorSurface</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -114,5 +116,16 @@
         <item name="strokeColor">@color/segmented_button_stroke</item>
         <item name="strokeWidth">1dp</item>
         <item name="rippleColor">?attr/colorControlHighlight</item>
+    </style>
+
+    <!-- Material 3 Popup Menu Style for Hold Menu -->
+    <style name="Widget.Omniplay.PopupMenu" parent="Widget.Material3.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_popup_menu_card</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.PopupMenu" parent="ThemeOverlay.Material3.MaterialPopupMenu">
+        <item name="popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>
+        <item name="android:popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>
+        <item name="android:textColorPrimary">?attr/colorOnSurface</item>
     </style>
 </resources>
