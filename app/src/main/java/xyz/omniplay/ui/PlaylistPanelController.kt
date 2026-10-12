@@ -40,8 +40,10 @@ class PlaylistPanelController(
         bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
 
         fun updateSheetDimensions() {
-            bottomSheetBehavior.isFitToContents = false
-            bottomSheetBehavior.halfExpandedRatio = 0.62f
+            if (bottomSheetBehavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                bottomSheetBehavior.isFitToContents = false
+                bottomSheetBehavior.halfExpandedRatio = 0.62f
+            }
             bottomSheetBehavior.maxHeight = -1
             bottomSheetBehavior.expandedOffset = 0
         }
@@ -129,10 +131,14 @@ class PlaylistPanelController(
             }
         }
 
+        var wasExpanded = false
+
         bottomSheetBehavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
                     BottomSheetBehavior.STATE_EXPANDED -> {
+                        wasExpanded = true
+                        bottomSheetBehavior.isFitToContents = true
                         binding.ivChevron.rotation = 180f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.queueScrimOverlay.alpha = 0.5f
@@ -140,6 +146,10 @@ class PlaylistPanelController(
                         onUpdateAppTitle()
                     }
                     BottomSheetBehavior.STATE_HALF_EXPANDED -> {
+                        if (wasExpanded) {
+                            bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                            return
+                        }
                         binding.ivChevron.rotation = 90f
                         binding.queueScrimOverlay.visibility = View.VISIBLE
                         binding.queueScrimOverlay.alpha = 0.4f
@@ -147,6 +157,9 @@ class PlaylistPanelController(
                         onUpdateAppTitle()
                     }
                     BottomSheetBehavior.STATE_COLLAPSED -> {
+                        wasExpanded = false
+                        bottomSheetBehavior.isFitToContents = false
+                        bottomSheetBehavior.halfExpandedRatio = 0.62f
                         binding.ivChevron.rotation = 0f
                         binding.queueScrimOverlay.visibility = View.GONE
                         binding.queueScrimOverlay.alpha = 0f
@@ -202,6 +215,8 @@ class PlaylistPanelController(
 
         binding.playlistPeekHeader.setOnClickListener {
             if (bottomSheetBehavior.state == BottomSheetBehavior.STATE_COLLAPSED) {
+                bottomSheetBehavior.isFitToContents = false
+                bottomSheetBehavior.halfExpandedRatio = 0.62f
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
             } else {
                 bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
@@ -349,6 +364,8 @@ class PlaylistPanelController(
 
     fun expand() {
         if (::bottomSheetBehavior.isInitialized) {
+            bottomSheetBehavior.isFitToContents = false
+            bottomSheetBehavior.halfExpandedRatio = 0.62f
             bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
         }
     }
@@ -357,6 +374,10 @@ class PlaylistPanelController(
 
     fun setState(state: Int) {
         if (::bottomSheetBehavior.isInitialized) {
+            if (state == BottomSheetBehavior.STATE_HALF_EXPANDED) {
+                bottomSheetBehavior.isFitToContents = false
+                bottomSheetBehavior.halfExpandedRatio = 0.62f
+            }
             bottomSheetBehavior.state = state
         }
     }

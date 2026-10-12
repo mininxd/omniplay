@@ -649,12 +649,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 super.onScrolled(recyclerView, dx, dy)
                 if (dy > 4 && playlistPanelController.getState() == BottomSheetBehavior.STATE_HALF_EXPANDED) {
                     playlistPanelController.setState(BottomSheetBehavior.STATE_EXPANDED)
-                } else if (dy < -4 && playlistPanelController.getState() == BottomSheetBehavior.STATE_EXPANDED) {
-                    val lm = recyclerView.layoutManager as? LinearLayoutManager
-                    val firstVisible = lm?.findFirstCompletelyVisibleItemPosition() ?: -1
-                    if (firstVisible == 0 || !recyclerView.canScrollVertically(-1)) {
-                        playlistPanelController.setState(BottomSheetBehavior.STATE_HALF_EXPANDED)
-                    }
                 }
             }
         })
