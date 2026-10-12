@@ -34,6 +34,97 @@ object AudioDetailsHelper {
         }
     }
 
+    fun isAudio24BitSupported(): Boolean {
+        return try {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+                    AudioTrack.getMinBufferSize(
+                        48000,
+                        AudioFormat.CHANNEL_OUT_STEREO,
+                        AudioFormat.ENCODING_PCM_24BIT_PACKED
+                    ) > 0
+        } catch (e: Throwable) {
+            false
+        }
+    }
+
+    fun isAudio16BitSupported(): Boolean {
+        return try {
+            AudioTrack.getMinBufferSize(
+                48000,
+                AudioFormat.CHANNEL_OUT_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT
+            ) > 0
+        } catch (e: Throwable) {
+            true
+        }
+    }
+
+    fun getDeviceSupportedPcmBitDepth(context: Context): Int {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                if (devices != null) {
+                    for (dev in devices) {
+                        val encodings = dev.encodings
+                        if (encodings.contains(AudioFormat.ENCODING_PCM_FLOAT) || encodings.contains(AudioFormat.ENCODING_PCM_32BIT)) {
+                            return 32
+                        }
+                        if (encodings.contains(AudioFormat.ENCODING_PCM_24BIT_PACKED)) {
+                            return 24
+                        }
+                    }
+                }
+            }
+            16
+        } catch (e: Throwable) {
+            16
+        }
+    }
+
+    fun encodingToBitDepth(encoding: Int): Int {
+        return when (encoding) {
+            AudioFormat.ENCODING_PCM_FLOAT -> 32
+            AudioFormat.ENCODING_PCM_32BIT -> 32
+            AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
+            AudioFormat.ENCODING_PCM_16BIT -> 16
+            AudioFormat.ENCODING_PCM_8BIT -> 8
+            else -> 0
+        }
+    }
+
+    fun encodingToDescription(encoding: Int): String {
+        return when (encoding) {
+            AudioFormat.ENCODING_PCM_FLOAT -> "32-bit Float Audio Engine"
+            AudioFormat.ENCODING_PCM_32BIT -> "32-bit Integer PCM Engine"
+            AudioFormat.ENCODING_PCM_24BIT_PACKED -> "24-bit PCM Engine"
+            AudioFormat.ENCODING_PCM_16BIT -> "16-bit Standard PCM Engine"
+            AudioFormat.ENCODING_PCM_8BIT -> "8-bit PCM Engine"
+            else -> "Standard PCM Engine"
+        }
+    }
+
+    fun isQualityStringHiRes(quality: String): Boolean {
+        if (quality.isEmpty()) return false
+        val qNorm = quality.lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
+        return qNorm.contains("24bit") ||
+                qNorm.contains("32bit") ||
+                qNorm.contains("24/") ||
+                qNorm.contains("32/") ||
+                qNorm.contains("/24") ||
+                qNorm.contains("/32") ||
+                qNorm.contains("88.2") ||
+                qNorm.contains("96") ||
+                qNorm.contains("176.4") ||
+                qNorm.contains("192") ||
+                qNorm.contains("352.8") ||
+                qNorm.contains("384") ||
+                qNorm.contains("mhz") ||
+                qNorm.contains("dsd") ||
+                qNorm.contains("hires") ||
+                qNorm.contains("hi-res")
+    }
+
     fun getDeviceNativeSampleRate(context: Context): Int {
         return try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -93,23 +184,7 @@ object AudioDetailsHelper {
         quality: String
     ): Boolean {
         if (song == null) return false
-        val qNorm = quality.lowercase(Locale.ROOT).replace(" ", "").replace("-", "")
-        val isHiResQuality = qNorm.contains("24bit") ||
-                qNorm.contains("32bit") ||
-                qNorm.contains("24/") ||
-                qNorm.contains("32/") ||
-                qNorm.contains("/24") ||
-                qNorm.contains("/32") ||
-                qNorm.contains("88.2") ||
-                qNorm.contains("96") ||
-                qNorm.contains("176.4") ||
-                qNorm.contains("192") ||
-                qNorm.contains("352.8") ||
-                qNorm.contains("384") ||
-                qNorm.contains("mhz") ||
-                qNorm.contains("dsd") ||
-                qNorm.contains("hires") ||
-                qNorm.contains("hi-res")
+        val isHiResQuality = isQualityStringHiRes(quality)
 
         val sampleRate = maxOf(audioInfo?.sampleRate ?: 0, 0)
         val bitDepth = maxOf(audioInfo?.bitDepth ?: 0, 0)
@@ -243,32 +318,43 @@ object AudioDetailsHelper {
             val outputDevice = playbackService?.getAudioOutputDeviceInfo() ?: getAudioOutputDeviceInfo(context)
 
             val isHighQuality = syncManager.streamQuality == OmniSyncQuality.HIGH
-            val streamQualityStr = if (isHighQuality) {
-                if (isAudioFloatSupported()) "High (32-bit Float Audio Engine)" else "High (Native Engine)"
+            val renderingBitDepth = syncManager.getRenderingBitDepth(syncManager.streamQuality)
+            val actualEncoding = syncManager.actualAudioTrackEncoding
+
+            val sr = if (syncManager.actualAudioTrackSampleRate > 0) {
+                syncManager.actualAudioTrackSampleRate
+            } else if (syncManager.listenerSampleRate > 0) {
+                syncManager.listenerSampleRate
             } else {
-                "Low (16-bit Standard PCM Engine)"
+                getDeviceNativeSampleRate(context)
+            }
+            val khz = if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
+            val renderedResolution = "${renderingBitDepth}bit/$khz"
+
+            val streamQualityStr = if (isHighQuality) {
+                if (syncManager.isAudioFloatSupported()) "High ($renderingBitDepth-bit Float Audio Engine)" else "High ($renderingBitDepth-bit Native Engine)"
+            } else {
+                "Low ($renderingBitDepth-bit Standard PCM Engine)"
             }
 
             val pipelineStr = if (isHighQuality) {
-                if (isAudioFloatSupported()) "Direct 32-bit Float Pipeline" else "Native Bitstream Pipeline"
+                if (syncManager.isAudioFloatSupported()) "Direct $renderingBitDepth-bit Float Pipeline" else "Native $renderingBitDepth-bit Bitstream Pipeline"
             } else {
-                "Standard 16-bit Integer PCM Pipeline"
+                "Standard $renderingBitDepth-bit Integer PCM Pipeline"
             }
 
-            val outputModeStr = if (isHighQuality) {
-                if (isAudioFloatSupported()) "Android AudioTrack (High-Res 32-bit Float Engine)" else "Android AudioTrack (Native Engine)"
+            val outputEncodingDesc = if (actualEncoding > 0) {
+                encodingToDescription(actualEncoding)
+            } else if (isHighQuality && syncManager.isAudioFloatSupported()) {
+                "High-Res 32-bit Float Engine"
             } else {
-                "Android AudioTrack (Standard 16-bit PCM Engine)"
+                "Standard $renderingBitDepth-bit PCM Engine"
             }
+            val outputModeStr = "Android AudioTrack ($outputEncodingDesc)"
 
             val sourceResolution = syncManager.currentSourceQuality.ifEmpty {
                 quality.ifEmpty { if (isHiRes) "24-bit PCM" else "16-bit PCM" }
             }
-
-            val renderingBitDepth = syncManager.getRenderingBitDepth(syncManager.streamQuality)
-            val sr = if (syncManager.listenerSampleRate > 0) syncManager.listenerSampleRate else getDeviceNativeSampleRate(context)
-            val khz = if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
-            val renderedResolution = "${renderingBitDepth}bit/$khz"
 
             val details = """
                 AUDIO INPUT

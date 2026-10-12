@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.media.AudioFormat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -19,6 +20,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import kotlinx.coroutines.CancellationException
@@ -175,15 +178,37 @@ class OmniSyncManager private constructor(private val context: Context) {
     var listenerNativeBitDepth: Int = 16
         private set
 
+    @Volatile
+    var actualAudioTrackEncoding: Int = 0
+        private set
+
+    @Volatile
+    var actualAudioTrackSampleRate: Int = 0
+        private set
+
+    @Volatile
+    var actualAudioTrackChannelCount: Int = 0
+        private set
+
     fun isAudioFloatSupported(): Boolean = AudioDetailsHelper.isAudioFloatSupported()
+
+    fun isAudio24BitSupported(): Boolean = AudioDetailsHelper.isAudio24BitSupported()
+
+    fun isAudio16BitSupported(): Boolean = AudioDetailsHelper.isAudio16BitSupported()
 
     fun getDeviceNativeSampleRate(): Int = AudioDetailsHelper.getDeviceNativeSampleRate(context)
 
     fun getRenderingBitDepth(quality: OmniSyncQuality): Int {
+        if (actualAudioTrackEncoding > 0 && quality == streamQuality) {
+            val actualBits = AudioDetailsHelper.encodingToBitDepth(actualAudioTrackEncoding)
+            if (actualBits > 0) return actualBits
+        }
         return when (quality) {
             OmniSyncQuality.HIGH -> {
                 if (isAudioFloatSupported()) {
                     32
+                } else if (isAudio24BitSupported()) {
+                    24
                 } else if (listenerNativeBitDepth > 16) {
                     listenerNativeBitDepth
                 } else {
@@ -191,24 +216,33 @@ class OmniSyncManager private constructor(private val context: Context) {
                 }
             }
             OmniSyncQuality.LOW -> {
-                16
+                if (isAudio16BitSupported()) {
+                    16
+                } else {
+                    AudioDetailsHelper.getDeviceSupportedPcmBitDepth(context)
+                }
             }
         }
     }
 
     fun getStreamQualityDescription(quality: OmniSyncQuality): String {
+        val bitDepth = getRenderingBitDepth(quality)
+        val sr = if (actualAudioTrackSampleRate > 0 && quality == streamQuality) {
+            actualAudioTrackSampleRate
+        } else {
+            getDeviceNativeSampleRate()
+        }
+        val srText = if (sr % 1000 == 0) "${sr / 1000}kHz" else String.format(Locale.US, "%.1fkHz", sr / 1000.0)
         return when (quality) {
             OmniSyncQuality.HIGH -> {
-                val bitDepth = getRenderingBitDepth(OmniSyncQuality.HIGH)
                 if (isAudioFloatSupported()) {
-                    "High Quality • $bitDepth-bit Float Engine"
+                    "High Quality • $bitDepth-bit Float Engine ($srText)"
                 } else {
-                    "High Quality • $bitDepth-bit Native Engine"
+                    "High Quality • $bitDepth-bit Native Engine ($srText)"
                 }
             }
             OmniSyncQuality.LOW -> {
-                val bitDepth = getRenderingBitDepth(OmniSyncQuality.LOW)
-                "Low Quality • $bitDepth-bit Standard PCM"
+                "Low Quality • $bitDepth-bit Standard PCM ($srText)"
             }
         }
     }
@@ -235,13 +269,27 @@ class OmniSyncManager private constructor(private val context: Context) {
     fun updateListenerAudioResolution() {
         if (currentRole != OmniSyncRole.LISTENER) return
         val hardwareSr = getDeviceNativeSampleRate()
-        val sr = if (listenerSampleRate > 0) listenerSampleRate else hardwareSr
+        val sr = if (actualAudioTrackSampleRate > 0) {
+            actualAudioTrackSampleRate
+        } else if (listenerSampleRate > 0) {
+            listenerSampleRate
+        } else {
+            hardwareSr
+        }
         val srText = if (sr <= 0) "" else if (sr % 1000 == 0) "${sr / 1000}khz" else String.format(Locale.US, "%.1fkhz", sr / 1000.0)
 
-        val bitDepth = getRenderingBitDepth(streamQuality)
+        val bitDepth = if (actualAudioTrackEncoding > 0) {
+            AudioDetailsHelper.encodingToBitDepth(actualAudioTrackEncoding).takeIf { it > 0 } ?: getRenderingBitDepth(streamQuality)
+        } else {
+            getRenderingBitDepth(streamQuality)
+        }
         val resolution = if (srText.isNotEmpty()) "${bitDepth}bit/$srText" else "${bitDepth}bit"
-        val isHiRes = streamQuality == OmniSyncQuality.HIGH &&
-                (bitDepth > 16 || sr > 48000 || currentSourceIsHiRes)
+
+        // Hi-Res badge logic:
+        // Must depend strictly on the host source fidelity (if the host is playing a Hi-Res song).
+        // The listener running a 32-bit float rendering pipeline does NOT make a non-Hi-Res song Hi-Res!
+        val hostSourceIsHiRes = currentSourceIsHiRes || AudioDetailsHelper.isQualityStringHiRes(currentSourceQuality)
+        val isHiRes = (streamQuality == OmniSyncQuality.HIGH) && hostSourceIsHiRes
 
         currentTrackQuality = resolution
         currentTrackIsHiRes = isHiRes
@@ -263,6 +311,9 @@ class OmniSyncManager private constructor(private val context: Context) {
         if (streamQuality == quality) return
         streamQuality = quality
         prefs.edit().putString("stream_quality", quality.name).apply()
+        actualAudioTrackEncoding = 0
+        actualAudioTrackSampleRate = 0
+        actualAudioTrackChannelCount = 0
         if (currentRole == OmniSyncRole.LISTENER) {
             updateListenerAudioResolution()
             recreateListenerPlayerForQuality()
@@ -1112,21 +1163,41 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val expectedHostPos = hostPos + transitTime
                 val drift = current - expectedHostPos
 
-                // User requirement: Do not force time matching under normal drift (avoids audio stuttering/pitch warping).
-                // Only refresh to synced when the song is late/drifted by more than 3 seconds (> 3000ms).
-                if (abs(drift) > 3000L) {
+                if (abs(drift) > 350L) {
+                    // Significant drift (> 350ms): snap seek directly to expected position
                     player.seekTo(expectedHostPos)
+                    try {
+                        if (player.playbackParameters.speed != 1.0f) {
+                            player.playbackParameters = PlaybackParameters(1.0f)
+                        }
+                    } catch (ignored: Exception) {}
+                } else if (drift < -40L) {
+                    // Listener is slightly behind (40ms to 350ms): smoothly catch up at higher speed (pitch preserved)
+                    val speed = if (drift < -150L) 1.05f else 1.025f
+                    try {
+                        if (player.playbackParameters.speed != speed) {
+                            player.playbackParameters = PlaybackParameters(speed)
+                        }
+                    } catch (ignored: Exception) {}
+                } else if (drift > 40L) {
+                    // Listener is slightly ahead (40ms to 350ms): smoothly slow down to let host catch up
+                    val speed = if (drift > 150L) 0.95f else 0.975f
+                    try {
+                        if (player.playbackParameters.speed != speed) {
+                            player.playbackParameters = PlaybackParameters(speed)
+                        }
+                    } catch (ignored: Exception) {}
+                } else {
+                    // Tightly aligned with host within network transit jitter
+                    try {
+                        if (player.playbackParameters.speed != 1.0f) {
+                            player.playbackParameters = PlaybackParameters(1.0f)
+                        }
+                    } catch (ignored: Exception) {}
                 }
-                try {
-                    if (player.playbackParameters.speed != 1.0f) {
-                        player.playbackParameters = PlaybackParameters(1.0f)
-                    }
-                } catch (ignored: Exception) {}
             }
         }
     }
-
-    private var pendingSeekPositionMs: Long = 0L
 
     private fun getOrCreateListenerPlayer(): ExoPlayer {
         listenerPlayer?.let { return it }
@@ -1139,10 +1210,10 @@ class OmniSyncManager private constructor(private val context: Context) {
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 1000,
-                /* maxBufferMs = */ 3000,
-                /* bufferForPlaybackMs = */ 100,
-                /* bufferForPlaybackAfterRebufferMs = */ 250
+                /* minBufferMs = */ 250,
+                /* maxBufferMs = */ 1000,
+                /* bufferForPlaybackMs = */ 50,
+                /* bufferForPlaybackAfterRebufferMs = */ 100
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -1164,17 +1235,33 @@ class OmniSyncManager private constructor(private val context: Context) {
             .build()
 
         player.volume = listenerVolume
+
+        // Register AnalyticsListener to detect exact runtime hardware AudioTrack configuration
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioTrackInitialized(
+                eventTime: AnalyticsListener.EventTime,
+                audioTrackConfig: AudioSink.AudioTrackConfig
+            ) {
+                actualAudioTrackEncoding = audioTrackConfig.encoding
+                actualAudioTrackSampleRate = audioTrackConfig.sampleRate
+                actualAudioTrackChannelCount = audioTrackConfig.channelConfig
+                updateListenerAudioResolution()
+            }
+
+            override fun onAudioTrackReleased(
+                eventTime: AnalyticsListener.EventTime,
+                audioTrackConfig: AudioSink.AudioTrackConfig
+            ) {
+                actualAudioTrackEncoding = 0
+                actualAudioTrackSampleRate = 0
+                actualAudioTrackChannelCount = 0
+            }
+        })
+
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
                     Player.STATE_READY -> {
-                        val target = pendingSeekPositionMs
-                        if (target > 50L) {
-                            pendingSeekPositionMs = 0L
-                            player.seekTo(target)
-                        } else {
-                            pendingSeekPositionMs = 0L
-                        }
                         isStreamPlaying = player.isPlaying
                         notifyPlaybackState(isStreamPlaying)
                     }
@@ -1267,16 +1354,12 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val player = getOrCreateListenerPlayer()
                 startListenerProgressTracker()
 
-                val transitLag = if (hostTimestamp > 0L) {
-                    (System.currentTimeMillis() - hostTimestamp).coerceIn(0L, 5000L)
-                } else {
-                    currentLatencyMs.coerceAtLeast(0L)
-                }
+                // Calculate transit lag strictly from measured WebSocket RTT latency (10-60ms), never cross-device wall clock
+                val transitLag = currentLatencyMs.coerceIn(0L, 250L)
                 val targetPos = if (positionMs > 0L) positionMs + transitLag else 0L
 
                 if (isNewSong) {
                     currentStreamUrl = url
-                    pendingSeekPositionMs = targetPos
                     val mediaItem = MediaItem.fromUri(url)
                     player.setMediaItem(mediaItem, targetPos)
                     player.prepare()
@@ -1330,8 +1413,9 @@ class OmniSyncManager private constructor(private val context: Context) {
             try {
                 if (currentRole != OmniSyncRole.LISTENER) return@post
                 val player = listenerPlayer ?: return@post
-                player.seekTo(positionMs)
-                notifyProgress(positionMs, currentStreamDurationMs)
+                val target = positionMs + currentLatencyMs.coerceIn(0L, 250L)
+                player.seekTo(target)
+                notifyProgress(target, currentStreamDurationMs)
             } catch (ignored: Exception) {}
         }
     }
@@ -1401,6 +1485,9 @@ class OmniSyncManager private constructor(private val context: Context) {
             notifyTrackInfo("", "")
             listenerSampleRate = getDeviceNativeSampleRate()
             listenerNativeBitDepth = 16
+            actualAudioTrackEncoding = 0
+            actualAudioTrackSampleRate = 0
+            actualAudioTrackChannelCount = 0
             currentSourceQuality = ""
             currentSourceIsHiRes = false
             notifyTrackAudioInfo("", "", false)
