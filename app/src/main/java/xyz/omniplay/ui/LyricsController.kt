@@ -1,20 +1,19 @@
 package xyz.omniplay.ui
 
-import android.graphics.Color
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.lyrics.Lyrics
@@ -22,8 +21,7 @@ import xyz.omniplay.lyrics.LyricsResult
 import xyz.omniplay.lyrics.LrcLibClient
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
-import xyz.omniplay.util.AlbumArtLoader
-
+import kotlin.math.abs
 
 class LyricsController(
     private val activity: AppCompatActivity,
@@ -55,34 +53,54 @@ class LyricsController(
 
     private var lyricsFetchJob: Job? = null
 
+    private val prefs by lazy {
+        activity.getSharedPreferences("lyrics_prefs", Context.MODE_PRIVATE)
+    }
+
+    /** Fullscreen font size in SP (default 48sp, 2x base size, pinch to zoom). */
+    var baseFontSizeSp: Float = 48f
+        private set
+
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+
     private fun dpToPx(dp: Int): Int = (dp * activity.resources.displayMetrics.density).toInt()
 
-    /** Extract dominant color from current song's album art and apply it to the fullscreen backdrop. */
-    private fun applyAlbumArtColor(song: Song?) {
-        if (song == null) {
-            binding.fullscreenLyricsBackdrop.setBackgroundColor(Color.parseColor("#1C1B1F"))
-            return
-        }
-        activity.lifecycleScope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                AlbumArtLoader.getCachedAlbumArt(song)
-            }
-            if (bitmap != null) {
-                val palette = withContext(Dispatchers.Default) {
-                    Palette.from(bitmap).generate()
-                }
-                val dominantColor = palette.darkVibrantSwatch?.rgb
-                    ?: palette.vibrantSwatch?.rgb
-                    ?: palette.dominantSwatch?.rgb
-                    ?: Color.parseColor("#1C1B1F")
-                binding.fullscreenLyricsBackdrop.setBackgroundColor(dominantColor)
-            } else {
-                binding.fullscreenLyricsBackdrop.setBackgroundColor(Color.parseColor("#1C1B1F"))
-            }
+    private fun applyFullscreenFontSize(sizeSp: Float) {
+        fullScreenLyricAdapter?.baseFontSizeSp = sizeSp
+        binding.fullscreenLyricsPlainText.textSize = sizeSp
+
+        // Dynamically update visible ViewHolders for 120 FPS live preview during pinch
+        val rv = binding.fullscreenLyricsRecyclerView
+        for (i in 0 until rv.childCount) {
+            val child = rv.getChildAt(i)
+            val vh = rv.getChildViewHolder(child) as? LyricAdapter.LyricViewHolder
+            vh?.updateTextSize(sizeSp)
         }
     }
 
     fun setup(onSeek: (Long) -> Unit) {
+        baseFontSizeSp = prefs.getFloat("fullscreen_lyrics_font_size_sp", 48f)
+        binding.fullscreenLyricsPlainText.textSize = baseFontSizeSp
+
+        scaleGestureDetector = ScaleGestureDetector(activity, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val scaleFactor = detector.scaleFactor
+                if (scaleFactor.isNaN() || scaleFactor.isInfinite()) return false
+
+                val newSize = (baseFontSizeSp * scaleFactor).coerceIn(24f, 72f)
+                if (abs(newSize - baseFontSizeSp) > 0.25f) {
+                    baseFontSizeSp = newSize
+                    applyFullscreenFontSize(baseFontSizeSp)
+                }
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                prefs.edit().putFloat("fullscreen_lyrics_font_size_sp", baseFontSizeSp).apply()
+                fullScreenLyricAdapter?.notifyDataSetChanged()
+            }
+        })
+
         lyricAdapter = LyricAdapter(isFullScreen = false) { line ->
             val service = getPlaybackService()
             service?.seekTo(line.timeMs.toInt())
@@ -125,6 +143,8 @@ class LyricsController(
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             } catch (ignored: Exception) {}
             onSeek(line.timeMs)
+        }.apply {
+            baseFontSizeSp = this@LyricsController.baseFontSizeSp
         }
         binding.fullscreenLyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.fullscreenLyricsRecyclerView.adapter = fullScreenLyricAdapter
@@ -141,6 +161,27 @@ class LyricsController(
                 }
             }
         })
+
+        // Intercept 2-finger pinch gesture to adjust lyrics font size smoothly
+        binding.fullscreenLyricsRecyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                scaleGestureDetector.onTouchEvent(e)
+                if (scaleGestureDetector.isInProgress || e.pointerCount >= 2) {
+                    isUserScrollingFullScreenLyrics = false
+                    return true
+                }
+                return false
+            }
+
+            override fun onTouchEvent(rv: RecyclerView, e: MotionEvent) {
+                scaleGestureDetector.onTouchEvent(e)
+            }
+        })
+
+        binding.fullscreenLyricsPlainScroll.setOnTouchListener { _, event ->
+            scaleGestureDetector.onTouchEvent(event)
+            scaleGestureDetector.isInProgress || event.pointerCount >= 2
+        }
 
         binding.btnCloseLyrics.setOnClickListener {
             closeLyricsCard()
@@ -243,9 +284,6 @@ class LyricsController(
             binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
         }
         binding.fullscreenLyricsSourceBadge.text = binding.lyricsSourceBadge.text
-
-        // Apply album art dominant color to backdrop
-        applyAlbumArtColor(song)
 
         isFullScreenLyricsShowing = true
         binding.fullscreenLyricsContainer.apply {
@@ -563,7 +601,7 @@ class LyricsController(
                         val layoutManager = binding.fullscreenLyricsRecyclerView.layoutManager as? LinearLayoutManager
                         if (layoutManager != null && binding.fullscreenLyricsRecyclerView.height > 0) {
                             // Center active line in the RecyclerView (half screen minus ~half item height)
-                            val estimatedItemHalfHeight = dpToPx(28)
+                            val estimatedItemHalfHeight = dpToPx(36)
                             val offset = (binding.fullscreenLyricsRecyclerView.height / 2) - estimatedItemHalfHeight
                             layoutManager.scrollToPositionWithOffset(activeIndex, offset)
                         }
@@ -603,11 +641,6 @@ class LyricsController(
         if (newSong == null) {
             renderLyricsResult(LyricsResult.NotFound("No song is currently playing"))
             return
-        }
-
-        // Refresh backdrop color for new song when fullscreen is open
-        if (isFullScreenLyricsShowing) {
-            applyAlbumArtColor(newSong)
         }
 
         if (isLyricsShowing || isFullScreenLyricsShowing) {

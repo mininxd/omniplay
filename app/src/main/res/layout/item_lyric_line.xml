@@ -4,18 +4,19 @@
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
     android:paddingStart="16dp"
-    android:paddingTop="10dp"
+    android:paddingTop="8dp"
     android:paddingEnd="16dp"
-    android:paddingBottom="10dp">
+    android:paddingBottom="8dp">
 
     <TextView
         android:id="@+id/lyric_line_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:alpha="0.90"
+        android:alpha="0.40"
         android:fontFamily="@font/inter_variable"
         android:gravity="center"
-        android:lineSpacingExtra="6dp"
+        android:letterSpacing="-0.02"
+        android:lineSpacingMultiplier="1.15"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="15sp" />
+        android:textSize="16sp" />
 </FrameLayout>

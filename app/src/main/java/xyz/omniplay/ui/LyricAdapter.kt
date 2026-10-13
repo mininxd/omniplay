@@ -1,9 +1,9 @@
 package xyz.omniplay.ui
 
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -24,24 +24,14 @@ class LyricAdapter(
     var activeIndex: Int = -1
         private set
 
+    /** Base font size in SP for fullscreen active line (default 48sp, adjustable via pinch). */
+    var baseFontSizeSp: Float = 48f
+
     companion object {
         private var cachedInterTypeface: Typeface? = null
 
-        // Fullscreen GPU scale for active line (larger feel without CPU textSize changes)
-        private const val FS_ACTIVE_SCALE = 1.25f
-        private const val FS_INACTIVE_SCALE = 1.0f
-
-        // Non-fullscreen scales (keep existing subtle bump)
-        private const val CARD_ACTIVE_SCALE = 1.02f
-        private const val CARD_INACTIVE_SCALE = 1.0f
-
         // Letter spacing per the design guide (-2%)
         private const val LETTER_SPACING = -0.02f
-
-        // Fullscreen colors
-        private val COLOR_FS_ACTIVE = Color.parseColor("#FFFFFF")
-        // 40% white = #66FFFFFF
-        private val COLOR_FS_INACTIVE = Color.parseColor("#66FFFFFF")
 
         fun getInterTypeface(ctx: Context): Typeface? {
             if (cachedInterTypeface == null) {
@@ -101,42 +91,50 @@ class LyricAdapter(
             }
         }
 
+        fun updateTextSize(baseSp: Float) {
+            if (!isFullScreen) return
+            val pos = bindingAdapterPosition
+            val isActive = (pos == activeIndex)
+            val targetSp = if (isActive) baseSp else (baseSp * 0.75f).coerceAtLeast(16f)
+            lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
+        }
+
         fun bind(line: LyricLine, isActive: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
             val interTypeface = getInterTypeface(ctx)
 
+            // Reset any item scale to 1.0f to prevent left-overflow and matrix clipping
+            itemView.scaleX = 1.0f
+            itemView.scaleY = 1.0f
+            itemView.pivotX = 0f
+            itemView.pivotY = 0f
+
             // Layout gravity & padding
             if (isFullScreen) {
                 lyricText.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                itemView.setPadding(dpToPx(ctx, 24), dpToPx(ctx, 12), dpToPx(ctx, 24), dpToPx(ctx, 12))
+                itemView.setPadding(dpToPx(ctx, 24), dpToPx(ctx, 8), dpToPx(ctx, 24), dpToPx(ctx, 8))
             } else {
                 lyricText.gravity = Gravity.CENTER
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_CENTER
                 itemView.setPadding(dpToPx(ctx, 16), dpToPx(ctx, 10), dpToPx(ctx, 16), dpToPx(ctx, 10))
             }
 
-            // Apply letter spacing to all lines (-2%)
+            // Apply letter spacing (-2%)
             lyricText.letterSpacing = LETTER_SPACING
 
             if (isActive) {
+                lyricText.alpha = 1.0f
+                lyricText.setTextColor(ThemeColors.getOnSurface(ctx))
+
                 if (isFullScreen) {
-                    // GPU scale — no textSize change
-                    itemView.scaleX = FS_ACTIVE_SCALE
-                    itemView.scaleY = FS_ACTIVE_SCALE
-                    lyricText.alpha = 1.0f
-                    lyricText.setTextColor(COLOR_FS_ACTIVE)
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, baseFontSizeSp)
                 } else {
-                    itemView.scaleX = CARD_ACTIVE_SCALE
-                    itemView.scaleY = CARD_ACTIVE_SCALE
-                    lyricText.alpha = 1.0f
-                    lyricText.setTextColor(ThemeColors.getOnSurface(ctx))
-                    // Keep card active size slightly larger (non-fullscreen can use textSize safely)
-                    lyricText.textSize = 17f
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
                 }
 
-                // Weight 800 (Inter Black) for active line
+                // Weight 800 (Inter Black/ExtraBold) for active line
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     try {
                         lyricText.fontVariationSettings = "'wght' 800"
@@ -150,18 +148,14 @@ class LyricAdapter(
                     lyricText.setTypeface(Typeface.SANS_SERIF, Typeface.BOLD)
                 }
             } else {
+                lyricText.alpha = 0.40f
+                lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
+
                 if (isFullScreen) {
-                    // GPU scale — no textSize change
-                    itemView.scaleX = FS_INACTIVE_SCALE
-                    itemView.scaleY = FS_INACTIVE_SCALE
-                    lyricText.alpha = 1.0f   // alpha baked into color (#66FFFFFF)
-                    lyricText.setTextColor(COLOR_FS_INACTIVE)
+                    val inactiveSp = (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, inactiveSp)
                 } else {
-                    itemView.scaleX = CARD_INACTIVE_SCALE
-                    itemView.scaleY = CARD_INACTIVE_SCALE
-                    lyricText.alpha = 0.90f
-                    lyricText.setTextColor(ThemeColors.getOnSurface(ctx))
-                    lyricText.textSize = 15f
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 }
 
                 // Weight 500 (Inter Medium) for inactive lines
