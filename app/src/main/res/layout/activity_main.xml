@@ -191,26 +191,6 @@
                         android:layout_height="1dp"
                         android:layout_weight="1" />
 
-                    <!-- Open Lyrics Fullscreen Button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_open_lyrics"
-                        style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:layout_marginEnd="6dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
-                        android:paddingStart="10dp"
-                        android:paddingEnd="12dp"
-                        android:text="Open Lyrics"
-                        android:textSize="11sp"
-                        android:textColor="?attr/colorPrimary"
-                        android:fontFamily="@font/inter"
-                        app:icon="@drawable/ic_open_in_full"
-                        app:iconSize="13dp"
-                        app:iconTint="?attr/colorPrimary"
-                        app:cornerRadius="16dp" />
-
                     <!-- Close Lyrics Button -->
                     <ImageButton
                         android:id="@+id/btn_close_lyrics"

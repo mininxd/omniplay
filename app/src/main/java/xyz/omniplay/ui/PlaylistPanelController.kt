@@ -226,106 +226,135 @@ class PlaylistPanelController(
         setupBottomSwipeGesture()
     }
 
-    private fun setupBottomSwipeGesture() {
-        var startY = 0f
-        var isDraggingSheet = false
-        var velocityTracker: VelocityTracker? = null
+    private var startY = 0f
+    private var isDraggingSheet = false
+    private var velocityTracker: VelocityTracker? = null
+    private var activeAnimator: ValueAnimator? = null
+
+    fun handleSlidingPanelDrag(event: MotionEvent, isFromFullscreen: Boolean = false): Boolean {
+        if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
+            return false
+        }
+
+        val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: binding.root.height
+        val maxSheetH = (parentH * 0.62f).toInt()
+        val targetTop = (parentH - maxSheetH).coerceAtLeast(0)
+        val collapsedTop = parentH - bottomSheetBehavior.peekHeight
+        val maxTravel = (collapsedTop - targetTop).toFloat().coerceAtLeast(1f)
         val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
-        var activeAnimator: ValueAnimator? = null
+        val dp = activity.resources.displayMetrics.density
 
-        binding.bottomGestureArea.setOnTouchListener { _, event ->
-            if (!::bottomSheetBehavior.isInitialized || bottomSheetBehavior.state != BottomSheetBehavior.STATE_COLLAPSED) {
-                return@setOnTouchListener false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                activeAnimator?.cancel()
+                startY = event.rawY
+                isDraggingSheet = false
+                velocityTracker?.recycle()
+                velocityTracker = VelocityTracker.obtain().apply {
+                    addMovement(event)
+                }
+                return true
             }
+            MotionEvent.ACTION_MOVE -> {
+                velocityTracker?.addMovement(event)
+                val deltaTotalY = event.rawY - startY
 
-            val parentH = binding.coordinatorRoot.height.takeIf { it > 0 } ?: binding.root.height
-            val maxSheetH = (parentH * 0.62f).toInt()
-            val targetTop = (parentH - maxSheetH).coerceAtLeast(0)
-            val collapsedTop = parentH - bottomSheetBehavior.peekHeight
-            val maxTravel = (collapsedTop - targetTop).toFloat().coerceAtLeast(1f)
-
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    activeAnimator?.cancel()
-                    startY = event.rawY
-                    isDraggingSheet = false
-                    velocityTracker?.recycle()
-                    velocityTracker = VelocityTracker.obtain().apply {
-                        addMovement(event)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    velocityTracker?.addMovement(event)
-                    val deltaTotalY = event.rawY - startY
-
-                    if (!isDraggingSheet && Math.abs(deltaTotalY) > touchSlop) {
-                        if (deltaTotalY < 0) { // Moving upwards
-                            isDraggingSheet = true
+                if (!isDraggingSheet && Math.abs(deltaTotalY) > touchSlop) {
+                    if (deltaTotalY < 0) { // Moving upwards
+                        isDraggingSheet = true
+                        if (isFromFullscreen) {
+                            binding.playlistSlidingPanel.elevation = 20 * dp
+                            binding.queueScrimOverlay.elevation = 18 * dp
+                            binding.queueScrimOverlay.bringToFront()
+                            binding.playlistSlidingPanel.bringToFront()
+                            binding.queueScrimOverlay.visibility = View.VISIBLE
+                            binding.queueScrimOverlay.alpha = 0f
                         }
                     }
-
-                    if (isDraggingSheet) {
-                        // Clamp translation between -maxTravel (expanded) and 0f (collapsed)
-                        val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
-                        binding.playlistSlidingPanel.translationY = targetTranslation
-                        val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
-                        binding.ivChevron.rotation = progress * 90f
-                    }
-                    true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    velocityTracker?.addMovement(event)
-                    if (isDraggingSheet) {
-                        velocityTracker?.computeCurrentVelocity(1000)
-                        val yVel = velocityTracker?.yVelocity ?: 0f
-                        val currentTrans = binding.playlistSlidingPanel.translationY
-                        val progress = (-currentTrans / maxTravel).coerceIn(0f, 1f)
 
-                        val shouldExpand = when {
-                            yVel < -800f -> true
-                            yVel > 800f -> false
-                            else -> progress >= 0.4f
-                        }
+                if (isDraggingSheet) {
+                    // Clamp translation between -maxTravel (expanded) and 0f (collapsed)
+                    val targetTranslation = deltaTotalY.coerceIn(-maxTravel, 0f)
+                    binding.playlistSlidingPanel.translationY = targetTranslation
+                    val progress = (-targetTranslation / maxTravel).coerceIn(0f, 1f)
+                    binding.ivChevron.rotation = progress * 90f
+                    if (isFromFullscreen) {
+                        binding.queueScrimOverlay.alpha = progress * 0.45f
+                    }
+                }
+                return isDraggingSheet
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                velocityTracker?.addMovement(event)
+                if (isDraggingSheet) {
+                    velocityTracker?.computeCurrentVelocity(1000)
+                    val yVel = velocityTracker?.yVelocity ?: 0f
+                    val currentTrans = binding.playlistSlidingPanel.translationY
+                    val progress = (-currentTrans / maxTravel).coerceIn(0f, 1f)
 
-                        val targetY = if (shouldExpand) -maxTravel else 0f
-                        val duration = (250 * if (shouldExpand) (1f - progress) else progress).toLong().coerceIn(100L, 300L)
+                    val shouldExpand = when {
+                        yVel < -800f -> true
+                        yVel > 800f -> false
+                        else -> progress >= 0.4f
+                    }
 
-                        activeAnimator = ValueAnimator.ofFloat(currentTrans, targetY).apply {
-                            this.duration = duration
-                            interpolator = DecelerateInterpolator()
-                            addUpdateListener { anim ->
-                                val v = anim.animatedValue as Float
-                                binding.playlistSlidingPanel.translationY = v
-                                binding.ivChevron.rotation = (-v / maxTravel).coerceIn(0f, 1f) * 90f
+                    val targetY = if (shouldExpand) -maxTravel else 0f
+                    val duration = (250 * if (shouldExpand) (1f - progress) else progress).toLong().coerceIn(100L, 300L)
+
+                    activeAnimator = ValueAnimator.ofFloat(currentTrans, targetY).apply {
+                        this.duration = duration
+                        interpolator = DecelerateInterpolator()
+                        addUpdateListener { anim ->
+                            val v = anim.animatedValue as Float
+                            binding.playlistSlidingPanel.translationY = v
+                            val p = (-v / maxTravel).coerceIn(0f, 1f)
+                            binding.ivChevron.rotation = p * 90f
+                            if (isFromFullscreen) {
+                                binding.queueScrimOverlay.alpha = p * 0.45f
                             }
-                            addListener(object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    val panel = binding.playlistSlidingPanel
-                                    if (shouldExpand) {
-                                        val offset = targetTop - panel.top
-                                        panel.offsetTopAndBottom(offset)
-                                        panel.translationY = 0f
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
-                                        binding.ivChevron.rotation = 90f
-                                    } else {
-                                        panel.translationY = 0f
-                                        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-                                        binding.ivChevron.rotation = 0f
-                                    }
-                                    activeAnimator = null
-                                }
-                            })
-                            start()
                         }
-                        isDraggingSheet = false
+                        addListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                val panel = binding.playlistSlidingPanel
+                                if (shouldExpand) {
+                                    val offset = targetTop - panel.top
+                                    panel.offsetTopAndBottom(offset)
+                                    panel.translationY = 0f
+                                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_HALF_EXPANDED
+                                    binding.ivChevron.rotation = 90f
+                                    if (isFromFullscreen) {
+                                        binding.queueScrimOverlay.alpha = 0.4f
+                                    }
+                                } else {
+                                    panel.translationY = 0f
+                                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                                    binding.ivChevron.rotation = 0f
+                                    if (isFromFullscreen) {
+                                        binding.playlistSlidingPanel.elevation = 12 * dp
+                                        binding.queueScrimOverlay.elevation = 6 * dp
+                                        binding.queueScrimOverlay.visibility = View.GONE
+                                        binding.queueScrimOverlay.alpha = 0f
+                                    }
+                                }
+                                activeAnimator = null
+                            }
+                        })
+                        start()
                     }
-                    velocityTracker?.recycle()
-                    velocityTracker = null
-                    true
+                    isDraggingSheet = false
                 }
-                else -> false
+                velocityTracker?.recycle()
+                velocityTracker = null
+                return true
             }
+            else -> false
+        }
+    }
+
+    private fun setupBottomSwipeGesture() {
+        binding.bottomGestureArea.setOnTouchListener { _, event ->
+            handleSlidingPanelDrag(event, isFromFullscreen = false)
         }
     }
 

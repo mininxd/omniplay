@@ -307,7 +307,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             activity = this,
             binding = binding,
             getPlaybackService = { playbackService },
-            onOpenQueue = { openQueueFromFullscreen() }
+            onQueueDrag = { event ->
+                playlistPanelController.handleSlidingPanelDrag(event, isFromFullscreen = true)
+            }
         )
 
         playlistPanelController = PlaylistPanelController(

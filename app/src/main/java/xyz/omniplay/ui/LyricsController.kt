@@ -1,12 +1,15 @@
 package xyz.omniplay.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
@@ -29,7 +32,7 @@ class LyricsController(
     private val activity: AppCompatActivity,
     private val binding: ActivityMainBinding,
     private val getPlaybackService: () -> PlaybackService?,
-    private val onOpenQueue: (() -> Unit)? = null
+    private val onQueueDrag: ((MotionEvent) -> Boolean)? = null
 ) {
 
     private var lyricAdapter: LyricAdapter? = null
@@ -116,7 +119,6 @@ class LyricsController(
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             } catch (ignored: Exception) {}
             onSeek(line.timeMs)
-            openFullScreenLyrics()
         }
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.lyricsRecyclerView.adapter = lyricAdapter
@@ -191,10 +193,6 @@ class LyricsController(
             closeLyricsCard()
         }
 
-        binding.btnOpenLyrics.setOnClickListener {
-            openFullScreenLyrics()
-        }
-
         binding.btnCloseFullscreenLyrics.setOnClickListener {
             closeFullScreenLyrics()
         }
@@ -209,102 +207,271 @@ class LyricsController(
 
         setupSmallLyricsCardInteractions()
         setupFullscreenControlsSwipeUp()
+        setupFullscreenTopBarDismissGesture()
+    }
+
+    private fun prepareFullscreenLyricsForOpen() {
+        val song = getPlaybackService()?.currentSong
+        if (song != null) {
+            binding.fullscreenLyricsSongTitle.text = song.title
+            binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
+        }
+        val currLyrics = currentLyrics
+        val currentBadge = when {
+            currLyrics == null -> ""
+            currLyrics.source.startsWith("EMBEDDED") -> currLyrics.source.removePrefix("EMBEDDED (").removeSuffix(")")
+            currLyrics.source == "LOCAL FILE" -> "LOCAL"
+            currLyrics.isOffline -> "OFFLINE"
+            else -> "LRCLIB"
+        }
+        if (currLyrics?.isOffline == true || currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
+            binding.fullscreenLyricsSourceBadge.visibility = View.GONE
+            binding.fullscreenLyricsSourceBadge.text = ""
+        } else {
+            binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
+            binding.fullscreenLyricsSourceBadge.text = currentBadge
+        }
+
+        val curr = currentLyrics
+        if (curr != null) {
+            renderLyricsResult(LyricsResult.Success(curr, isOffline = curr.isOffline))
+        } else {
+            prepareLyricsForDisplay()
+        }
     }
 
     private fun setupSmallLyricsCardInteractions() {
-        val openFullscreenAction = View.OnClickListener {
-            openFullScreenLyrics()
-        }
-
-        binding.lyricsCard.setOnClickListener(openFullscreenAction)
-        binding.lyricsHeaderBar.setOnClickListener(openFullscreenAction)
-        binding.lyricsContentContainer.setOnClickListener(openFullscreenAction)
-        binding.lyricsStatusLayout.setOnClickListener(openFullscreenAction)
-        binding.lyricsPlainScroll.setOnClickListener(openFullscreenAction)
-        binding.lyricsPlainText.setOnClickListener(openFullscreenAction)
-
         val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+        var startY = 0f
+        var startX = 0f
+        var isDraggingFullscreen = false
+        var velocityTracker: VelocityTracker? = null
+        var fullscreenOpenAnimator: ValueAnimator? = null
 
-        // Detect swipe-up gesture on lyrics header bar and plain text to expand to fullscreen
-        val cardSwipeUpDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (velocityY < -300f && abs(velocityY) > abs(velocityX)) {
-                    openFullScreenLyrics()
-                    return true
-                }
-                return false
-            }
-
-            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
-                if (distanceY > 20f && abs(distanceY) > abs(distanceX)) {
-                    openFullScreenLyrics()
-                    return true
-                }
-                return false
-            }
-        })
-
-        val headerTouchListener = View.OnTouchListener { _, event ->
-            cardSwipeUpDetector.onTouchEvent(event)
-        }
-        binding.lyricsHeaderBar.setOnTouchListener(headerTouchListener)
-
-        // Detect swipe-up on the small synced lyrics list to expand into fullscreen
-        binding.lyricsRecyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            private var startY = 0f
-            private var startX = 0f
-
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
-                when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        startY = e.rawY
-                        startX = e.rawX
+        // 1:1 Sliding upward gesture from lyricsHeaderBar ONLY (scrollable lyrics area remains scrollable)
+        binding.lyricsHeaderBar.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    fullscreenOpenAnimator?.cancel()
+                    startY = event.rawY
+                    startX = event.rawX
+                    isDraggingFullscreen = false
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
                     }
-                    MotionEvent.ACTION_MOVE -> {
-                        val deltaY = e.rawY - startY
-                        val deltaX = e.rawX - startX
-                        if (deltaY < -touchSlop * 1.5f && abs(deltaY) > abs(deltaX) * 1.2f) {
-                            openFullScreenLyrics()
-                            return true
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    velocityTracker?.addMovement(event)
+                    val deltaY = event.rawY - startY
+                    val deltaX = event.rawX - startX
+
+                    if (!isDraggingFullscreen && deltaY < -touchSlop && abs(deltaY) > abs(deltaX)) {
+                        isDraggingFullscreen = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                        prepareFullscreenLyricsForOpen()
+                        binding.fullscreenLyricsContainer.visibility = View.VISIBLE
+                    }
+
+                    if (isDraggingFullscreen) {
+                        val maxTravel = dpToPx(240).toFloat()
+                        val travel = deltaY.coerceIn(-maxTravel, 0f)
+                        val progress = (-travel / maxTravel).coerceIn(0f, 1f)
+
+                        binding.fullscreenLyricsContainer.translationY = maxTravel + travel
+                        binding.fullscreenLyricsContainer.alpha = progress
+                        binding.lyricsCard.translationY = travel * 0.4f
+                        binding.lyricsCard.alpha = (1f - progress * 0.4f).coerceIn(0.6f, 1f)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    velocityTracker?.addMovement(event)
+                    if (isDraggingFullscreen) {
+                        velocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = velocityTracker?.yVelocity ?: 0f
+                        val maxTravel = dpToPx(240).toFloat()
+                        val currentTrans = binding.fullscreenLyricsContainer.translationY
+                        val progress = (1f - (currentTrans / maxTravel)).coerceIn(0f, 1f)
+
+                        val shouldOpen = yVel < -600f || progress >= 0.35f
+                        val targetContainerY = if (shouldOpen) 0f else maxTravel
+                        val targetContainerAlpha = if (shouldOpen) 1f else 0f
+                        val targetCardY = if (shouldOpen) -maxTravel * 0.4f else 0f
+                        val targetCardAlpha = if (shouldOpen) 0f else 1f
+
+                        val duration = (220 * if (shouldOpen) (1f - progress) else progress).toLong().coerceIn(100L, 260L)
+
+                        fullscreenOpenAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                            this.duration = duration
+                            interpolator = DecelerateInterpolator()
+                            val startContainerY = binding.fullscreenLyricsContainer.translationY
+                            val startContainerAlpha = binding.fullscreenLyricsContainer.alpha
+                            val startCardY = binding.lyricsCard.translationY
+                            val startCardAlpha = binding.lyricsCard.alpha
+
+                            addUpdateListener { anim ->
+                                val f = anim.animatedValue as Float
+                                binding.fullscreenLyricsContainer.translationY = startContainerY + (targetContainerY - startContainerY) * f
+                                binding.fullscreenLyricsContainer.alpha = startContainerAlpha + (targetContainerAlpha - startContainerAlpha) * f
+                                binding.lyricsCard.translationY = startCardY + (targetCardY - startCardY) * f
+                                binding.lyricsCard.alpha = startCardAlpha + (targetCardAlpha - startCardAlpha) * f
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (shouldOpen) {
+                                        binding.fullscreenLyricsContainer.translationY = 0f
+                                        binding.fullscreenLyricsContainer.alpha = 1f
+                                        binding.lyricsCard.visibility = View.INVISIBLE
+                                        binding.lyricsCard.translationY = 0f
+                                        binding.lyricsCard.alpha = 1f
+                                        isFullScreenLyricsShowing = true
+                                        getPlaybackService()?.let { service ->
+                                            updateLyricsProgress(service.getCurrentPosition().toLong())
+                                        }
+                                    } else {
+                                        binding.fullscreenLyricsContainer.visibility = View.GONE
+                                        binding.fullscreenLyricsContainer.translationY = 0f
+                                        binding.fullscreenLyricsContainer.alpha = 1f
+                                        binding.lyricsCard.translationY = 0f
+                                        binding.lyricsCard.alpha = 1f
+                                        isFullScreenLyricsShowing = false
+                                    }
+                                    fullscreenOpenAnimator = null
+                                }
+                            })
+                            start()
                         }
+                        isDraggingFullscreen = false
+                        velocityTracker?.recycle()
+                        velocityTracker = null
+                        true
+                    } else {
+                        velocityTracker?.recycle()
+                        velocityTracker = null
+                        false
                     }
                 }
-                return false
+                else -> false
             }
-        })
+        }
+    }
+
+    private fun setupFullscreenTopBarDismissGesture() {
+        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+        var startY = 0f
+        var startX = 0f
+        var isDismissDragging = false
+        var dismissVelocityTracker: VelocityTracker? = null
+        var dismissAnimator: ValueAnimator? = null
+
+        // 1:1 Sliding downward gesture from fullscreen top bar/title area to dismiss
+        binding.fullscreenLyricsTopBar.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    dismissAnimator?.cancel()
+                    startY = event.rawY
+                    startX = event.rawX
+                    isDismissDragging = false
+                    dismissVelocityTracker?.recycle()
+                    dismissVelocityTracker = VelocityTracker.obtain().apply {
+                        addMovement(event)
+                    }
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    dismissVelocityTracker?.addMovement(event)
+                    val deltaY = event.rawY - startY
+                    val deltaX = event.rawX - startX
+
+                    if (!isDismissDragging && deltaY > touchSlop && abs(deltaY) > abs(deltaX)) {
+                        isDismissDragging = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+
+                    if (isDismissDragging) {
+                        val maxDismissTravel = dpToPx(300).toFloat()
+                        val travel = deltaY.coerceAtLeast(0f)
+                        val progress = (travel / maxDismissTravel).coerceIn(0f, 1f)
+
+                        binding.fullscreenLyricsContainer.translationY = travel
+                        binding.fullscreenLyricsContainer.alpha = (1f - progress * 0.4f).coerceIn(0.6f, 1f)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    dismissVelocityTracker?.addMovement(event)
+                    if (isDismissDragging) {
+                        dismissVelocityTracker?.computeCurrentVelocity(1000)
+                        val yVel = dismissVelocityTracker?.yVelocity ?: 0f
+                        val maxDismissTravel = dpToPx(300).toFloat()
+                        val currentTrans = binding.fullscreenLyricsContainer.translationY
+                        val progress = (currentTrans / maxDismissTravel).coerceIn(0f, 1f)
+
+                        val shouldDismiss = yVel > 600f || progress >= 0.35f
+                        val containerH = binding.fullscreenLyricsContainer.height.takeIf { it > 0 } ?: dpToPx(600)
+                        val targetY = if (shouldDismiss) containerH.toFloat() else 0f
+                        val targetAlpha = if (shouldDismiss) 0f else 1f
+
+                        val duration = (220 * if (shouldDismiss) (1f - progress) else progress).toLong().coerceIn(100L, 260L)
+
+                        dismissAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                            this.duration = duration
+                            interpolator = DecelerateInterpolator()
+                            val startTrans = binding.fullscreenLyricsContainer.translationY
+                            val startAlpha = binding.fullscreenLyricsContainer.alpha
+
+                            addUpdateListener { anim ->
+                                val f = anim.animatedValue as Float
+                                binding.fullscreenLyricsContainer.translationY = startTrans + (targetY - startTrans) * f
+                                binding.fullscreenLyricsContainer.alpha = startAlpha + (targetAlpha - startAlpha) * f
+                            }
+                            addListener(object : AnimatorListenerAdapter() {
+                                override fun onAnimationEnd(animation: Animator) {
+                                    if (shouldDismiss) {
+                                        binding.fullscreenLyricsContainer.visibility = View.GONE
+                                        binding.fullscreenLyricsContainer.translationY = 0f
+                                        binding.fullscreenLyricsContainer.alpha = 1f
+                                        isFullScreenLyricsShowing = false
+                                        if (isLyricsShowing) {
+                                            binding.lyricsCard.visibility = View.VISIBLE
+                                            binding.lyricsCard.translationY = 0f
+                                            binding.lyricsCard.alpha = 1f
+                                        }
+                                    } else {
+                                        binding.fullscreenLyricsContainer.translationY = 0f
+                                        binding.fullscreenLyricsContainer.alpha = 1f
+                                    }
+                                    dismissAnimator = null
+                                }
+                            })
+                            start()
+                        }
+                        isDismissDragging = false
+                        dismissVelocityTracker?.recycle()
+                        dismissVelocityTracker = null
+                        true
+                    } else {
+                        dismissVelocityTracker?.recycle()
+                        dismissVelocityTracker = null
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
     }
 
     private fun setupFullscreenControlsSwipeUp() {
         val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
 
-        // Gesture detector for the controls container area
-        val controlsSwipeDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                if (velocityY < -250f && abs(velocityY) > abs(velocityX)) {
-                    try {
-                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                    } catch (ignored: Exception) {}
-                    onOpenQueue?.invoke()
-                    return true
-                }
-                return false
-            }
-
-            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
-                if (distanceY > 20f && abs(distanceY) > abs(distanceX)) {
-                    try {
-                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                    } catch (ignored: Exception) {}
-                    onOpenQueue?.invoke()
-                    return true
-                }
-                return false
-            }
-        })
-
         val areaTouchListener = View.OnTouchListener { _, event ->
-            controlsSwipeDetector.onTouchEvent(event)
-            true
+            onQueueDrag?.invoke(event) ?: false
         }
 
         binding.fullscreenLyricsControls.setOnTouchListener(areaTouchListener)
@@ -312,7 +479,7 @@ class LyricsController(
         binding.fullscreenCurrentTimeText.setOnTouchListener(areaTouchListener)
         binding.fullscreenTotalTimeText.setOnTouchListener(areaTouchListener)
 
-        // Action buttons: allow normal tap clicks to proceed, but intercept vertical swipe-up
+        // Action buttons: allow normal tap clicks to proceed, but intercept vertical swipe-up with 1:1 sliding
         val actionButtons = listOf(
             binding.fullscreenBtnPlayPauseCard,
             binding.fullscreenBtnNext,
@@ -324,30 +491,32 @@ class LyricsController(
         for (btn in actionButtons) {
             var startY = 0f
             var startX = 0f
-            var isSwipingUp = false
+            var isDraggingQueue = false
 
             btn.setOnTouchListener { v, event ->
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         startY = event.rawY
                         startX = event.rawX
-                        isSwipingUp = false
+                        isDraggingQueue = false
                         v.isPressed = true
+                        onQueueDrag?.invoke(event)
                         false // Allow default pressed ripple
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val deltaY = event.rawY - startY
                         val deltaX = event.rawX - startX
-                        if (!isSwipingUp && deltaY < -touchSlop * 1.5f && abs(deltaY) > abs(deltaX)) {
-                            isSwipingUp = true
+                        if (!isDraggingQueue && deltaY < -touchSlop && abs(deltaY) > abs(deltaX)) {
+                            isDraggingQueue = true
                             v.isPressed = false
                             v.parent?.requestDisallowInterceptTouchEvent(true)
                             try {
                                 v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             } catch (ignored: Exception) {}
-                            onOpenQueue?.invoke()
-                            true
-                        } else if (isSwipingUp) {
+                        }
+
+                        if (isDraggingQueue) {
+                            onQueueDrag?.invoke(event)
                             true
                         } else {
                             false
@@ -355,16 +524,27 @@ class LyricsController(
                     }
                     MotionEvent.ACTION_UP -> {
                         v.isPressed = false
-                        if (isSwipingUp) {
-                            isSwipingUp = false
+                        if (isDraggingQueue) {
+                            isDraggingQueue = false
+                            onQueueDrag?.invoke(event)
                             true // Consume gesture without triggering button click
                         } else {
+                            val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                            onQueueDrag?.invoke(cancelEvent)
+                            cancelEvent.recycle()
                             false // Allow normal click to trigger
                         }
                     }
                     MotionEvent.ACTION_CANCEL -> {
                         v.isPressed = false
-                        isSwipingUp = false
+                        if (isDraggingQueue) {
+                            onQueueDrag?.invoke(event)
+                        } else {
+                            val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                            onQueueDrag?.invoke(cancelEvent)
+                            cancelEvent.recycle()
+                        }
+                        isDraggingQueue = false
                         false
                     }
                     else -> false
@@ -450,26 +630,7 @@ class LyricsController(
 
     fun openFullScreenLyrics() {
         if (isFullScreenLyricsShowing) return
-        val song = getPlaybackService()?.currentSong
-        if (song != null) {
-            binding.fullscreenLyricsSongTitle.text = song.title
-            binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
-        }
-        val currLyrics = currentLyrics
-        val currentBadge = when {
-            currLyrics == null -> ""
-            currLyrics.source.startsWith("EMBEDDED") -> currLyrics.source.removePrefix("EMBEDDED (").removeSuffix(")")
-            currLyrics.source == "LOCAL FILE" -> "LOCAL"
-            currLyrics.isOffline -> "OFFLINE"
-            else -> "LRCLIB"
-        }
-        if (currLyrics?.isOffline == true || currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
-            binding.fullscreenLyricsSourceBadge.visibility = View.GONE
-            binding.fullscreenLyricsSourceBadge.text = ""
-        } else {
-            binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
-            binding.fullscreenLyricsSourceBadge.text = currentBadge
-        }
+        prepareFullscreenLyricsForOpen()
 
         isFullScreenLyricsShowing = true
         binding.fullscreenLyricsContainer.apply {
@@ -488,13 +649,6 @@ class LyricsController(
                     }
                 }
                 .start()
-        }
-
-        val curr = currentLyrics
-        if (curr != null) {
-            renderLyricsResult(LyricsResult.Success(curr, isOffline = curr.isOffline))
-        } else {
-            prepareLyricsForDisplay()
         }
     }
 
