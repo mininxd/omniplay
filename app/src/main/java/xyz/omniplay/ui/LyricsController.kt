@@ -3,10 +3,12 @@ package xyz.omniplay.ui
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -26,7 +28,8 @@ import kotlin.math.abs
 class LyricsController(
     private val activity: AppCompatActivity,
     private val binding: ActivityMainBinding,
-    private val getPlaybackService: () -> PlaybackService?
+    private val getPlaybackService: () -> PlaybackService?,
+    private val onOpenQueue: (() -> Unit)? = null
 ) {
 
     private var lyricAdapter: LyricAdapter? = null
@@ -113,6 +116,7 @@ class LyricsController(
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             } catch (ignored: Exception) {}
             onSeek(line.timeMs)
+            openFullScreenLyrics()
         }
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.lyricsRecyclerView.adapter = lyricAdapter
@@ -202,12 +206,180 @@ class LyricsController(
         binding.fullscreenBtnLyricsRetry.setOnClickListener {
             loadLyricsForCurrentSong(forceRefresh = true)
         }
+
+        setupSmallLyricsCardInteractions()
+        setupFullscreenControlsSwipeUp()
+    }
+
+    private fun setupSmallLyricsCardInteractions() {
+        val openFullscreenAction = View.OnClickListener {
+            openFullScreenLyrics()
+        }
+
+        binding.lyricsCard.setOnClickListener(openFullscreenAction)
+        binding.lyricsHeaderBar.setOnClickListener(openFullscreenAction)
+        binding.lyricsContentContainer.setOnClickListener(openFullscreenAction)
+        binding.lyricsStatusLayout.setOnClickListener(openFullscreenAction)
+        binding.lyricsPlainScroll.setOnClickListener(openFullscreenAction)
+        binding.lyricsPlainText.setOnClickListener(openFullscreenAction)
+
+        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+
+        // Detect swipe-up gesture on lyrics header bar and plain text to expand to fullscreen
+        val cardSwipeUpDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (velocityY < -300f && abs(velocityY) > abs(velocityX)) {
+                    openFullScreenLyrics()
+                    return true
+                }
+                return false
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                if (distanceY > 20f && abs(distanceY) > abs(distanceX)) {
+                    openFullScreenLyrics()
+                    return true
+                }
+                return false
+            }
+        })
+
+        val headerTouchListener = View.OnTouchListener { _, event ->
+            cardSwipeUpDetector.onTouchEvent(event)
+        }
+        binding.lyricsHeaderBar.setOnTouchListener(headerTouchListener)
+
+        // Detect swipe-up on the small synced lyrics list to expand into fullscreen
+        binding.lyricsRecyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            private var startY = 0f
+            private var startX = 0f
+
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startY = e.rawY
+                        startX = e.rawX
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaY = e.rawY - startY
+                        val deltaX = e.rawX - startX
+                        if (deltaY < -touchSlop * 1.5f && abs(deltaY) > abs(deltaX) * 1.2f) {
+                            openFullScreenLyrics()
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+        })
+    }
+
+    private fun setupFullscreenControlsSwipeUp() {
+        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
+
+        // Gesture detector for the controls container area
+        val controlsSwipeDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (velocityY < -250f && abs(velocityY) > abs(velocityX)) {
+                    try {
+                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    } catch (ignored: Exception) {}
+                    onOpenQueue?.invoke()
+                    return true
+                }
+                return false
+            }
+
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+                if (distanceY > 20f && abs(distanceY) > abs(distanceX)) {
+                    try {
+                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    } catch (ignored: Exception) {}
+                    onOpenQueue?.invoke()
+                    return true
+                }
+                return false
+            }
+        })
+
+        val areaTouchListener = View.OnTouchListener { _, event ->
+            controlsSwipeDetector.onTouchEvent(event)
+            true
+        }
+
+        binding.fullscreenLyricsControls.setOnTouchListener(areaTouchListener)
+        binding.fullscreenPlaybackControlsRow.setOnTouchListener(areaTouchListener)
+        binding.fullscreenCurrentTimeText.setOnTouchListener(areaTouchListener)
+        binding.fullscreenTotalTimeText.setOnTouchListener(areaTouchListener)
+
+        // Action buttons: allow normal tap clicks to proceed, but intercept vertical swipe-up
+        val actionButtons = listOf(
+            binding.fullscreenBtnPlayPauseCard,
+            binding.fullscreenBtnNext,
+            binding.fullscreenBtnPrevious,
+            binding.fullscreenBtnShuffle,
+            binding.fullscreenBtnRepeat
+        )
+
+        for (btn in actionButtons) {
+            var startY = 0f
+            var startX = 0f
+            var isSwipingUp = false
+
+            btn.setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startY = event.rawY
+                        startX = event.rawX
+                        isSwipingUp = false
+                        v.isPressed = true
+                        false // Allow default pressed ripple
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaY = event.rawY - startY
+                        val deltaX = event.rawX - startX
+                        if (!isSwipingUp && deltaY < -touchSlop * 1.5f && abs(deltaY) > abs(deltaX)) {
+                            isSwipingUp = true
+                            v.isPressed = false
+                            v.parent?.requestDisallowInterceptTouchEvent(true)
+                            try {
+                                v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            } catch (ignored: Exception) {}
+                            onOpenQueue?.invoke()
+                            true
+                        } else if (isSwipingUp) {
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        v.isPressed = false
+                        if (isSwipingUp) {
+                            isSwipingUp = false
+                            true // Consume gesture without triggering button click
+                        } else {
+                            false // Allow normal click to trigger
+                        }
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        v.isPressed = false
+                        isSwipingUp = false
+                        false
+                    }
+                    else -> false
+                }
+            }
+        }
     }
 
     fun openLyricsCard() {
         if (isLyricsShowing) return
         val card = binding.albumArtCard
         val cardHeight = card.height.toFloat().coerceAtLeast(1f)
+
+        binding.lyricsSourceBadge.visibility = View.GONE
+        binding.lyricsSourceBadge.text = ""
 
         binding.peekAlbumArtCard.visibility = View.INVISIBLE
         binding.lyricsCard.visibility = View.VISIBLE
@@ -283,8 +455,15 @@ class LyricsController(
             binding.fullscreenLyricsSongTitle.text = song.title
             binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
         }
-        val currentBadge = binding.lyricsSourceBadge.text.toString()
-        if (currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
+        val currLyrics = currentLyrics
+        val currentBadge = when {
+            currLyrics == null -> ""
+            currLyrics.source.startsWith("EMBEDDED") -> currLyrics.source.removePrefix("EMBEDDED (").removeSuffix(")")
+            currLyrics.source == "LOCAL FILE" -> "LOCAL"
+            currLyrics.isOffline -> "OFFLINE"
+            else -> "LRCLIB"
+        }
+        if (currLyrics?.isOffline == true || currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
             binding.fullscreenLyricsSourceBadge.visibility = View.GONE
             binding.fullscreenLyricsSourceBadge.text = ""
         } else {
@@ -573,7 +752,9 @@ class LyricsController(
             isOffline -> "OFFLINE"
             else -> "LRCLIB"
         }
-        binding.lyricsSourceBadge.text = badge
+        // Small lyrics card must not show any badge ("LRCLIB", "OFFLINE", or any other source badge)
+        binding.lyricsSourceBadge.visibility = View.GONE
+        binding.lyricsSourceBadge.text = ""
 
         // Don't show "OFFLINE" badge when in fullscreen lyrics
         if (isOffline) {
@@ -648,6 +829,7 @@ class LyricsController(
 
         binding.lyricsPlainText.text = ""
         binding.lyricsSourceBadge.text = ""
+        binding.lyricsSourceBadge.visibility = View.GONE
         binding.fullscreenLyricsPlainText.text = ""
         binding.fullscreenLyricsSourceBadge.text = ""
         binding.fullscreenLyricsSourceBadge.visibility = View.GONE

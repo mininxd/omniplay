@@ -306,7 +306,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         lyricsController = LyricsController(
             activity = this,
             binding = binding,
-            getPlaybackService = { playbackService }
+            getPlaybackService = { playbackService },
+            onOpenQueue = { openQueueFromFullscreen() }
         )
 
         playlistPanelController = PlaylistPanelController(
@@ -314,6 +315,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding = binding,
             onUpdateAppTitle = { updateAppTitle() },
             onPanelCollapsed = {
+                val dp = resources.displayMetrics.density
+                binding.playlistSlidingPanel.elevation = 12 * dp
+                binding.queueScrimOverlay.elevation = 6 * dp
                 if (binding.searchBarContainer.visibility == View.VISIBLE) {
                     closeSearchBar(clearQuery = true)
                 }
@@ -438,17 +442,26 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
     }
 
+    private fun openQueueFromFullscreen() {
+        val dp = resources.displayMetrics.density
+        binding.playlistSlidingPanel.elevation = 20 * dp
+        binding.queueScrimOverlay.elevation = 18 * dp
+        binding.queueScrimOverlay.bringToFront()
+        binding.playlistSlidingPanel.bringToFront()
+        playlistPanelController.expand()
+    }
+
     private fun setupBackPressHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (drawerFilterController.handleBackPressed()) {
                     return
+                } else if (playlistPanelController.handleBackPressed()) {
+                    return
                 } else if (lyricsController.handleBackPressed()) {
                     return
                 } else if (binding.searchBarContainer.visibility == View.VISIBLE) {
                     closeSearchBar()
-                    return
-                } else if (playlistPanelController.handleBackPressed()) {
                     return
                 } else {
                     isEnabled = false
@@ -464,14 +477,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         if (drawerFilterController.handleBackPressed()) {
             return
         }
+        if (playlistPanelController.handleBackPressed()) {
+            return
+        }
         if (lyricsController.handleBackPressed()) {
             return
         }
         if (binding.searchBarContainer.visibility == View.VISIBLE) {
             closeSearchBar()
-            return
-        }
-        if (playlistPanelController.handleBackPressed()) {
             return
         }
         super.onBackPressed()

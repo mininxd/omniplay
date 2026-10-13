@@ -176,23 +176,15 @@
                         android:text="LYRICS"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="11sp"
-                        android:fontFamily="@font/inter_variable"
+                        android:fontFamily="@font/inter"
                         android:letterSpacing="0.08" />
 
+                    <!-- Badge removed for small lyrics card -->
                     <TextView
                         android:id="@+id/lyrics_source_badge"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:background="@drawable/bg_badge_material_you"
-                        android:paddingStart="6dp"
-                        android:paddingTop="2dp"
-                        android:paddingEnd="6dp"
-                        android:paddingBottom="2dp"
-                        android:text="LRCLIB"
-                        android:textColor="?attr/colorPrimary"
-                        android:textSize="9sp"
-                        android:fontFamily="@font/inter_variable" />
+                        android:visibility="gone" />
 
                     <View
                         android:layout_width="0dp"
@@ -213,7 +205,7 @@
                         android:text="Open Lyrics"
                         android:textSize="11sp"
                         android:textColor="?attr/colorPrimary"
-                        android:fontFamily="@font/inter_variable"
+                        android:fontFamily="@font/inter"
                         app:icon="@drawable/ic_open_in_full"
                         app:iconSize="13dp"
                         app:iconTint="?attr/colorPrimary"
@@ -275,7 +267,7 @@
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="15sp"
                         android:lineSpacingExtra="6dp"
-                        android:fontFamily="@font/inter_variable" />
+                        android:fontFamily="@font/inter" />
                 </ScrollView>
 
                 <!-- Status Layout (Loading / Instrumental / Not Found / Error) -->
@@ -1055,7 +1047,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:ellipsize="marquee"
-                    android:fontFamily="@font/inter_variable"
+                    android:fontFamily="@font/inter"
                     android:letterSpacing="-0.02"
                     android:singleLine="true"
                     android:text=""
@@ -1069,7 +1061,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="1dp"
                     android:ellipsize="end"
-                    android:fontFamily="@font/inter_variable"
+                    android:fontFamily="@font/inter"
                     android:letterSpacing="-0.02"
                     android:singleLine="true"
                     android:text=""
@@ -1083,7 +1075,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_badge_material_you"
-                android:fontFamily="@font/inter_variable"
+                android:fontFamily="@font/inter"
                 android:paddingStart="8dp"
                 android:paddingTop="3dp"
                 android:paddingEnd="8dp"
@@ -1134,7 +1126,7 @@
                 android:id="@+id/fullscreen_lyrics_plain_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="@font/inter_variable"
+                android:fontFamily="@font/inter"
                 android:gravity="start"
                 android:textAlignment="viewStart"
                 android:letterSpacing="-0.02"
@@ -1178,7 +1170,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:fontFamily="@font/inter_variable"
+                android:fontFamily="@font/inter"
                 android:gravity="center"
                 android:text="Loading lyrics..."
                 android:textColor="?attr/colorOnSurfaceVariant"
@@ -1189,7 +1181,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:fontFamily="@font/inter_variable"
+                android:fontFamily="@font/inter"
                 android:gravity="center"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -1204,7 +1196,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
                 android:layout_marginTop="16dp"
-                android:fontFamily="@font/inter_variable"
+                android:fontFamily="@font/inter"
                 android:text="Retry"
                 android:textSize="13sp"
                 android:visibility="gone"
@@ -1245,7 +1237,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentStart="true"
-                    android:fontFamily="@font/inter_variable"
+                    android:fontFamily="@font/inter"
                     android:letterSpacing="-0.02"
                     android:text="@string/default_time"
                     android:textColor="?attr/colorOnSurfaceVariant"
@@ -1256,7 +1248,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
-                    android:fontFamily="@font/inter_variable"
+                    android:fontFamily="@font/inter"
                     android:letterSpacing="-0.02"
                     android:text="@string/default_time"
                     android:textColor="?attr/colorOnSurfaceVariant"
@@ -1265,6 +1257,7 @@
 
             <!-- Playback Controls Row -->
             <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/fullscreen_playback_controls_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp">
