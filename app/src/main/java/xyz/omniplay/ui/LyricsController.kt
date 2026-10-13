@@ -6,6 +6,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -241,123 +242,26 @@ class LyricsController(
     }
 
     private fun setupSmallLyricsCardInteractions() {
-        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
-        var startY = 0f
-        var startX = 0f
-        var isDraggingFullscreen = false
-        var velocityTracker: VelocityTracker? = null
-        var fullscreenOpenAnimator: ValueAnimator? = null
-
-        // 1:1 Sliding upward gesture from lyricsHeaderBar ONLY (scrollable lyrics area remains scrollable)
-        binding.lyricsHeaderBar.setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    fullscreenOpenAnimator?.cancel()
-                    startY = event.rawY
-                    startX = event.rawX
-                    isDraggingFullscreen = false
-                    velocityTracker?.recycle()
-                    velocityTracker = VelocityTracker.obtain().apply {
-                        addMovement(event)
-                    }
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    velocityTracker?.addMovement(event)
-                    val deltaY = event.rawY - startY
-                    val deltaX = event.rawX - startX
-
-                    if (!isDraggingFullscreen && deltaY < -touchSlop && abs(deltaY) > abs(deltaX)) {
-                        isDraggingFullscreen = true
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                        prepareFullscreenLyricsForOpen()
-                        binding.fullscreenLyricsContainer.visibility = View.VISIBLE
-                    }
-
-                    if (isDraggingFullscreen) {
-                        val maxTravel = dpToPx(240).toFloat()
-                        val travel = deltaY.coerceIn(-maxTravel, 0f)
-                        val progress = (-travel / maxTravel).coerceIn(0f, 1f)
-
-                        binding.fullscreenLyricsContainer.translationY = maxTravel + travel
-                        binding.fullscreenLyricsContainer.alpha = progress
-                        binding.lyricsCard.translationY = travel * 0.4f
-                        binding.lyricsCard.alpha = (1f - progress * 0.4f).coerceIn(0.6f, 1f)
-                        true
-                    } else {
-                        false
-                    }
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    velocityTracker?.addMovement(event)
-                    if (isDraggingFullscreen) {
-                        velocityTracker?.computeCurrentVelocity(1000)
-                        val yVel = velocityTracker?.yVelocity ?: 0f
-                        val maxTravel = dpToPx(240).toFloat()
-                        val currentTrans = binding.fullscreenLyricsContainer.translationY
-                        val progress = (1f - (currentTrans / maxTravel)).coerceIn(0f, 1f)
-
-                        val shouldOpen = yVel < -600f || progress >= 0.35f
-                        val targetContainerY = if (shouldOpen) 0f else maxTravel
-                        val targetContainerAlpha = if (shouldOpen) 1f else 0f
-                        val targetCardY = if (shouldOpen) -maxTravel * 0.4f else 0f
-                        val targetCardAlpha = if (shouldOpen) 0f else 1f
-
-                        val duration = (220 * if (shouldOpen) (1f - progress) else progress).toLong().coerceIn(100L, 260L)
-
-                        fullscreenOpenAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-                            this.duration = duration
-                            interpolator = DecelerateInterpolator()
-                            val startContainerY = binding.fullscreenLyricsContainer.translationY
-                            val startContainerAlpha = binding.fullscreenLyricsContainer.alpha
-                            val startCardY = binding.lyricsCard.translationY
-                            val startCardAlpha = binding.lyricsCard.alpha
-
-                            addUpdateListener { anim ->
-                                val f = anim.animatedValue as Float
-                                binding.fullscreenLyricsContainer.translationY = startContainerY + (targetContainerY - startContainerY) * f
-                                binding.fullscreenLyricsContainer.alpha = startContainerAlpha + (targetContainerAlpha - startContainerAlpha) * f
-                                binding.lyricsCard.translationY = startCardY + (targetCardY - startCardY) * f
-                                binding.lyricsCard.alpha = startCardAlpha + (targetCardAlpha - startCardAlpha) * f
-                            }
-                            addListener(object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    if (shouldOpen) {
-                                        binding.fullscreenLyricsContainer.translationY = 0f
-                                        binding.fullscreenLyricsContainer.alpha = 1f
-                                        binding.lyricsCard.visibility = View.INVISIBLE
-                                        binding.lyricsCard.translationY = 0f
-                                        binding.lyricsCard.alpha = 1f
-                                        isFullScreenLyricsShowing = true
-                                        getPlaybackService()?.let { service ->
-                                            updateLyricsProgress(service.getCurrentPosition().toLong())
-                                        }
-                                    } else {
-                                        binding.fullscreenLyricsContainer.visibility = View.GONE
-                                        binding.fullscreenLyricsContainer.translationY = 0f
-                                        binding.fullscreenLyricsContainer.alpha = 1f
-                                        binding.lyricsCard.translationY = 0f
-                                        binding.lyricsCard.alpha = 1f
-                                        isFullScreenLyricsShowing = false
-                                    }
-                                    fullscreenOpenAnimator = null
-                                }
-                            })
-                            start()
-                        }
-                        isDraggingFullscreen = false
-                        velocityTracker?.recycle()
-                        velocityTracker = null
-                        true
-                    } else {
-                        velocityTracker?.recycle()
-                        velocityTracker = null
-                        false
-                    }
-                }
-                else -> false
+        // Double-tap anywhere on the small lyrics card opens fullscreen lyrics.
+        // Single tap on lyric lines (RecyclerView items) still seeks as normal.
+        val doubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                openFullScreenLyrics()
+                return true
             }
+        })
+
+        val doubleTapListener = View.OnTouchListener { _, event ->
+            doubleTapDetector.onTouchEvent(event)
+            false // never consume — let normal click/scroll still work
         }
+
+        // Attach to header bar and all content areas so any double-tap on the card works
+        binding.lyricsHeaderBar.setOnTouchListener(doubleTapListener)
+        binding.lyricsRecyclerView.setOnTouchListener(doubleTapListener)
+        binding.lyricsPlainScroll.setOnTouchListener(doubleTapListener)
+        binding.lyricsStatusLayout.setOnTouchListener(doubleTapListener)
+        binding.lyricsCard.setOnTouchListener(doubleTapListener)
     }
 
     private fun setupFullscreenTopBarDismissGesture() {
