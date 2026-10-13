@@ -348,7 +348,7 @@ class PlaylistPanelController(
                 velocityTracker = null
                 return true
             }
-            else -> false
+            else -> return false
         }
     }
 
