@@ -2,7 +2,6 @@ package xyz.omniplay.ui
 
 import android.content.Context
 import android.graphics.Typeface
-import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -28,20 +27,32 @@ class LyricAdapter(
     var baseFontSizeSp: Float = 48f
 
     companion object {
-        private var cachedInterTypeface: Typeface? = null
+        private var cachedBlackTypeface: Typeface? = null
+        private var cachedMediumTypeface: Typeface? = null
 
         // Letter spacing per the design guide (-2%)
         private const val LETTER_SPACING = -0.02f
 
-        fun getInterTypeface(ctx: Context): Typeface? {
-            if (cachedInterTypeface == null) {
-                cachedInterTypeface = try {
-                    ResourcesCompat.getFont(ctx, R.font.inter_variable)
+        fun getBlackTypeface(ctx: Context): Typeface {
+            if (cachedBlackTypeface == null) {
+                cachedBlackTypeface = try {
+                    ResourcesCompat.getFont(ctx, R.font.inter_black)
                 } catch (e: Exception) {
-                    null
+                    Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 }
             }
-            return cachedInterTypeface
+            return cachedBlackTypeface ?: Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        fun getMediumTypeface(ctx: Context): Typeface {
+            if (cachedMediumTypeface == null) {
+                cachedMediumTypeface = try {
+                    ResourcesCompat.getFont(ctx, R.font.inter_medium)
+                } catch (e: Exception) {
+                    Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+                }
+            }
+            return cachedMediumTypeface ?: Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
     }
 
@@ -102,7 +113,6 @@ class LyricAdapter(
         fun bind(line: LyricLine, isActive: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
-            val interTypeface = getInterTypeface(ctx)
 
             // Reset any item scale to 1.0f to prevent left-overflow and matrix clipping
             itemView.scaleX = 1.0f
@@ -127,49 +137,25 @@ class LyricAdapter(
             if (isActive) {
                 lyricText.alpha = 1.0f
                 lyricText.setTextColor(ThemeColors.getOnSurface(ctx))
+                // Static weight 900 (Black)
+                lyricText.typeface = getBlackTypeface(ctx)
 
                 if (isFullScreen) {
                     lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, baseFontSizeSp)
                 } else {
                     lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
                 }
-
-                // Weight 800 (Inter Black/ExtraBold) for active line
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    try {
-                        lyricText.fontVariationSettings = "'wght' 800"
-                    } catch (ignored: Exception) {}
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && interTypeface != null) {
-                    lyricText.typeface = Typeface.create(interTypeface, 800, false)
-                } else if (interTypeface != null) {
-                    lyricText.setTypeface(interTypeface, Typeface.BOLD)
-                } else {
-                    lyricText.setTypeface(Typeface.SANS_SERIF, Typeface.BOLD)
-                }
             } else {
                 lyricText.alpha = 0.40f
                 lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
+                // Static weight 500 (Medium)
+                lyricText.typeface = getMediumTypeface(ctx)
 
                 if (isFullScreen) {
                     val inactiveSp = (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
                     lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, inactiveSp)
                 } else {
                     lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                }
-
-                // Weight 500 (Inter Medium) for inactive lines
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    try {
-                        lyricText.fontVariationSettings = "'wght' 500"
-                    } catch (ignored: Exception) {}
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && interTypeface != null) {
-                    lyricText.typeface = Typeface.create(interTypeface, 500, false)
-                } else if (interTypeface != null) {
-                    lyricText.setTypeface(interTypeface, Typeface.NORMAL)
-                } else {
-                    lyricText.setTypeface(Typeface.SANS_SERIF, Typeface.NORMAL)
                 }
             }
         }

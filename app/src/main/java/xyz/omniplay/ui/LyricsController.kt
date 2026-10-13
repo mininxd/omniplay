@@ -283,7 +283,14 @@ class LyricsController(
             binding.fullscreenLyricsSongTitle.text = song.title
             binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
         }
-        binding.fullscreenLyricsSourceBadge.text = binding.lyricsSourceBadge.text
+        val currentBadge = binding.lyricsSourceBadge.text.toString()
+        if (currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
+            binding.fullscreenLyricsSourceBadge.visibility = View.GONE
+            binding.fullscreenLyricsSourceBadge.text = ""
+        } else {
+            binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
+            binding.fullscreenLyricsSourceBadge.text = currentBadge
+        }
 
         isFullScreenLyricsShowing = true
         binding.fullscreenLyricsContainer.apply {
@@ -567,7 +574,15 @@ class LyricsController(
             else -> "LRCLIB"
         }
         binding.lyricsSourceBadge.text = badge
-        binding.fullscreenLyricsSourceBadge.text = badge
+
+        // Don't show "OFFLINE" badge when in fullscreen lyrics
+        if (isOffline) {
+            binding.fullscreenLyricsSourceBadge.visibility = View.GONE
+            binding.fullscreenLyricsSourceBadge.text = ""
+        } else {
+            binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
+            binding.fullscreenLyricsSourceBadge.text = badge
+        }
     }
 
     fun updateLyricsProgress(currentPositionMs: Long) {
@@ -599,10 +614,16 @@ class LyricsController(
                     val changed = adapter.setActiveIndex(activeIndex)
                     if (changed && activeIndex >= 0 && !isUserScrollingFullScreenLyrics) {
                         val layoutManager = binding.fullscreenLyricsRecyclerView.layoutManager as? LinearLayoutManager
-                        if (layoutManager != null && binding.fullscreenLyricsRecyclerView.height > 0) {
-                            // Center active line in the RecyclerView (half screen minus ~half item height)
-                            val estimatedItemHalfHeight = dpToPx(36)
-                            val offset = (binding.fullscreenLyricsRecyclerView.height / 2) - estimatedItemHalfHeight
+                        val rvHeight = binding.fullscreenLyricsRecyclerView.height
+                        if (layoutManager != null && rvHeight > 0) {
+                            val remainingBelow = (synced.size - 1) - activeIndex
+                            val offset = if (remainingBelow > 0) {
+                                // Anchor active line at upper area (~28% from top) so upcoming lyrics are never blank and clearly visible below
+                                (rvHeight * 0.28f).toInt()
+                            } else {
+                                // Final line reading position
+                                (rvHeight * 0.38f).toInt()
+                            }
                             layoutManager.scrollToPositionWithOffset(activeIndex, offset)
                         }
                     }
@@ -629,6 +650,7 @@ class LyricsController(
         binding.lyricsSourceBadge.text = ""
         binding.fullscreenLyricsPlainText.text = ""
         binding.fullscreenLyricsSourceBadge.text = ""
+        binding.fullscreenLyricsSourceBadge.visibility = View.GONE
 
         if (newSong != null) {
             binding.fullscreenLyricsSongTitle.text = newSong.title
