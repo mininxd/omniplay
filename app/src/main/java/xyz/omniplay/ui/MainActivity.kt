@@ -84,7 +84,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     // Backward-compatibility delegating properties
     val isLyricsShowing: Boolean
-        get() = if (::lyricsController.isInitialized) lyricsController.isLyricsShowing else false
+        get() = if (::lyricsController.isInitialized) lyricsController.isAnyLyricsShowing else false
     val isFilterMenuOpen: Boolean
         get() = if (::drawerFilterController.isInitialized) drawerFilterController.isFilterMenuOpen else false
     var isFilterPreviewActive: Boolean
@@ -492,6 +492,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.playbackSlider.setPlaying(false)
         binding.playbackSlider.isEnabled = false
 
+        binding.fullscreenPlaybackSlider.setDuration(1000L)
+        binding.fullscreenPlaybackSlider.setProgress(0L)
+        binding.fullscreenPlaybackSlider.setPlaying(false)
+        binding.fullscreenPlaybackSlider.isEnabled = false
+        binding.fullscreenLyricsSongTitle.text = getString(R.string.no_track_selected)
+        binding.fullscreenLyricsArtistName.text = ""
+        binding.fullscreenCurrentTimeText.text = getString(R.string.default_time)
+        binding.fullscreenTotalTimeText.text = getString(R.string.default_time)
+
         updateAudioBadges(null, null)
 
         updateShuffleButton(false)
@@ -825,6 +834,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
                 if (fromUser) {
                     binding.currentTimeText.text = Song.formatTime(progressMs)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(progressMs)
                 }
             }
 
@@ -833,6 +843,54 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (isCancelled) {
                     val currentPos = playbackService?.getCurrentPosition()?.toLong() ?: progressMs
                     binding.playbackSlider.setProgress(currentPos)
+                    binding.fullscreenPlaybackSlider.setProgress(currentPos)
+                    binding.currentTimeText.text = Song.formatTime(currentPos)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPos)
+                } else {
+                    playbackService?.seekTo(progressMs.toInt())
+                }
+            }
+        }
+
+        binding.fullscreenBtnPlayPauseCard.setOnClickListener {
+            binding.btnPlayPauseCard.performClick()
+        }
+
+        binding.fullscreenBtnNext.setOnClickListener {
+            binding.btnNext.performClick()
+        }
+
+        binding.fullscreenBtnPrevious.setOnClickListener {
+            binding.btnPrevious.performClick()
+        }
+
+        binding.fullscreenBtnShuffle.setOnClickListener {
+            binding.btnShuffle.performClick()
+        }
+
+        binding.fullscreenBtnRepeat.setOnClickListener {
+            binding.btnRepeat.performClick()
+        }
+
+        binding.fullscreenPlaybackSlider.seekListener = object : SquigglySeekBar.OnSeekListener {
+            override fun onStartTracking() {
+                isUserTrackingSlider = true
+            }
+
+            override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
+                if (fromUser) {
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(progressMs)
+                    binding.currentTimeText.text = Song.formatTime(progressMs)
+                }
+            }
+
+            override fun onStopTracking(progressMs: Long, isCancelled: Boolean) {
+                isUserTrackingSlider = false
+                if (isCancelled) {
+                    val currentPos = playbackService?.getCurrentPosition()?.toLong() ?: progressMs
+                    binding.fullscreenPlaybackSlider.setProgress(currentPos)
+                    binding.playbackSlider.setProgress(currentPos)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPos)
                     binding.currentTimeText.text = Song.formatTime(currentPos)
                 } else {
                     playbackService?.seekTo(progressMs.toInt())
@@ -1373,6 +1431,15 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.playbackSlider.setPlaying(playbackService?.isPlaying() == true)
             binding.playbackSlider.isEnabled = true
 
+            binding.fullscreenLyricsSongTitle.text = song.title
+            binding.fullscreenLyricsArtistName.text = displayArtist
+            binding.fullscreenTotalTimeText.text = Song.formatTime(song.duration)
+            binding.fullscreenCurrentTimeText.text = getString(R.string.default_time)
+            binding.fullscreenPlaybackSlider.setDuration(song.duration)
+            binding.fullscreenPlaybackSlider.setProgress(0L)
+            binding.fullscreenPlaybackSlider.setPlaying(playbackService?.isPlaying() == true)
+            binding.fullscreenPlaybackSlider.isEnabled = true
+
             songAdapter?.setCurrentPlayingSongId(song.id)
 
             binding.albumArtCard.translationX = 0f
@@ -1417,6 +1484,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             if (!::binding.isInitialized) return@runOnUiThread
             updatePlayPauseButton(isPlaying)
             binding.playbackSlider.setPlaying(isPlaying)
+            binding.fullscreenPlaybackSlider.setPlaying(isPlaying)
         }
     }
 
@@ -1428,8 +1496,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 binding.playbackSlider.setProgress(currentPositionMs.toLong())
                 binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
                 binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
+                binding.fullscreenPlaybackSlider.setProgress(currentPositionMs.toLong())
+                binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPositionMs.toLong())
+                binding.fullscreenTotalTimeText.text = Song.formatTime(totalDurationMs.toLong())
             }
-            if (lyricsController.isLyricsShowing) {
+            if (lyricsController.isLyricsShowing || lyricsController.isFullScreenLyricsShowing) {
                 lyricsController.updateLyricsProgress(currentPositionMs.toLong())
             }
         }
@@ -1475,6 +1546,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     private fun updatePlayPauseButton(isPlaying: Boolean) {
         val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         binding.btnPlayPauseIcon.setImageResource(iconRes)
+        binding.fullscreenBtnPlayPauseIcon.setImageResource(iconRes)
     }
 
     private fun getActiveControlTint(): Int {
@@ -1497,26 +1569,25 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         binding.btnShuffle.setColorFilter(tintColor)
         binding.btnShuffle.alpha = if (enabled) 1.0f else 0.45f
+        binding.fullscreenBtnShuffle.setColorFilter(tintColor)
+        binding.fullscreenBtnShuffle.alpha = if (enabled) 1.0f else 0.45f
     }
 
     private fun updateRepeatButton(mode: Int) {
-        when (mode) {
-            PlaybackService.REPEAT_ALL -> {
-                binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
-                binding.btnRepeat.setColorFilter(getActiveControlTint())
-                binding.btnRepeat.alpha = 1.0f
-            }
-            PlaybackService.REPEAT_ONE -> {
-                binding.btnRepeat.setImageResource(R.drawable.ic_repeat_one)
-                binding.btnRepeat.setColorFilter(getActiveControlTint())
-                binding.btnRepeat.alpha = 1.0f
-            }
-            else -> {
-                binding.btnRepeat.setImageResource(R.drawable.ic_repeat)
-                binding.btnRepeat.setColorFilter(getInactiveControlTint())
-                binding.btnRepeat.alpha = 0.45f
-            }
+        val iconRes = when (mode) {
+            PlaybackService.REPEAT_ONE -> R.drawable.ic_repeat_one
+            else -> R.drawable.ic_repeat
         }
+        val tintColor = if (mode != PlaybackService.REPEAT_OFF) getActiveControlTint() else getInactiveControlTint()
+        val alphaVal = if (mode != PlaybackService.REPEAT_OFF) 1.0f else 0.45f
+
+        binding.btnRepeat.setImageResource(iconRes)
+        binding.btnRepeat.setColorFilter(tintColor)
+        binding.btnRepeat.alpha = alphaVal
+
+        binding.fullscreenBtnRepeat.setImageResource(iconRes)
+        binding.fullscreenBtnRepeat.setColorFilter(tintColor)
+        binding.fullscreenBtnRepeat.alpha = alphaVal
     }
 
     private fun updateOmniSyncButtonState(role: OmniSyncRole) {
@@ -1538,50 +1609,84 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.isEnabled = true
                     binding.playbackSlider.isSeekable = false
                     binding.playbackSlider.setNeutralMode(true)
+                    binding.fullscreenPlaybackSlider.isEnabled = true
+                    binding.fullscreenPlaybackSlider.isSeekable = false
+                    binding.fullscreenPlaybackSlider.setNeutralMode(true)
                     binding.btnShuffle.isEnabled = false
                     binding.btnRepeat.isEnabled = false
                     binding.btnPrevious.isEnabled = false
                     binding.btnNext.isEnabled = false
+                    binding.fullscreenBtnShuffle.isEnabled = false
+                    binding.fullscreenBtnRepeat.isEnabled = false
+                    binding.fullscreenBtnPrevious.isEnabled = false
+                    binding.fullscreenBtnNext.isEnabled = false
                     binding.btnShuffle.alpha = 0.45f
                     binding.btnRepeat.alpha = 0.45f
                     binding.btnPrevious.alpha = 0.45f
                     binding.btnNext.alpha = 0.45f
+                    binding.fullscreenBtnShuffle.alpha = 0.45f
+                    binding.fullscreenBtnRepeat.alpha = 0.45f
+                    binding.fullscreenBtnPrevious.alpha = 0.45f
+                    binding.fullscreenBtnNext.alpha = 0.45f
                     binding.btnShuffle.setColorFilter(getInactiveControlTint())
                     binding.btnRepeat.setColorFilter(getInactiveControlTint())
                     binding.btnPrevious.setColorFilter(getInactiveControlTint())
                     binding.btnNext.setColorFilter(getInactiveControlTint())
+                    binding.fullscreenBtnShuffle.setColorFilter(getInactiveControlTint())
+                    binding.fullscreenBtnRepeat.setColorFilter(getInactiveControlTint())
+                    binding.fullscreenBtnPrevious.setColorFilter(getInactiveControlTint())
+                    binding.fullscreenBtnNext.setColorFilter(getInactiveControlTint())
                     updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
                     val dur = OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
                     if (dur > 0L) {
                         binding.playbackSlider.updateDuration(dur)
                         binding.totalTimeText.text = Song.formatTime(dur)
+                        binding.fullscreenPlaybackSlider.updateDuration(dur)
+                        binding.fullscreenTotalTimeText.text = Song.formatTime(dur)
                     }
                     updatePlayPauseButton(isPlaying = true)
                 } else if (role == OmniSyncRole.IDLE) {
                     binding.playbackSlider.isSeekable = true
                     binding.playbackSlider.setNeutralMode(false)
+                    binding.fullscreenPlaybackSlider.isSeekable = true
+                    binding.fullscreenPlaybackSlider.setNeutralMode(false)
                     binding.badgeLatency.visibility = View.GONE
                     binding.btnShuffle.isEnabled = true
                     binding.btnRepeat.isEnabled = true
                     binding.btnPrevious.isEnabled = true
                     binding.btnNext.isEnabled = true
+                    binding.fullscreenBtnShuffle.isEnabled = true
+                    binding.fullscreenBtnRepeat.isEnabled = true
+                    binding.fullscreenBtnPrevious.isEnabled = true
+                    binding.fullscreenBtnNext.isEnabled = true
                     binding.btnPrevious.alpha = 1.0f
                     binding.btnNext.alpha = 1.0f
+                    binding.fullscreenBtnPrevious.alpha = 1.0f
+                    binding.fullscreenBtnNext.alpha = 1.0f
                     binding.btnPrevious.setColorFilter(getStandardControlTint())
                     binding.btnNext.setColorFilter(getStandardControlTint())
+                    binding.fullscreenBtnPrevious.setColorFilter(getStandardControlTint())
+                    binding.fullscreenBtnNext.setColorFilter(getStandardControlTint())
                     updateShuffleButton(playbackService?.isShuffleEnabled == true)
                     updateRepeatButton(playbackService?.repeatMode ?: PlaybackService.REPEAT_OFF)
                     playbackService?.currentSong?.let {
                         binding.playbackSlider.isEnabled = true
+                        binding.fullscreenPlaybackSlider.isEnabled = true
                         onTrackChanged(it)
                         updatePlayPauseButton(playbackService?.isPlaying() == true)
                     } ?: run {
                         binding.playbackSlider.isEnabled = false
                         binding.playbackSlider.setProgress(0L)
+                        binding.fullscreenPlaybackSlider.isEnabled = false
+                        binding.fullscreenPlaybackSlider.setProgress(0L)
                         binding.currentTimeText.text = getString(R.string.default_time)
                         binding.totalTimeText.text = getString(R.string.default_time)
+                        binding.fullscreenCurrentTimeText.text = getString(R.string.default_time)
+                        binding.fullscreenTotalTimeText.text = getString(R.string.default_time)
                         binding.songTitleText.text = getString(R.string.no_track_selected)
+                        binding.fullscreenLyricsSongTitle.text = getString(R.string.no_track_selected)
                         binding.artistNameText.text = ""
+                        binding.fullscreenLyricsArtistName.text = ""
                         binding.albumNameText.text = ""
                         binding.audioBadgeContainer.visibility = View.GONE
                         updatePlayPauseButton(false)
@@ -1600,7 +1705,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         if (dur > 0L) {
                             binding.playbackSlider.updateDuration(dur)
                             binding.totalTimeText.text = Song.formatTime(dur)
+                            binding.fullscreenPlaybackSlider.updateDuration(dur)
+                            binding.fullscreenTotalTimeText.text = Song.formatTime(dur)
                         }
+                        binding.fullscreenLyricsSongTitle.text = title
+                        binding.fullscreenLyricsArtistName.text = if (artist.isNotEmpty()) artist else "OmniSync Stream"
                         updatePlayPauseButton(isPlaying = true)
                         updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
 
@@ -1639,6 +1748,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (OmniSyncManager.getInstance(this@MainActivity).currentRole == OmniSyncRole.LISTENER) {
                     updatePlayPauseButton(isPlaying)
                     binding.playbackSlider.setPlaying(isPlaying)
+                    binding.fullscreenPlaybackSlider.setPlaying(isPlaying)
                 }
             }
         }
@@ -1649,10 +1759,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (durationMs > 0L) {
                         binding.playbackSlider.updateDuration(durationMs)
                         binding.totalTimeText.text = Song.formatTime(durationMs)
+                        binding.fullscreenPlaybackSlider.updateDuration(durationMs)
+                        binding.fullscreenTotalTimeText.text = Song.formatTime(durationMs)
                     }
                     binding.playbackSlider.setProgress(currentPositionMs)
                     binding.currentTimeText.text = Song.formatTime(currentPositionMs)
-                    if (lyricsController.isLyricsShowing) {
+                    binding.fullscreenPlaybackSlider.setProgress(currentPositionMs)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPositionMs)
+                    if (lyricsController.isLyricsShowing || lyricsController.isFullScreenLyricsShowing) {
                         lyricsController.updateLyricsProgress(currentPositionMs)
                     }
                 }

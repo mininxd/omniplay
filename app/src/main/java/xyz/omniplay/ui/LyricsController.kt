@@ -26,23 +26,39 @@ class LyricsController(
 ) {
 
     private var lyricAdapter: LyricAdapter? = null
+    private var fullScreenLyricAdapter: LyricAdapter? = null
     private var currentLyrics: Lyrics? = null
     private var lastOnlineLyricsSongId: Long? = null
+
     var isLyricsShowing: Boolean = false
         private set
+
+    var isFullScreenLyricsShowing: Boolean = false
+        private set
+
+    val isAnyLyricsShowing: Boolean
+        get() = isLyricsShowing || isFullScreenLyricsShowing
+
     private var isUserScrollingLyrics = false
     private val lyricsScrollResetHandler = Handler(Looper.getMainLooper())
     private val resetUserScrollingRunnable = Runnable { isUserScrollingLyrics = false }
+
+    private var isUserScrollingFullScreenLyrics = false
+    private val fullScreenScrollResetHandler = Handler(Looper.getMainLooper())
+    private val resetUserFullScreenScrollingRunnable = Runnable { isUserScrollingFullScreenLyrics = false }
+
     private var lyricsFetchJob: Job? = null
 
     private fun dpToPx(dp: Int): Int = (dp * activity.resources.displayMetrics.density).toInt()
 
     fun setup(onSeek: (Long) -> Unit) {
-        lyricAdapter = LyricAdapter { line ->
+        lyricAdapter = LyricAdapter(isFullScreen = false) { line ->
             val service = getPlaybackService()
             service?.seekTo(line.timeMs.toInt())
             binding.playbackSlider.setProgress(line.timeMs)
             binding.currentTimeText.text = Song.formatTime(line.timeMs)
+            binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+            binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
             isUserScrollingLyrics = false
             try {
                 binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -65,15 +81,53 @@ class LyricsController(
             }
         })
 
+        // Fullscreen Lyrics Setup
+        fullScreenLyricAdapter = LyricAdapter(isFullScreen = true) { line ->
+            val service = getPlaybackService()
+            service?.seekTo(line.timeMs.toInt())
+            binding.playbackSlider.setProgress(line.timeMs)
+            binding.currentTimeText.text = Song.formatTime(line.timeMs)
+            binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+            binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
+            isUserScrollingFullScreenLyrics = false
+            try {
+                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (ignored: Exception) {}
+            onSeek(line.timeMs)
+        }
+        binding.fullscreenLyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
+        binding.fullscreenLyricsRecyclerView.adapter = fullScreenLyricAdapter
+
+        binding.fullscreenLyricsRecyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                super.onScrollStateChanged(recyclerView, newState)
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    isUserScrollingFullScreenLyrics = true
+                    fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
+                } else if (newState == RecyclerView.SCROLL_STATE_IDLE && isUserScrollingFullScreenLyrics) {
+                    fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
+                    fullScreenScrollResetHandler.postDelayed(resetUserFullScreenScrollingRunnable, 3500L)
+                }
+            }
+        })
+
         binding.btnCloseLyrics.setOnClickListener {
             closeLyricsCard()
         }
 
-        binding.lyricsHeaderBar.setOnClickListener {
-            closeLyricsCard()
+        binding.btnOpenLyrics.setOnClickListener {
+            openFullScreenLyrics()
+        }
+
+        binding.btnCloseFullscreenLyrics.setOnClickListener {
+            closeFullScreenLyrics()
         }
 
         binding.btnLyricsRetry.setOnClickListener {
+            loadLyricsForCurrentSong(forceRefresh = true)
+        }
+
+        binding.fullscreenBtnLyricsRetry.setOnClickListener {
             loadLyricsForCurrentSong(forceRefresh = true)
         }
     }
@@ -150,6 +204,57 @@ class LyricsController(
             .start()
     }
 
+    fun openFullScreenLyrics() {
+        if (isFullScreenLyricsShowing) return
+        val song = getPlaybackService()?.currentSong
+        if (song != null) {
+            binding.fullscreenLyricsSongTitle.text = song.title
+            binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
+        }
+        binding.fullscreenLyricsSourceBadge.text = binding.lyricsSourceBadge.text
+
+        isFullScreenLyricsShowing = true
+        binding.fullscreenLyricsContainer.apply {
+            visibility = View.VISIBLE
+            alpha = 0f
+            val startY = dpToPx(160).toFloat()
+            translationY = startY
+            animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(220L)
+                .setInterpolator(DecelerateInterpolator())
+                .withEndAction {
+                    getPlaybackService()?.let { service ->
+                        updateLyricsProgress(service.getCurrentPosition().toLong())
+                    }
+                }
+                .start()
+        }
+
+        if (currentLyrics != null) {
+            renderLyricsResult(LyricsResult.Success(currentLyrics!, isOffline = currentLyrics!.isOffline))
+        } else {
+            prepareLyricsForDisplay()
+        }
+    }
+
+    fun closeFullScreenLyrics() {
+        if (!isFullScreenLyricsShowing) return
+        binding.fullscreenLyricsContainer.animate()
+            .alpha(0f)
+            .translationY(dpToPx(160).toFloat())
+            .setDuration(200L)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                binding.fullscreenLyricsContainer.visibility = View.GONE
+                binding.fullscreenLyricsContainer.translationY = 0f
+                binding.fullscreenLyricsContainer.alpha = 1f
+                isFullScreenLyricsShowing = false
+            }
+            .start()
+    }
+
     fun prepareLyricsForDisplay() {
         val song = getPlaybackService()?.currentSong ?: return
         val lyrics = currentLyrics ?: LrcLibClient.getCachedLyrics(activity, song)?.also {
@@ -158,7 +263,6 @@ class LyricsController(
 
         if (lyrics != null && lyrics.songId == song.id) {
             renderLyricsResult(LyricsResult.Success(lyrics, isOffline = lyrics.isOffline))
-            // If currently displayed lyrics are static, force an online search for synchronized lyrics
             if (!lyrics.hasSynced && !lyrics.isInstrumental && lastOnlineLyricsSongId != song.id) {
                 loadLyricsForSong(song, forceRefresh = false)
             }
@@ -179,16 +283,14 @@ class LyricsController(
         val isSyncedOrInstrumental = currentLyrics?.let { it.hasSynced || it.isInstrumental } == true
         val alreadyFetchedOnline = (lastOnlineLyricsSongId == song.id)
 
-        // If we already have synced lyrics or already queried online for this song (and not force refreshing), no need to re-query
         if (currentLyrics?.songId == song.id && !forceRefresh && (isSyncedOrInstrumental || alreadyFetchedOnline)) {
-            if (isLyricsShowing) {
+            if (isLyricsShowing || isFullScreenLyricsShowing) {
                 renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
             }
             return
         }
 
-        // Only show full loading spinner if we don't have static lyrics already showing, or if user explicitly requested a refresh
-        if (isLyricsShowing && (currentLyrics == null || forceRefresh)) {
+        if ((isLyricsShowing || isFullScreenLyricsShowing) && (currentLyrics == null || forceRefresh)) {
             showLyricsLoading()
         }
 
@@ -199,14 +301,14 @@ class LyricsController(
                 when (result) {
                     is LyricsResult.Success -> {
                         currentLyrics = result.lyrics
-                        if (isLyricsShowing) {
+                        if (isLyricsShowing || isFullScreenLyricsShowing) {
                             renderLyricsResult(result)
                         }
                     }
                     is LyricsResult.NotFound, is LyricsResult.Error -> {
                         if (currentLyrics == null || forceRefresh) {
                             currentLyrics = null
-                            if (isLyricsShowing) {
+                            if (isLyricsShowing || isFullScreenLyricsShowing) {
                                 renderLyricsResult(result)
                             }
                         }
@@ -226,6 +328,15 @@ class LyricsController(
         binding.lyricsStatusText.text = "Loading lyrics..."
         binding.lyricsStatusSubtext.visibility = View.GONE
         binding.btnLyricsRetry.visibility = View.GONE
+
+        binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+        binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+        binding.fullscreenLyricsStatusLayout.visibility = View.VISIBLE
+        binding.fullscreenLyricsProgressBar.visibility = View.VISIBLE
+        binding.fullscreenLyricsStatusIcon.visibility = View.GONE
+        binding.fullscreenLyricsStatusText.text = "Loading lyrics..."
+        binding.fullscreenLyricsStatusSubtext.visibility = View.GONE
+        binding.fullscreenBtnLyricsRetry.visibility = View.GONE
     }
 
     private fun renderLyricsResult(result: LyricsResult) {
@@ -246,6 +357,18 @@ class LyricsController(
                     binding.lyricsStatusSubtext.text = "This track contains no vocal lyrics"
                     binding.lyricsStatusSubtext.visibility = View.VISIBLE
                     binding.btnLyricsRetry.visibility = View.GONE
+
+                    binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+                    binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+                    binding.fullscreenLyricsStatusLayout.visibility = View.VISIBLE
+                    binding.fullscreenLyricsProgressBar.visibility = View.GONE
+                    binding.fullscreenLyricsStatusIcon.visibility = View.VISIBLE
+                    binding.fullscreenLyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                    binding.fullscreenLyricsStatusText.text = "Instrumental Track"
+                    binding.fullscreenLyricsStatusSubtext.text = "This track contains no vocal lyrics"
+                    binding.fullscreenLyricsStatusSubtext.visibility = View.VISIBLE
+                    binding.fullscreenBtnLyricsRetry.visibility = View.GONE
+
                     updateLyricsSourceBadge(lyrics.source, result.isOffline)
                     return
                 }
@@ -255,6 +378,12 @@ class LyricsController(
                     binding.lyricsPlainScroll.visibility = View.GONE
                     binding.lyricsRecyclerView.visibility = View.VISIBLE
                     lyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
+
+                    binding.fullscreenLyricsStatusLayout.visibility = View.GONE
+                    binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+                    binding.fullscreenLyricsRecyclerView.visibility = View.VISIBLE
+                    fullScreenLyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
+
                     getPlaybackService()?.let { service ->
                         updateLyricsProgress(service.getCurrentPosition().toLong())
                     }
@@ -267,6 +396,12 @@ class LyricsController(
                     binding.lyricsRecyclerView.visibility = View.GONE
                     binding.lyricsPlainScroll.visibility = View.VISIBLE
                     binding.lyricsPlainText.text = lyrics.plainLyrics
+
+                    binding.fullscreenLyricsStatusLayout.visibility = View.GONE
+                    binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+                    binding.fullscreenLyricsPlainScroll.visibility = View.VISIBLE
+                    binding.fullscreenLyricsPlainText.text = lyrics.plainLyrics
+
                     updateLyricsSourceBadge(lyrics.source, result.isOffline)
                     return
                 }
@@ -282,6 +417,18 @@ class LyricsController(
                 binding.lyricsStatusSubtext.visibility = View.VISIBLE
                 binding.btnLyricsRetry.visibility = View.VISIBLE
                 binding.btnLyricsRetry.text = "Search Again"
+
+                binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+                binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+                binding.fullscreenLyricsStatusLayout.visibility = View.VISIBLE
+                binding.fullscreenLyricsProgressBar.visibility = View.GONE
+                binding.fullscreenLyricsStatusIcon.visibility = View.VISIBLE
+                binding.fullscreenLyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                binding.fullscreenLyricsStatusText.text = "No lyrics available"
+                binding.fullscreenLyricsStatusSubtext.text = "No lyric lines available for this song"
+                binding.fullscreenLyricsStatusSubtext.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.text = "Search Again"
             }
             is LyricsResult.NotFound -> {
                 binding.lyricsRecyclerView.visibility = View.GONE
@@ -295,6 +442,18 @@ class LyricsController(
                 binding.lyricsStatusSubtext.visibility = View.VISIBLE
                 binding.btnLyricsRetry.visibility = View.VISIBLE
                 binding.btnLyricsRetry.text = "Search Again"
+
+                binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+                binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+                binding.fullscreenLyricsStatusLayout.visibility = View.VISIBLE
+                binding.fullscreenLyricsProgressBar.visibility = View.GONE
+                binding.fullscreenLyricsStatusIcon.visibility = View.VISIBLE
+                binding.fullscreenLyricsStatusIcon.setImageResource(R.drawable.ic_music_note)
+                binding.fullscreenLyricsStatusText.text = "No lyrics found"
+                binding.fullscreenLyricsStatusSubtext.text = result.message
+                binding.fullscreenLyricsStatusSubtext.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.text = "Search Again"
             }
             is LyricsResult.Error -> {
                 binding.lyricsRecyclerView.visibility = View.GONE
@@ -303,15 +462,24 @@ class LyricsController(
                 binding.lyricsProgressBar.visibility = View.GONE
                 binding.lyricsStatusIcon.visibility = View.VISIBLE
                 binding.lyricsStatusIcon.setImageResource(R.drawable.ic_info)
-                if (result.isRateLimited) {
-                    binding.lyricsStatusText.text = "Too many requests"
-                } else {
-                    binding.lyricsStatusText.text = "Could not load lyrics"
-                }
+                val statusText = if (result.isRateLimited) "Too many requests" else "Could not load lyrics"
+                binding.lyricsStatusText.text = statusText
                 binding.lyricsStatusSubtext.text = result.message
                 binding.lyricsStatusSubtext.visibility = View.VISIBLE
                 binding.btnLyricsRetry.visibility = View.VISIBLE
                 binding.btnLyricsRetry.text = "Retry"
+
+                binding.fullscreenLyricsRecyclerView.visibility = View.GONE
+                binding.fullscreenLyricsPlainScroll.visibility = View.GONE
+                binding.fullscreenLyricsStatusLayout.visibility = View.VISIBLE
+                binding.fullscreenLyricsProgressBar.visibility = View.GONE
+                binding.fullscreenLyricsStatusIcon.visibility = View.VISIBLE
+                binding.fullscreenLyricsStatusIcon.setImageResource(R.drawable.ic_info)
+                binding.fullscreenLyricsStatusText.text = statusText
+                binding.fullscreenLyricsStatusSubtext.text = result.message
+                binding.fullscreenLyricsStatusSubtext.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.visibility = View.VISIBLE
+                binding.fullscreenBtnLyricsRetry.text = "Retry"
             }
         }
     }
@@ -324,23 +492,43 @@ class LyricsController(
             else -> "LRCLIB"
         }
         binding.lyricsSourceBadge.text = badge
+        binding.fullscreenLyricsSourceBadge.text = badge
     }
 
     fun updateLyricsProgress(currentPositionMs: Long) {
-        if (!isLyricsShowing) return
+        if (!isLyricsShowing && !isFullScreenLyricsShowing) return
         val lyrics = currentLyrics ?: return
         val synced = lyrics.syncedLyrics ?: return
         if (synced.isEmpty()) return
 
         val activeIndex = synced.indexOfLast { it.timeMs <= currentPositionMs }
-        val adapter = lyricAdapter ?: return
-        if (activeIndex != adapter.activeIndex) {
-            val changed = adapter.setActiveIndex(activeIndex)
-            if (changed && activeIndex >= 0 && !isUserScrollingLyrics) {
-                val layoutManager = binding.lyricsRecyclerView.layoutManager as? LinearLayoutManager
-                if (layoutManager != null && binding.lyricsRecyclerView.height > 0) {
-                    val offset = (binding.lyricsRecyclerView.height / 2) - dpToPx(24)
-                    layoutManager.scrollToPositionWithOffset(activeIndex, offset)
+
+        if (isLyricsShowing) {
+            lyricAdapter?.let { adapter ->
+                if (activeIndex != adapter.activeIndex) {
+                    val changed = adapter.setActiveIndex(activeIndex)
+                    if (changed && activeIndex >= 0 && !isUserScrollingLyrics) {
+                        val layoutManager = binding.lyricsRecyclerView.layoutManager as? LinearLayoutManager
+                        if (layoutManager != null && binding.lyricsRecyclerView.height > 0) {
+                            val offset = (binding.lyricsRecyclerView.height / 2) - dpToPx(24)
+                            layoutManager.scrollToPositionWithOffset(activeIndex, offset)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isFullScreenLyricsShowing) {
+            fullScreenLyricAdapter?.let { adapter ->
+                if (activeIndex != adapter.activeIndex) {
+                    val changed = adapter.setActiveIndex(activeIndex)
+                    if (changed && activeIndex >= 0 && !isUserScrollingFullScreenLyrics) {
+                        val layoutManager = binding.fullscreenLyricsRecyclerView.layoutManager as? LinearLayoutManager
+                        if (layoutManager != null && binding.fullscreenLyricsRecyclerView.height > 0) {
+                            val offset = (binding.fullscreenLyricsRecyclerView.height / 3)
+                            layoutManager.scrollToPositionWithOffset(activeIndex, offset)
+                        }
+                    }
                 }
             }
         }
@@ -351,21 +539,34 @@ class LyricsController(
         currentLyrics = null
         lastOnlineLyricsSongId = null
         isUserScrollingLyrics = false
+        isUserScrollingFullScreenLyrics = false
         lyricsScrollResetHandler.removeCallbacks(resetUserScrollingRunnable)
+        fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
 
-        if (lyricAdapter != null) {
-            lyricAdapter?.submitLines(emptyList())
-            lyricAdapter?.setActiveIndex(-1)
-        }
+        lyricAdapter?.submitLines(emptyList())
+        lyricAdapter?.setActiveIndex(-1)
+        fullScreenLyricAdapter?.submitLines(emptyList())
+        fullScreenLyricAdapter?.setActiveIndex(-1)
+
         binding.lyricsPlainText.text = ""
         binding.lyricsSourceBadge.text = ""
+        binding.fullscreenLyricsPlainText.text = ""
+        binding.fullscreenLyricsSourceBadge.text = ""
+
+        if (newSong != null) {
+            binding.fullscreenLyricsSongTitle.text = newSong.title
+            binding.fullscreenLyricsArtistName.text = newSong.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
+        } else {
+            binding.fullscreenLyricsSongTitle.text = ""
+            binding.fullscreenLyricsArtistName.text = ""
+        }
 
         if (newSong == null) {
             renderLyricsResult(LyricsResult.NotFound("No song is currently playing"))
             return
         }
 
-        if (isLyricsShowing) {
+        if (isLyricsShowing || isFullScreenLyricsShowing) {
             val cached = LrcLibClient.getCachedLyrics(activity, newSong)
             if (cached != null) {
                 currentLyrics = cached
@@ -385,6 +586,10 @@ class LyricsController(
     }
 
     fun handleBackPressed(): Boolean {
+        if (isFullScreenLyricsShowing) {
+            closeFullScreenLyrics()
+            return true
+        }
         if (isLyricsShowing) {
             closeLyricsCard()
             return true
@@ -395,5 +600,6 @@ class LyricsController(
     fun onDestroy() {
         lyricsFetchJob?.cancel()
         lyricsScrollResetHandler.removeCallbacks(resetUserScrollingRunnable)
+        fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
     }
 }

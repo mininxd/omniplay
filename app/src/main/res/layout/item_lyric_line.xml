@@ -12,10 +12,10 @@
         android:id="@+id/lyric_line_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:alpha="0.45"
-        android:fontFamily="sans-serif"
+        android:alpha="0.90"
+        android:fontFamily="@font/inter_variable"
         android:gravity="center"
-        android:lineSpacingExtra="4dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
+        android:lineSpacingExtra="6dp"
+        android:textColor="?attr/colorOnSurface"
         android:textSize="15sp" />
 </FrameLayout>
