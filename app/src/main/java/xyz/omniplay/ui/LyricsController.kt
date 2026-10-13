@@ -232,8 +232,9 @@ class LyricsController(
                 .start()
         }
 
-        if (currentLyrics != null) {
-            renderLyricsResult(LyricsResult.Success(currentLyrics!, isOffline = currentLyrics!.isOffline))
+        val curr = currentLyrics
+        if (curr != null) {
+            renderLyricsResult(LyricsResult.Success(curr, isOffline = curr.isOffline))
         } else {
             prepareLyricsForDisplay()
         }
@@ -283,9 +284,10 @@ class LyricsController(
         val isSyncedOrInstrumental = currentLyrics?.let { it.hasSynced || it.isInstrumental } == true
         val alreadyFetchedOnline = (lastOnlineLyricsSongId == song.id)
 
-        if (currentLyrics?.songId == song.id && !forceRefresh && (isSyncedOrInstrumental || alreadyFetchedOnline)) {
+        val curr = currentLyrics
+        if (curr != null && curr.songId == song.id && !forceRefresh && (isSyncedOrInstrumental || alreadyFetchedOnline)) {
             if (isLyricsShowing || isFullScreenLyricsShowing) {
-                renderLyricsResult(LyricsResult.Success(currentLyrics!!, isOffline = currentLyrics!!.isOffline))
+                renderLyricsResult(LyricsResult.Success(curr, isOffline = curr.isOffline))
             }
             return
         }
