@@ -1,5 +1,6 @@
 package xyz.omniplay.ui
 
+import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
@@ -7,10 +8,13 @@ import android.view.View
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.palette.graphics.Palette
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.lyrics.Lyrics
@@ -18,6 +22,8 @@ import xyz.omniplay.lyrics.LyricsResult
 import xyz.omniplay.lyrics.LrcLibClient
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
+import xyz.omniplay.util.AlbumArtLoader
+
 
 class LyricsController(
     private val activity: AppCompatActivity,
@@ -50,6 +56,31 @@ class LyricsController(
     private var lyricsFetchJob: Job? = null
 
     private fun dpToPx(dp: Int): Int = (dp * activity.resources.displayMetrics.density).toInt()
+
+    /** Extract dominant color from current song's album art and apply it to the fullscreen backdrop. */
+    private fun applyAlbumArtColor(song: Song?) {
+        if (song == null) {
+            binding.fullscreenLyricsBackdrop.setBackgroundColor(Color.parseColor("#1C1B1F"))
+            return
+        }
+        activity.lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                AlbumArtLoader.getCachedAlbumArt(song)
+            }
+            if (bitmap != null) {
+                val palette = withContext(Dispatchers.Default) {
+                    Palette.from(bitmap).generate()
+                }
+                val dominantColor = palette.darkVibrantSwatch?.rgb
+                    ?: palette.vibrantSwatch?.rgb
+                    ?: palette.dominantSwatch?.rgb
+                    ?: Color.parseColor("#1C1B1F")
+                binding.fullscreenLyricsBackdrop.setBackgroundColor(dominantColor)
+            } else {
+                binding.fullscreenLyricsBackdrop.setBackgroundColor(Color.parseColor("#1C1B1F"))
+            }
+        }
+    }
 
     fun setup(onSeek: (Long) -> Unit) {
         lyricAdapter = LyricAdapter(isFullScreen = false) { line ->
@@ -213,6 +244,9 @@ class LyricsController(
         }
         binding.fullscreenLyricsSourceBadge.text = binding.lyricsSourceBadge.text
 
+        // Apply album art dominant color to backdrop
+        applyAlbumArtColor(song)
+
         isFullScreenLyricsShowing = true
         binding.fullscreenLyricsContainer.apply {
             visibility = View.VISIBLE
@@ -239,6 +273,7 @@ class LyricsController(
             prepareLyricsForDisplay()
         }
     }
+
 
     fun closeFullScreenLyrics() {
         if (!isFullScreenLyricsShowing) return
@@ -527,7 +562,9 @@ class LyricsController(
                     if (changed && activeIndex >= 0 && !isUserScrollingFullScreenLyrics) {
                         val layoutManager = binding.fullscreenLyricsRecyclerView.layoutManager as? LinearLayoutManager
                         if (layoutManager != null && binding.fullscreenLyricsRecyclerView.height > 0) {
-                            val offset = (binding.fullscreenLyricsRecyclerView.height / 3)
+                            // Center active line in the RecyclerView (half screen minus ~half item height)
+                            val estimatedItemHalfHeight = dpToPx(28)
+                            val offset = (binding.fullscreenLyricsRecyclerView.height / 2) - estimatedItemHalfHeight
                             layoutManager.scrollToPositionWithOffset(activeIndex, offset)
                         }
                     }
@@ -566,6 +603,11 @@ class LyricsController(
         if (newSong == null) {
             renderLyricsResult(LyricsResult.NotFound("No song is currently playing"))
             return
+        }
+
+        // Refresh backdrop color for new song when fullscreen is open
+        if (isFullScreenLyricsShowing) {
+            applyAlbumArtColor(newSong)
         }
 
         if (isLyricsShowing || isFullScreenLyricsShowing) {

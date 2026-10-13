@@ -1012,12 +1012,26 @@
         android:id="@+id/fullscreen_lyrics_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="?attr/colorSurface"
+        android:background="#000000"
         android:clickable="true"
         android:focusable="true"
         android:elevation="14dp"
         android:fitsSystemWindows="true"
         android:visibility="gone">
+
+        <!-- Solid Dynamic Backdrop (Dominant Color from Album Art) -->
+        <View
+            android:id="@+id/fullscreen_lyrics_backdrop"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#1C1B1F" />
+
+        <!-- 90% Dark Scrim Overlay (Zero Blur GPU Impact) -->
+        <View
+            android:id="@+id/fullscreen_lyrics_scrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#E6000000" />
 
         <!-- Top Bar -->
         <LinearLayout
@@ -1040,7 +1054,7 @@
                 android:contentDescription="Close Fullscreen Lyrics"
                 android:padding="10dp"
                 android:src="@drawable/ic_chevron_down"
-                app:tint="?attr/colorOnSurface" />
+                app:tint="#FFFFFF" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -1056,9 +1070,10 @@
                     android:layout_height="wrap_content"
                     android:ellipsize="marquee"
                     android:fontFamily="@font/inter_variable"
+                    android:letterSpacing="-0.02"
                     android:singleLine="true"
                     android:text=""
-                    android:textColor="?attr/colorOnSurface"
+                    android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     tools:text="Song Title" />
 
@@ -1069,9 +1084,10 @@
                     android:layout_marginTop="1dp"
                     android:ellipsize="end"
                     android:fontFamily="@font/inter_variable"
+                    android:letterSpacing="-0.02"
                     android:singleLine="true"
                     android:text=""
-                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textColor="#66FFFFFF"
                     android:textSize="12sp"
                     tools:text="Artist Name" />
             </LinearLayout>
@@ -1135,10 +1151,11 @@
                 android:fontFamily="@font/inter_variable"
                 android:gravity="start"
                 android:textAlignment="viewStart"
+                android:letterSpacing="-0.02"
                 android:lineSpacingExtra="8dp"
-                android:textColor="?attr/colorOnSurface"
-                android:alpha="0.90"
-                android:textSize="18sp" />
+                android:textColor="#FFFFFF"
+                android:alpha="0.40"
+                android:textSize="22sp" />
         </ScrollView>
 
         <!-- Status Layout (Loading / Instrumental / Not Found / Error) -->
@@ -1243,8 +1260,9 @@
                     android:layout_height="wrap_content"
                     android:layout_alignParentStart="true"
                     android:fontFamily="@font/inter_variable"
+                    android:letterSpacing="-0.02"
                     android:text="@string/default_time"
-                    android:textColor="?attr/colorOutline"
+                    android:textColor="#66FFFFFF"
                     android:textSize="12sp" />
 
                 <TextView
@@ -1253,8 +1271,9 @@
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
                     android:fontFamily="@font/inter_variable"
+                    android:letterSpacing="-0.02"
                     android:text="@string/default_time"
-                    android:textColor="?attr/colorOutline"
+                    android:textColor="#66FFFFFF"
                     android:textSize="12sp" />
             </RelativeLayout>
 
@@ -1279,7 +1298,7 @@
                     app:layout_constraintHorizontal_chainStyle="spread_inside"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:tint="?attr/colorOnSurfaceVariant" />
+                    app:tint="#FFFFFF" />
 
                 <!-- Previous -->
                 <ImageButton
@@ -1294,7 +1313,7 @@
                     app:layout_constraintEnd_toStartOf="@id/fullscreen_btn_play_pause_card"
                     app:layout_constraintStart_toEndOf="@id/fullscreen_btn_shuffle"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:tint="?attr/colorOnSurface" />
+                    app:tint="#FFFFFF" />
 
                 <!-- Play / Pause Card -->
                 <com.google.android.material.card.MaterialCardView
@@ -1333,7 +1352,7 @@
                     app:layout_constraintEnd_toStartOf="@id/fullscreen_btn_repeat"
                     app:layout_constraintStart_toEndOf="@id/fullscreen_btn_play_pause_card"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:tint="?attr/colorOnSurface" />
+                    app:tint="#FFFFFF" />
 
                 <!-- Repeat -->
                 <ImageButton
@@ -1349,7 +1368,7 @@
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toEndOf="@id/fullscreen_btn_next"
                     app:layout_constraintTop_toTopOf="parent"
-                    app:tint="?attr/colorOnSurfaceVariant" />
+                    app:tint="#FFFFFF" />
             </androidx.constraintlayout.widget.ConstraintLayout>
         </LinearLayout>
 
