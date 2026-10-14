@@ -261,15 +261,18 @@ class PlaybackGestureController(
                         val dragDistance = Math.abs(v.translationX)
                         val progress = (dragDistance / cardWidth).coerceIn(0f, 1f)
 
+                        val isSwipeLeft = deltaX < 0
+                        val isFlingingOpposite = if (isSwipeLeft) xVel > 400f else xVel < -400f
+
                         val shouldCommit = when {
                             currentPeekSong == null -> false
+                            isFlingingOpposite -> false
                             Math.abs(xVel) > 650f -> true
                             progress >= 0.22f -> true
                             else -> false
                         }
 
                         if (shouldCommit) {
-                            val isSwipeLeft = if (Math.abs(xVel) > 400f) xVel < 0 else deltaX < 0
                             val targetX = if (isSwipeLeft) -cardWidth * 1.15f else cardWidth * 1.15f
 
                             binding.peekAlbumArtCard.animate()
@@ -345,9 +348,13 @@ class PlaybackGestureController(
                         val dragDistance = Math.abs(v.translationY)
                         val progress = (dragDistance / cardHeight).coerceIn(0f, 1f)
 
+                        val isSwipeUp = deltaY < 0
+                        val isFlingingDown = isSwipeUp && yVel > 400f
+
                         val shouldOpenLyrics = when {
+                            isFlingingDown -> false
                             yVel < -500f -> true
-                            deltaY < 0 && progress >= 0.20f -> true
+                            isSwipeUp && progress >= 0.20f -> true
                             else -> false
                         }
 
