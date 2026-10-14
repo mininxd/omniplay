@@ -1,0 +1,11 @@
+--- app/src/main/java/xyz/omniplay/ui/PlaybackGestureController.kt
++++ app/src/main/java/xyz/omniplay/ui/PlaybackGestureController.kt
+@@ -113,7 +113,7 @@
+             }
+
+             if (peekSong != null) {
+-                if (currentPeekSong?.id != peekSong.id || peekDirection != direction) {
++                if (currentPeekSong?.id != peekSong.id || peekDirection != direction || binding.peekAlbumArtCard.visibility != View.VISIBLE) {
+                     currentPeekSong = peekSong
+                     peekDirection = direction
+                     binding.peekAlbumArtCard.visibility = View.VISIBLE

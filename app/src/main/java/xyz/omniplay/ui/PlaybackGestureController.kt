@@ -113,7 +113,7 @@ class PlaybackGestureController(
             }
 
             if (peekSong != null) {
-                if (currentPeekSong?.id != peekSong.id || peekDirection != direction) {
+                if (currentPeekSong?.id != peekSong.id || peekDirection != direction || binding.peekAlbumArtCard.visibility != View.VISIBLE) {
                     currentPeekSong = peekSong
                     peekDirection = direction
                     binding.peekAlbumArtCard.visibility = View.VISIBLE
@@ -297,6 +297,7 @@ class PlaybackGestureController(
                                             v.translationX = 0f
                                             v.translationY = 0f
                                             v.alpha = 1f
+                                            currentPeekSong = null
                                             binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                             binding.peekAlbumArtCard.scaleX = 0.90f
                                             binding.peekAlbumArtCard.scaleY = 0.90f
@@ -330,6 +331,7 @@ class PlaybackGestureController(
                                     override fun onAnimationEnd(animation: Animator) {
                                         v.translationX = 0f
                                         v.alpha = 1f
+                                        currentPeekSong = null
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                         activeAnimator = null
                                     }
