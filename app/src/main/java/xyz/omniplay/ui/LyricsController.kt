@@ -15,6 +15,9 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
+import android.widget.TextView
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -123,8 +126,8 @@ class LyricsController(
                 } catch (ignored: Exception) {}
                 onSeek(line.timeMs)
             },
-            onLineDoubleTap = {
-                openFullScreenLyrics()
+            onLineDoubleTap = { view ->
+                openFullScreenLyrics(view)
             }
         )
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
@@ -254,7 +257,7 @@ class LyricsController(
         // Double-tap on the plain lyric text to open fullscreen lyrics.
         val plainTextDoubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
-                openFullScreenLyrics()
+                openFullScreenLyrics(binding.lyricsPlainText)
                 return true
             }
         })
@@ -532,27 +535,101 @@ class LyricsController(
             .start()
     }
 
-    fun openFullScreenLyrics() {
+    fun openFullScreenLyrics(clickedView: View? = null) {
         if (isFullScreenLyricsShowing) return
         prepareFullscreenLyricsForOpen()
 
         isFullScreenLyricsShowing = true
-        binding.fullscreenLyricsContainer.apply {
-            visibility = View.VISIBLE
-            alpha = 0f
-            val startY = dpToPx(160).toFloat()
-            translationY = startY
-            animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setDuration(220L)
-                .setInterpolator(DecelerateInterpolator())
-                .withEndAction {
-                    getPlaybackService()?.let { service ->
-                        updateLyricsProgress(service.getCurrentPosition().toLong())
+
+        binding.fullscreenLyricsContainer.visibility = View.VISIBLE
+        binding.fullscreenLyricsContainer.alpha = 0f
+
+        // Ensure the container is laid out before calculating animations
+        binding.fullscreenLyricsContainer.post {
+            if (clickedView != null && clickedView is TextView) {
+                val startLoc = IntArray(2)
+                clickedView.getLocationOnScreen(startLoc)
+
+                val rootContentView = activity.findViewById<ViewGroup>(android.R.id.content)
+                val rootLoc = IntArray(2)
+                rootContentView.getLocationOnScreen(rootLoc)
+
+                // Adjust to get absolute coordinate relative to root view
+                val startY = startLoc[1].toFloat() - rootLoc[1].toFloat()
+                val startX = startLoc[0].toFloat() - rootLoc[0].toFloat()
+
+                val tempTextView = TextView(activity).apply {
+                    text = clickedView.text
+                    typeface = clickedView.typeface
+                    textSize = clickedView.textSize / activity.resources.displayMetrics.scaledDensity
+                    setTextColor(clickedView.currentTextColor)
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    x = startX
+                    y = startY
+                    pivotX = 0f
+                    pivotY = 0f
+                }
+
+                rootContentView.addView(tempTextView)
+
+                val density = activity.resources.displayMetrics.scaledDensity
+                val targetSizePx = (fullScreenLyricAdapter?.baseFontSizeSp ?: baseFontSizeSp) * density
+                val scaleRatio = targetSizePx / clickedView.textSize
+
+                binding.fullscreenLyricsContainer.apply {
+                    alpha = 0f
+                    translationY = dpToPx(160).toFloat()
+                    animate()
+                        .alpha(1f)
+                        .translationY(0f)
+                        .setDuration(220L)
+                        .setInterpolator(DecelerateInterpolator())
+                        .withEndAction {
+                            rootContentView.removeView(tempTextView)
+                            getPlaybackService()?.let { service ->
+                                updateLyricsProgress(service.getCurrentPosition().toLong())
+                            }
+                        }
+                        .start()
+                }
+
+                val targetMidY = rootContentView.height.toFloat() / 2f
+
+                val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+                    duration = 220L
+                    interpolator = DecelerateInterpolator()
+                    addUpdateListener { animation ->
+                        val fraction = animation.animatedFraction
+                        tempTextView.scaleX = 1f + (scaleRatio - 1f) * fraction
+                        tempTextView.scaleY = 1f + (scaleRatio - 1f) * fraction
+                        // Slide up to roughly the middle of the screen
+                        val currentHeight = tempTextView.height.toFloat() * tempTextView.scaleY
+                        val screenMidY = targetMidY - currentHeight / 2f
+                        tempTextView.y = startY + (screenMidY - startY) * fraction
                     }
                 }
-                .start()
+                animator.start()
+            } else {
+                binding.fullscreenLyricsContainer.apply {
+                    alpha = 0f
+                    val startY = dpToPx(160).toFloat()
+                    translationY = startY
+                    animate()
+                        .alpha(1f)
+                        .translationY(0f)
+                        .setDuration(220L)
+                        .setInterpolator(DecelerateInterpolator())
+                        .withEndAction {
+                            getPlaybackService()?.let { service ->
+                                updateLyricsProgress(service.getCurrentPosition().toLong())
+                            }
+                        }
+                        .start()
+                }
+            }
         }
     }
 
