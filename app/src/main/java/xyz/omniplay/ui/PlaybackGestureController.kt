@@ -113,7 +113,7 @@ class PlaybackGestureController(
             }
 
             if (peekSong != null) {
-                if (currentPeekSong?.id != peekSong.id || peekDirection != direction) {
+                if (currentPeekSong?.id != peekSong.id || peekDirection != direction || binding.peekAlbumArtCard.visibility != View.VISIBLE) {
                     currentPeekSong = peekSong
                     peekDirection = direction
                     binding.peekAlbumArtCard.visibility = View.VISIBLE
@@ -188,7 +188,7 @@ class PlaybackGestureController(
                     binding.peekAlbumArtCard.visibility = View.INVISIBLE
                     binding.peekAlbumArtCard.scaleX = 0.90f
                     binding.peekAlbumArtCard.scaleY = 0.90f
-                    binding.peekAlbumArtCard.alpha = 0.6f
+                    binding.peekAlbumArtCard.alpha = 1f
                     velocityTracker?.recycle()
                     velocityTracker = VelocityTracker.obtain().apply {
                         addMovement(event)
@@ -229,12 +229,12 @@ class PlaybackGestureController(
                         val effectiveDeltaX = if (currentPeekSong == null) deltaX * 0.25f else deltaX
                         v.translationX = effectiveDeltaX
                         val progress = (Math.abs(effectiveDeltaX) / cardWidth).coerceIn(0f, 1f)
-                        v.alpha = (1f - (progress * 0.45f)).coerceIn(0.55f, 1f)
+                        v.alpha = 1f
 
                         val peekScale = 0.90f + (progress * 0.10f)
                         binding.peekAlbumArtCard.scaleX = peekScale
                         binding.peekAlbumArtCard.scaleY = peekScale
-                        binding.peekAlbumArtCard.alpha = (0.6f + (progress * 0.4f)).coerceIn(0.6f, 1f)
+                        binding.peekAlbumArtCard.alpha = 1f
                     } else if (isDraggingY) {
                         val cardHeight = v.height.toFloat().coerceAtLeast(1f)
                         val effectiveDeltaY = deltaY.coerceAtMost(0f)
@@ -273,7 +273,7 @@ class PlaybackGestureController(
                             val targetX = if (isSwipeLeft) -cardWidth * 1.15f else cardWidth * 1.15f
 
                             binding.peekAlbumArtCard.animate()
-                                .scaleX(1f).scaleY(1f).alpha(1f)
+                                .scaleX(1f).scaleY(1f)
                                 .setDuration(160L).start()
 
                             activeAnimator = ValueAnimator.ofFloat(v.translationX, targetX).apply {
@@ -282,8 +282,7 @@ class PlaybackGestureController(
                                 addUpdateListener { anim ->
                                     val currentX = anim.animatedValue as Float
                                     v.translationX = currentX
-                                    val p = (Math.abs(currentX) / cardWidth).coerceIn(0f, 1f)
-                                    v.alpha = (1f - (p * 0.45f)).coerceIn(0.55f, 1f)
+                                    v.alpha = 1f
                                 }
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationEnd(animation: Animator) {
@@ -297,10 +296,11 @@ class PlaybackGestureController(
                                             v.translationX = 0f
                                             v.translationY = 0f
                                             v.alpha = 1f
+                                            currentPeekSong = null
                                             binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                             binding.peekAlbumArtCard.scaleX = 0.90f
                                             binding.peekAlbumArtCard.scaleY = 0.90f
-                                            binding.peekAlbumArtCard.alpha = 0.6f
+                                            binding.peekAlbumArtCard.alpha = 1f
                                         }, 280L)
                                         activeAnimator = null
                                     }
@@ -309,10 +309,9 @@ class PlaybackGestureController(
                             }
                         } else {
                             val startTransX = v.translationX
-                            val startAlpha = v.alpha
 
                             binding.peekAlbumArtCard.animate()
-                                .scaleX(0.90f).scaleY(0.90f).alpha(0.6f)
+                                .scaleX(0.90f).scaleY(0.90f)
                                 .setDuration(180L)
                                 .withEndAction { binding.peekAlbumArtCard.visibility = View.INVISIBLE }
                                 .start()
@@ -323,13 +322,13 @@ class PlaybackGestureController(
                                 addUpdateListener { anim ->
                                     val currentX = anim.animatedValue as Float
                                     v.translationX = currentX
-                                    val p = (Math.abs(currentX) / cardWidth).coerceIn(0f, 1f)
-                                    v.alpha = (1f - (p * 0.45f)).coerceIn(startAlpha, 1f)
+                                    v.alpha = 1f
                                 }
                                 addListener(object : AnimatorListenerAdapter() {
                                     override fun onAnimationEnd(animation: Animator) {
                                         v.translationX = 0f
                                         v.alpha = 1f
+                                        currentPeekSong = null
                                         binding.peekAlbumArtCard.visibility = View.INVISIBLE
                                         activeAnimator = null
                                     }
