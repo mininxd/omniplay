@@ -1,0 +1,12 @@
+--- app/src/main/java/xyz/omniplay/ui/LyricAdapter.kt
++++ app/src/main/java/xyz/omniplay/ui/LyricAdapter.kt
+@@ -102,8 +102,8 @@
+             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
+                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                     val pos = bindingAdapterPosition
+                     if (pos in lines.indices) {
+-                        onLineClick?.invoke(lines[pos])
++                        if (pos != activeIndex) onLineClick?.invoke(lines[pos])
+                     }
+                     return true
+                 }
