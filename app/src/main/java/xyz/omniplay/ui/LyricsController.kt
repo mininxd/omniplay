@@ -284,7 +284,7 @@ class LyricsController(
                     dismissVelocityTracker = VelocityTracker.obtain().apply {
                         addMovement(event)
                     }
-                    false
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     dismissVelocityTracker?.addMovement(event)
