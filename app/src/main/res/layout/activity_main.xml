@@ -672,7 +672,7 @@
                 android:layout_height="66dp"
                 app:cardBackgroundColor="?attr/colorPrimary"
                 app:cardCornerRadius="33dp"
-                app:cardElevation="0dp"
+                app:cardElevation="4dp"
                 app:strokeWidth="0dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toStartOf="@id/btn_next"
@@ -994,9 +994,6 @@
         <!-- Top Bar -->
         <LinearLayout
             android:id="@+id/fullscreen_lyrics_top_bar"
-            android:background="@null"
-            android:clickable="false"
-            android:focusable="false"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:gravity="center_vertical"
@@ -1284,7 +1281,7 @@
                     android:layout_height="60dp"
                     app:cardBackgroundColor="?attr/colorPrimary"
                     app:cardCornerRadius="30dp"
-                    app:cardElevation="0dp"
+                    app:cardElevation="4dp"
                     app:strokeWidth="0dp"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintEnd_toStartOf="@id/fullscreen_btn_next"

@@ -103,7 +103,7 @@ class LyricAdapter(
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices) {
-                        if (pos != activeIndex) onLineClick?.invoke(lines[pos])
+                        onLineClick?.invoke(lines[pos])
                     }
                     return true
                 }
