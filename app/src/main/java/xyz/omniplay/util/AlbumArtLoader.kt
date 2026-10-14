@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.omniplay.coverart.CoverArtArchiveClient
+import xyz.omniplay.data.AlbumArtDatabase
 import xyz.omniplay.model.Song
 import xyz.omniplay.ui.MainActivity
 import java.io.File
@@ -163,7 +164,7 @@ object AlbumArtLoader {
         if (cachedMem != null) return@withContext cachedMem
 
         val diskKey = "artist_$cleanArtist"
-        val diskBitmap = loadFromDiskCache(context, diskKey)
+        val diskBitmap = AlbumArtDatabase.getInstance(context).getArt(diskKey)
         if (diskBitmap != null) {
             artistArtCache.put(cleanArtist, diskBitmap)
             return@withContext diskBitmap
@@ -173,7 +174,7 @@ object AlbumArtLoader {
             val onlineArt = CoverArtArchiveClient.fetchArtistImage(context, artistName, representativeSong)
             if (onlineArt != null) {
                 artistArtCache.put(cleanArtist, onlineArt)
-                saveToDiskCache(context, diskKey, onlineArt)
+                AlbumArtDatabase.getInstance(context).saveArt(diskKey, onlineArt)
                 return@withContext onlineArt
             }
         }
@@ -182,7 +183,7 @@ object AlbumArtLoader {
             val repBitmap = loadAlbumArt(context, representativeSong)
             if (repBitmap != null) {
                 artistArtCache.put(cleanArtist, repBitmap)
-                saveToDiskCache(context, diskKey, repBitmap)
+                AlbumArtDatabase.getInstance(context).saveArt(diskKey, repBitmap)
                 return@withContext repBitmap
             }
         }
@@ -233,7 +234,7 @@ object AlbumArtLoader {
             }
 
             // Step 2: Check persistent disk LRU cache
-            val diskBitmap = loadFromDiskCache(context, cacheKey)
+            val diskBitmap = AlbumArtDatabase.getInstance(context).getArt(cacheKey)
             if (diskBitmap != null) {
                 memoryCache.put(cacheKey, diskBitmap)
                 val albumKey = getAlbumKey(song)
@@ -417,9 +418,9 @@ object AlbumArtLoader {
                 val albumKey = getAlbumKey(song)
                 if (albumKey != null) {
                     albumArtCache.put(albumKey, finalBitmap)
-                    saveToDiskCache(context, "album_$albumKey", finalBitmap)
+                    AlbumArtDatabase.getInstance(context).saveArt("album_$albumKey", finalBitmap)
                 }
-                saveToDiskCache(context, cacheKey, finalBitmap)
+                AlbumArtDatabase.getInstance(context).saveArt(cacheKey, finalBitmap)
                 return@withContext finalBitmap
             }
 
@@ -480,65 +481,10 @@ object AlbumArtLoader {
         }
     }
 
-    private fun getDiskCacheDir(context: Context): File {
-        val dir = File(context.cacheDir, DISK_CACHE_SUBDIR)
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
 
-    private fun hashKey(key: String): String {
-        return try {
-            val md = MessageDigest.getInstance("MD5")
-            val bytes = md.digest(key.toByteArray(Charsets.UTF_8))
-            bytes.joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            key.hashCode().toString()
-        }
-    }
 
-    private fun loadFromDiskCache(context: Context, key: String): Bitmap? {
-        try {
-            val dir = getDiskCacheDir(context)
-            val file = File(dir, "${hashKey(key)}.art")
-            if (file.exists() && file.length() > 0) {
-                file.setLastModified(System.currentTimeMillis())
-                return BitmapFactory.decodeFile(file.absolutePath)
-            }
-        } catch (ignored: Throwable) {}
-        return null
-    }
 
-    private fun saveToDiskCache(context: Context, key: String, bitmap: Bitmap) {
-        try {
-            val dir = getDiskCacheDir(context)
-            val hash = hashKey(key)
-            val tempFile = File(dir, "$hash.tmp")
-            val targetFile = File(dir, "$hash.art")
-            FileOutputStream(tempFile).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-                out.flush()
-            }
-            tempFile.renameTo(targetFile)
-            trimDiskCacheIfNeeded(dir, MAX_DISK_CACHE_SIZE)
-        } catch (ignored: Throwable) {}
-    }
 
-    private fun trimDiskCacheIfNeeded(dir: File, maxSizeBytes: Long) {
-        try {
-            val files = dir.listFiles { f -> f.extension == "art" } ?: return
-            var totalSize = files.sumOf { it.length() }
-            if (totalSize > maxSizeBytes) {
-                val sorted = files.sortedBy { it.lastModified() }
-                for (f in sorted) {
-                    val len = f.length()
-                    if (f.delete()) {
-                        totalSize -= len
-                        if (totalSize <= maxSizeBytes * 0.8) break
-                    }
-                }
-            }
-        } catch (ignored: Throwable) {}
-    }
 
     private fun isSolidOrBlankBitmap(bitmap: Bitmap): Boolean {
         try {
