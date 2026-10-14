@@ -14,10 +14,14 @@ import xyz.omniplay.R
 import xyz.omniplay.lyrics.LyricLine
 import xyz.omniplay.util.ThemeColors
 
+import android.view.GestureDetector
+import android.view.MotionEvent
+
 class LyricAdapter(
     private var lines: List<LyricLine> = emptyList(),
     val isFullScreen: Boolean = false,
-    var onLineClick: ((LyricLine) -> Unit)? = null
+    var onLineClick: ((LyricLine) -> Unit)? = null,
+    var onLineDoubleTap: (() -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
     var activeIndex: Int = -1
@@ -92,13 +96,27 @@ class LyricAdapter(
 
     inner class LyricViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val lyricText: TextView = itemView.findViewById(R.id.lyric_line_text)
+        private val gestureDetector: GestureDetector
 
         init {
-            itemView.setOnClickListener {
-                val pos = bindingAdapterPosition
-                if (pos in lines.indices) {
-                    onLineClick?.invoke(lines[pos])
+            gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    val pos = bindingAdapterPosition
+                    if (pos in lines.indices) {
+                        onLineClick?.invoke(lines[pos])
+                    }
+                    return true
                 }
+
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    onLineDoubleTap?.invoke()
+                    return true
+                }
+            })
+            
+            itemView.setOnTouchListener { _, event ->
+                gestureDetector.onTouchEvent(event)
+                true
             }
         }
 
