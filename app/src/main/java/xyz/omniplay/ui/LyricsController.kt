@@ -108,19 +108,25 @@ class LyricsController(
             }
         })
 
-        lyricAdapter = LyricAdapter(isFullScreen = false) { line ->
-            val service = getPlaybackService()
-            service?.seekTo(line.timeMs.toInt())
-            binding.playbackSlider.setProgress(line.timeMs)
-            binding.currentTimeText.text = Song.formatTime(line.timeMs)
-            binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
-            binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
-            isUserScrollingLyrics = false
-            try {
-                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            } catch (ignored: Exception) {}
-            onSeek(line.timeMs)
-        }
+        lyricAdapter = LyricAdapter(
+            isFullScreen = false,
+            onLineClick = { line ->
+                val service = getPlaybackService()
+                service?.seekTo(line.timeMs.toInt())
+                binding.playbackSlider.setProgress(line.timeMs)
+                binding.currentTimeText.text = Song.formatTime(line.timeMs)
+                binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+                binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
+                isUserScrollingLyrics = false
+                try {
+                    binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                } catch (ignored: Exception) {}
+                onSeek(line.timeMs)
+            },
+            onLineDoubleTap = {
+                openFullScreenLyrics()
+            }
+        )
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.lyricsRecyclerView.adapter = lyricAdapter
 
@@ -138,19 +144,22 @@ class LyricsController(
         })
 
         // Fullscreen Lyrics Setup
-        fullScreenLyricAdapter = LyricAdapter(isFullScreen = true) { line ->
-            val service = getPlaybackService()
-            service?.seekTo(line.timeMs.toInt())
-            binding.playbackSlider.setProgress(line.timeMs)
-            binding.currentTimeText.text = Song.formatTime(line.timeMs)
-            binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
-            binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
-            isUserScrollingFullScreenLyrics = false
-            try {
-                binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            } catch (ignored: Exception) {}
-            onSeek(line.timeMs)
-        }.apply {
+        fullScreenLyricAdapter = LyricAdapter(
+            isFullScreen = true,
+            onLineClick = { line ->
+                val service = getPlaybackService()
+                service?.seekTo(line.timeMs.toInt())
+                binding.playbackSlider.setProgress(line.timeMs)
+                binding.currentTimeText.text = Song.formatTime(line.timeMs)
+                binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+                binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
+                isUserScrollingFullScreenLyrics = false
+                try {
+                    binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                } catch (ignored: Exception) {}
+                onSeek(line.timeMs)
+            }
+        ).apply {
             baseFontSizeSp = this@LyricsController.baseFontSizeSp
         }
         binding.fullscreenLyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
@@ -242,23 +251,17 @@ class LyricsController(
     }
 
     private fun setupSmallLyricsCardInteractions() {
-        // Double-tap on the lyric lines opens fullscreen lyrics.
-        // Single tap on lyric lines (RecyclerView items) still seeks as normal.
-        val doubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
+        // Double-tap on the plain lyric text to open fullscreen lyrics.
+        val plainTextDoubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 openFullScreenLyrics()
                 return true
             }
         })
-
-        val doubleTapListener = View.OnTouchListener { _, event ->
-            doubleTapDetector.onTouchEvent(event)
-            false // never consume — let normal click/scroll still work
+        binding.lyricsPlainScroll.setOnTouchListener { _, event ->
+            plainTextDoubleTapDetector.onTouchEvent(event)
+            false // let normal scroll still work
         }
-
-        // Attach only to lyric text areas so double-tap to open fullscreen works on the text specifically
-        binding.lyricsRecyclerView.setOnTouchListener(doubleTapListener)
-        binding.lyricsPlainScroll.setOnTouchListener(doubleTapListener)
     }
 
     private fun setupFullscreenTopBarDismissGesture() {
