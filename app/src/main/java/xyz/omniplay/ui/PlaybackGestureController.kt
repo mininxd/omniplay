@@ -15,6 +15,7 @@ import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
@@ -103,6 +104,7 @@ class PlaybackGestureController(
         var activeAnimator: ValueAnimator? = null
         var currentPeekSong: Song? = null
         var peekDirection = 0 // -1 = next (swipe left), +1 = prev (swipe right)
+        var peekLoadJob: Job? = null
 
         fun updatePeekCard(direction: Int) {
             val service = getPlaybackService()
@@ -115,6 +117,9 @@ class PlaybackGestureController(
             if (peekSong != null) {
                 if (currentPeekSong?.id != peekSong.id || peekDirection != direction || binding.peekAlbumArtCard.visibility != View.VISIBLE) {
                     currentPeekSong = peekSong
+                    peekLoadJob?.cancel()
+                    peekLoadJob = null
+
                     peekDirection = direction
                     binding.peekAlbumArtCard.visibility = View.VISIBLE
 
@@ -155,7 +160,7 @@ class PlaybackGestureController(
                     } else {
                         binding.peekAlbumArtImage.setImageResource(R.drawable.default_album_art)
                         updatePeekTextContrast(isBright = false)
-                        activity.lifecycleScope.launch {
+                        peekLoadJob = activity.lifecycleScope.launch {
                             val bitmap = AlbumArtLoader.loadAlbumArt(activity, peekSong)
                             if (currentPeekSong?.id == peekSong.id) {
                                 if (bitmap != null) {
@@ -170,6 +175,8 @@ class PlaybackGestureController(
                 currentPeekSong = null
                 peekDirection = direction
                 binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                peekLoadJob?.cancel()
+                peekLoadJob = null
             }
         }
 
@@ -185,6 +192,8 @@ class PlaybackGestureController(
                     isDraggingY = false
                     currentPeekSong = null
                     peekDirection = 0
+                    peekLoadJob?.cancel()
+                    peekLoadJob = null
                     binding.peekAlbumArtCard.visibility = View.INVISIBLE
                     binding.peekAlbumArtCard.scaleX = 0.90f
                     binding.peekAlbumArtCard.scaleY = 0.90f
