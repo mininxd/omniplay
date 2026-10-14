@@ -242,7 +242,7 @@ class LyricsController(
     }
 
     private fun setupSmallLyricsCardInteractions() {
-        // Double-tap anywhere on the small lyrics card opens fullscreen lyrics.
+        // Double-tap on the lyric lines opens fullscreen lyrics.
         // Single tap on lyric lines (RecyclerView items) still seeks as normal.
         val doubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
@@ -256,12 +256,9 @@ class LyricsController(
             false // never consume — let normal click/scroll still work
         }
 
-        // Attach to header bar and all content areas so any double-tap on the card works
-        binding.lyricsHeaderBar.setOnTouchListener(doubleTapListener)
+        // Attach only to lyric text areas so double-tap to open fullscreen works on the text specifically
         binding.lyricsRecyclerView.setOnTouchListener(doubleTapListener)
         binding.lyricsPlainScroll.setOnTouchListener(doubleTapListener)
-        binding.lyricsStatusLayout.setOnTouchListener(doubleTapListener)
-        binding.lyricsCard.setOnTouchListener(doubleTapListener)
     }
 
     private fun setupFullscreenTopBarDismissGesture() {
