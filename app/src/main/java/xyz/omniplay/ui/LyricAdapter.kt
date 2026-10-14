@@ -21,7 +21,7 @@ class LyricAdapter(
     private var lines: List<LyricLine> = emptyList(),
     val isFullScreen: Boolean = false,
     var onLineClick: ((LyricLine) -> Unit)? = null,
-    var onLineDoubleTap: (() -> Unit)? = null
+    var onLineDoubleTap: ((View?) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
     var activeIndex: Int = -1
@@ -109,7 +109,7 @@ class LyricAdapter(
                 }
 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    onLineDoubleTap?.invoke()
+                    onLineDoubleTap?.invoke(lyricText)
                     return true
                 }
             })
