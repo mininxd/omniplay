@@ -15,7 +15,9 @@ import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
@@ -156,7 +158,14 @@ class PlaybackGestureController(
                     val cached = AlbumArtLoader.getCachedAlbumArt(peekSong)
                     if (cached != null) {
                         binding.peekAlbumArtImage.setImageBitmap(cached)
-                        updatePeekTextContrast(isBitmapBright(cached))
+                        peekLoadJob = activity.lifecycleScope.launch {
+                            val isBright = withContext(Dispatchers.Default) {
+                                isBitmapBright(cached)
+                            }
+                            if (currentPeekSong?.id == peekSong.id) {
+                                updatePeekTextContrast(isBright)
+                            }
+                        }
                     } else {
                         binding.peekAlbumArtImage.setImageResource(R.drawable.default_album_art)
                         updatePeekTextContrast(isBright = false)
@@ -165,7 +174,12 @@ class PlaybackGestureController(
                             if (currentPeekSong?.id == peekSong.id) {
                                 if (bitmap != null) {
                                     binding.peekAlbumArtImage.setImageBitmap(bitmap)
-                                    updatePeekTextContrast(isBitmapBright(bitmap))
+                                    val isBright = withContext(Dispatchers.Default) {
+                                        isBitmapBright(bitmap)
+                                    }
+                                    if (currentPeekSong?.id == peekSong.id) {
+                                        updatePeekTextContrast(isBright)
+                                    }
                                 }
                             }
                         }
