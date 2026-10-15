@@ -54,6 +54,10 @@
     <string name="show_album_art_desc">Display artwork in queue</string>
     <string name="download_missing_artwork">Download missing artwork</string>
     <string name="download_missing_artwork_desc">Fetch covers and artist images from Cover Art Archive &amp; MusicBrainz</string>
+    <string name="direct_fullscreen_lyrics">Direct fullscreen lyrics</string>
+    <string name="direct_fullscreen_lyrics_desc">Skip mini lyrics and open fullscreen directly when swiping up</string>
+    <string name="crossfade">Crossfade between song</string>
+    <string name="crossfade_desc">Fade out current song while fading in next song</string>
     <string name="rescan_library_desc">Check for new or updated tracks</string>
     <string name="omnisync_feature_desc">Stream playback to nearby devices</string>
     <string name="close">Close</string>
