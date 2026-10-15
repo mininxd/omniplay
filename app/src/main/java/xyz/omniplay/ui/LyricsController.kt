@@ -553,8 +553,15 @@ class LyricsController(
                 updateLyricsProgress(service.getCurrentPosition().toLong())
             }
 
+            // Fallback to albumArtCard if lyricsCard is invisible or 0-width (e.g. direct fullscreen)
+            val startView = if (binding.lyricsCard.visibility == View.VISIBLE && binding.lyricsCard.width > 0) {
+                binding.lyricsCard
+            } else {
+                binding.albumArtCard
+            }
+
             val startLoc = IntArray(2)
-            binding.lyricsCard.getLocationOnScreen(startLoc)
+            startView.getLocationOnScreen(startLoc)
 
             val rootLoc = IntArray(2)
             val rootContentView = activity.findViewById<ViewGroup>(android.R.id.content)
@@ -562,11 +569,11 @@ class LyricsController(
 
             val startX = startLoc[0].toFloat() - rootLoc[0].toFloat()
             val startY = startLoc[1].toFloat() - rootLoc[1].toFloat()
-            val startW = binding.lyricsCard.width.toFloat()
-            val startH = binding.lyricsCard.height.toFloat()
+            val startW = startView.width.toFloat()
+            val startH = startView.height.toFloat()
 
-            val targetW = binding.fullscreenLyricsContainer.width.toFloat()
-            val targetH = binding.fullscreenLyricsContainer.height.toFloat()
+            val targetW = if (binding.fullscreenLyricsContainer.width > 0) binding.fullscreenLyricsContainer.width.toFloat() else rootContentView.width.toFloat()
+            val targetH = if (binding.fullscreenLyricsContainer.height > 0) binding.fullscreenLyricsContainer.height.toFloat() else rootContentView.height.toFloat()
 
             if (targetW > 0 && targetH > 0 && startW > 0 && startH > 0) {
                 val scaleX = startW / targetW
