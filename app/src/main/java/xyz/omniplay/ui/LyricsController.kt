@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.TextView
 import android.view.ViewGroup
@@ -547,6 +548,11 @@ class LyricsController(
 
         // Ensure the container is laid out before calculating animations
         binding.fullscreenLyricsContainer.post {
+            // Sync background immediately before animation begins
+            getPlaybackService()?.let { service ->
+                updateLyricsProgress(service.getCurrentPosition().toLong())
+            }
+
             if (clickedView != null && clickedView is TextView) {
                 val startLoc = IntArray(2)
                 clickedView.getLocationOnScreen(startLoc)
@@ -580,37 +586,35 @@ class LyricsController(
                 val targetSizePx = (fullScreenLyricAdapter?.baseFontSizeSp ?: baseFontSizeSp) * density
                 val scaleRatio = targetSizePx / clickedView.textSize
 
-                binding.fullscreenLyricsContainer.apply {
-                    alpha = 0f
-                    translationY = dpToPx(160).toFloat()
-                    animate()
-                        .alpha(1f)
-                        .translationY(0f)
-                        .setDuration(2000L)
-                        .setInterpolator(AccelerateInterpolator())
-                        .withEndAction {
-                            rootContentView.removeView(tempTextView)
-                            getPlaybackService()?.let { service ->
-                                updateLyricsProgress(service.getCurrentPosition().toLong())
-                            }
-                        }
-                        .start()
-                }
+                binding.fullscreenLyricsContainer.alpha = 0f
+                val startTransY = dpToPx(160).toFloat()
+                binding.fullscreenLyricsContainer.translationY = startTransY
 
                 val targetMidY = rootContentView.height.toFloat() / 2f
 
                 val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 2000L
-                    interpolator = AccelerateInterpolator()
+                    duration = 750L
+                    interpolator = LinearInterpolator()
                     addUpdateListener { animation ->
                         val fraction = animation.animatedFraction
+
+                        // Text View Animation
                         tempTextView.scaleX = 1f + (scaleRatio - 1f) * fraction
                         tempTextView.scaleY = 1f + (scaleRatio - 1f) * fraction
-                        // Slide up to roughly the middle of the screen
+
                         val currentHeight = tempTextView.height.toFloat() * tempTextView.scaleY
                         val screenMidY = targetMidY - currentHeight / 2f
                         tempTextView.y = startY + (screenMidY - startY) * fraction
+
+                        // Container Animation
+                        binding.fullscreenLyricsContainer.alpha = fraction
+                        binding.fullscreenLyricsContainer.translationY = startTransY * (1f - fraction)
                     }
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            rootContentView.removeView(tempTextView)
+                        }
+                    })
                 }
                 animator.start()
             } else {
@@ -621,13 +625,8 @@ class LyricsController(
                     animate()
                         .alpha(1f)
                         .translationY(0f)
-                        .setDuration(2000L)
-                        .setInterpolator(AccelerateInterpolator())
-                        .withEndAction {
-                            getPlaybackService()?.let { service ->
-                                updateLyricsProgress(service.getCurrentPosition().toLong())
-                            }
-                        }
+                        .setDuration(750L)
+                        .setInterpolator(LinearInterpolator())
                         .start()
                 }
             }
