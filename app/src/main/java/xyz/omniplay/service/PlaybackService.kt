@@ -72,6 +72,7 @@ class PlaybackService : Service() {
 
     private val binder = LocalBinder()
     private var player: ExoPlayer? = null
+    private var fadeOutPlayer: ExoPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private lateinit var audioManager: android.media.AudioManager
 
@@ -101,6 +102,7 @@ class PlaybackService : Service() {
 
     private var currentAlbumArt: Bitmap? = null
     private var progressJob: Job? = null
+    private var crossfadeJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val listeners = CopyOnWriteArrayList<PlaybackListener>()
@@ -192,11 +194,24 @@ class PlaybackService : Service() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
-        exo.addListener(object : Player.Listener {
+        fadeOutPlayer = ExoPlayer.Builder(applicationContext, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true
+            )
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
+
+        fun createListener(exoInstance: ExoPlayer) = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (exoInstance != player) return
                 when (playbackState) {
                     Player.STATE_READY -> {
-                        val dur = exo.duration.takeIf { it > 0L } ?: currentSong?.duration ?: 0L
+                        val dur = exoInstance.duration.takeIf { it > 0L } ?: currentSong?.duration ?: 0L
                         currentSong?.let {
                             if (it.duration <= 0L && dur > 0L) {
                                 currentSong = it.copy(duration = dur)
@@ -204,19 +219,27 @@ class PlaybackService : Service() {
                             }
                             updateMediaMetadata(it, dur, currentAlbumArt)
                         }
-                        val isPlaying = exo.isPlaying
+                        val isPlaying = exoInstance.isPlaying
                         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
-                        updatePlaybackState(state, exo.currentPosition.coerceAtLeast(0L))
+                        updatePlaybackState(state, exoInstance.currentPosition.coerceAtLeast(0L))
                     }
                     Player.STATE_ENDED -> {
-                        skipNext(forceNext = false)
+                        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                        val crossfadeDurationSec = prefs.getInt(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_DURATION, 0)
+                        if (crossfadeDurationSec > 0) {
+                            // Let the progressTracker trigger crossfade, or if we ended before tracking could, skipNext
+                            skipNext(forceNext = false)
+                        } else {
+                            skipNext(forceNext = false)
+                        }
                     }
                     Player.STATE_IDLE, Player.STATE_BUFFERING -> {}
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                val currentPos = exo.currentPosition.coerceAtLeast(0L)
+                if (exoInstance != player) return
+                val currentPos = exoInstance.currentPosition.coerceAtLeast(0L)
                 xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).updateHostLivePlayback(currentSong, currentPos, isPlaying)
                 if (isPlaying && currentSong != null) {
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, currentPos)
@@ -239,6 +262,7 @@ class PlaybackService : Service() {
             }
 
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                if (exoInstance != player) return
                 for (group in tracks.groups) {
                     if (group.type == C.TRACK_TYPE_AUDIO && group.isSelected) {
                         for (i in 0 until group.length) {
@@ -255,10 +279,14 @@ class PlaybackService : Service() {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                if (exoInstance != player) return
                 // If a playback error occurs, advance safely without hanging
                 skipNext(forceNext = false)
             }
-        })
+        }
+
+        exo.addListener(createListener(exo))
+        fadeOutPlayer?.addListener(createListener(fadeOutPlayer!!))
 
         player = exo
     }
@@ -684,21 +712,69 @@ class PlaybackService : Service() {
         }
 
         try {
+            val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+            val crossfadeDurationSec = prefs.getInt(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_DURATION, 0)
+            val crossfadeDurationMs = crossfadeDurationSec * 1000L
+
             val p = player ?: return
-            p.stop()
-            if (song.contentUri != Uri.EMPTY) {
+
+            if (crossfadeDurationSec > 0 && p.isPlaying && startPlaying && song.contentUri != Uri.EMPTY) {
+                // Perform crossfade
+                val oldPlayer = p
+                val newPlayer = fadeOutPlayer ?: return
+
+                // Swap players
+                player = newPlayer
+                fadeOutPlayer = oldPlayer
+
+                // Setup new player
                 val mediaItem = MediaItem.fromUri(song.contentUri)
-                p.setMediaItem(mediaItem)
-                p.prepare()
-                if (startPlaying) {
-                    p.play()
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
-                } else {
-                    stopProgressTracker()
-                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
-                    updateNotification(isPlaying = false)
-                    listeners.forEach { it.onPlaybackStateChanged(false) }
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = false)
+                player?.setMediaItem(mediaItem)
+                player?.prepare()
+                player?.volume = 0f
+                player?.play()
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
+
+                // Start crossfade animation
+                crossfadeJob?.cancel()
+                crossfadeJob = serviceScope.launch {
+                    val steps = 20
+                    val delayMs = crossfadeDurationMs / steps
+
+                    for (i in 1..steps) {
+                        if (!isActive) break
+                        val volume = i.toFloat() / steps
+                        player?.volume = volume
+                        fadeOutPlayer?.volume = 1f - volume
+                        delay(delayMs)
+                    }
+
+                    if (isActive) {
+                        player?.volume = 1f
+                        fadeOutPlayer?.stop()
+                        fadeOutPlayer?.volume = 1f
+                    }
+                }
+            } else {
+                p.stop()
+                p.volume = 1f
+                fadeOutPlayer?.stop()
+                crossfadeJob?.cancel()
+
+                if (song.contentUri != Uri.EMPTY) {
+                    val mediaItem = MediaItem.fromUri(song.contentUri)
+                    p.setMediaItem(mediaItem)
+                    p.prepare()
+                    if (startPlaying) {
+                        p.play()
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
+                    } else {
+                        stopProgressTracker()
+                        updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
+                        updateNotification(isPlaying = false)
+                        listeners.forEach { it.onPlaybackStateChanged(false) }
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = false)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -1098,6 +1174,7 @@ class PlaybackService : Service() {
         progressJob?.cancel()
         progressJob = serviceScope.launch {
             var lastStateSync = 0L
+            var crossfadeTriggered = false
             while (isActive) {
                 val current = getCurrentPosition()
                 val total = getDuration()
@@ -1108,6 +1185,16 @@ class PlaybackService : Service() {
                 if (now - lastStateSync >= 1000L) {
                     lastStateSync = now
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, current.toLong())
+                }
+
+                val prefs = getSharedPreferences("omniplay_prefs", Context.MODE_PRIVATE)
+                val crossfadeDurationSec = prefs.getInt("key_crossfade_duration", 0)
+                if (crossfadeDurationSec > 0 && total > 0 && !crossfadeTriggered) {
+                    val crossfadeDurationMs = crossfadeDurationSec * 1000L
+                    if (total - current <= crossfadeDurationMs) {
+                        crossfadeTriggered = true
+                        skipNext(forceNext = false)
+                    }
                 }
 
                 delay(80)

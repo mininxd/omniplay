@@ -3,6 +3,7 @@ package xyz.omniplay.ui
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.view.GestureDetector
@@ -232,13 +233,17 @@ class PlaybackGestureController(
                             isDraggingY = true
                             v.parent?.requestDisallowInterceptTouchEvent(true)
                             binding.peekAlbumArtCard.visibility = View.INVISIBLE
-                            binding.lyricsCard.visibility = View.VISIBLE
-                            binding.lyricsCard.translationX = 0f
-                            binding.lyricsCard.translationY = 0f
-                            binding.lyricsCard.scaleX = 0.92f
-                            binding.lyricsCard.scaleY = 0.92f
-                            binding.lyricsCard.alpha = 0.5f
-                            lyricsController.prepareLyricsForDisplay()
+                            val isDirectFullscreen = activity.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                                .getBoolean(MainActivity.KEY_DIRECT_FULLSCREEN_LYRICS, false)
+                            if (!isDirectFullscreen) {
+                                binding.lyricsCard.visibility = View.VISIBLE
+                                binding.lyricsCard.translationX = 0f
+                                binding.lyricsCard.translationY = 0f
+                                binding.lyricsCard.scaleX = 0.92f
+                                binding.lyricsCard.scaleY = 0.92f
+                                binding.lyricsCard.alpha = 0.5f
+                                lyricsController.prepareLyricsForDisplay()
+                            }
                         } else if (deltaY > 35f && Math.abs(deltaY) > Math.abs(deltaX) * 2f) {
                             v.parent?.requestDisallowInterceptTouchEvent(false)
                         }
@@ -265,10 +270,14 @@ class PlaybackGestureController(
                         val progress = (Math.abs(effectiveDeltaY) / cardHeight).coerceIn(0f, 1f)
                         v.alpha = (1f - (progress * 0.5f)).coerceIn(0.5f, 1f)
 
-                        val lyricsScale = 0.92f + (progress * 0.08f)
-                        binding.lyricsCard.scaleX = lyricsScale
-                        binding.lyricsCard.scaleY = lyricsScale
-                        binding.lyricsCard.alpha = (0.5f + (progress * 0.5f)).coerceIn(0.5f, 1f)
+                        val isDirectFullscreen = activity.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                            .getBoolean(MainActivity.KEY_DIRECT_FULLSCREEN_LYRICS, false)
+                        if (!isDirectFullscreen) {
+                            val lyricsScale = 0.92f + (progress * 0.08f)
+                            binding.lyricsCard.scaleX = lyricsScale
+                            binding.lyricsCard.scaleY = lyricsScale
+                            binding.lyricsCard.alpha = (0.5f + (progress * 0.5f)).coerceIn(0.5f, 1f)
+                        }
                     }
                     true
                 }
@@ -381,14 +390,25 @@ class PlaybackGestureController(
                             else -> false
                         }
 
+                        val isDirectFullscreen = activity.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                            .getBoolean(MainActivity.KEY_DIRECT_FULLSCREEN_LYRICS, false)
+
                         if (shouldOpenLyrics) {
-                            lyricsController.openLyricsCard()
+                            if (isDirectFullscreen) {
+                                lyricsController.openFullScreenLyrics()
+                                v.translationY = 0f
+                                v.alpha = 1f
+                            } else {
+                                lyricsController.openLyricsCard()
+                            }
                         } else {
-                            binding.lyricsCard.animate()
-                                .scaleX(0.92f).scaleY(0.92f).alpha(0f)
-                                .setDuration(160L)
-                                .withEndAction { binding.lyricsCard.visibility = View.INVISIBLE }
-                                .start()
+                            if (!isDirectFullscreen) {
+                                binding.lyricsCard.animate()
+                                    .scaleX(0.92f).scaleY(0.92f).alpha(0f)
+                                    .setDuration(160L)
+                                    .withEndAction { binding.lyricsCard.visibility = View.INVISIBLE }
+                                    .start()
+                            }
 
                             activeAnimator = ValueAnimator.ofFloat(v.translationY, 0f).apply {
                                 duration = 160L
@@ -403,7 +423,9 @@ class PlaybackGestureController(
                                     override fun onAnimationEnd(animation: Animator) {
                                         v.translationY = 0f
                                         v.alpha = 1f
-                                        binding.lyricsCard.visibility = View.INVISIBLE
+                                        if (!isDirectFullscreen) {
+                                            binding.lyricsCard.visibility = View.INVISIBLE
+                                        }
                                         activeAnimator = null
                                     }
                                 })

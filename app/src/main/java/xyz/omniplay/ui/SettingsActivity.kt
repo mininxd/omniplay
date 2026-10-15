@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivitySettingsBinding
@@ -133,6 +134,38 @@ class SettingsActivity : AppCompatActivity() {
         binding.settingFetchOnlineArtwork.setOnClickListener {
             binding.switchFetchOnlineArtwork.toggle()
         }
+
+        // Direct Fullscreen Lyrics Switch & Row Click
+        binding.titleDirectFullscreenLyrics.isSelected = true
+        val isDirectFullscreenLyrics = prefs.getBoolean(MainActivity.KEY_DIRECT_FULLSCREEN_LYRICS, false)
+        binding.switchDirectFullscreenLyrics.isChecked = isDirectFullscreenLyrics
+
+        binding.switchDirectFullscreenLyrics.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_DIRECT_FULLSCREEN_LYRICS, isChecked).apply()
+        }
+
+        binding.settingDirectFullscreenLyrics.setOnClickListener {
+            binding.switchDirectFullscreenLyrics.toggle()
+        }
+
+        // Crossfade Setting
+        binding.titleCrossfade.isSelected = true
+        val crossfadeDuration = prefs.getInt(MainActivity.KEY_CROSSFADE_DURATION, 0)
+        binding.sliderCrossfade.value = crossfadeDuration.toFloat()
+        binding.textCrossfadeDuration.text = if (crossfadeDuration > 0) "${crossfadeDuration}s" else "Off"
+
+        binding.sliderCrossfade.addOnChangeListener { _, value, _ ->
+            val duration = value.toInt()
+            binding.textCrossfadeDuration.text = if (duration > 0) "${duration}s" else "Off"
+        }
+
+        binding.sliderCrossfade.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                val duration = slider.value.toInt()
+                prefs.edit().putInt(MainActivity.KEY_CROSSFADE_DURATION, duration).apply()
+            }
+        })
 
         // 4. Rescan Music
         binding.settingRescanMusic.setOnClickListener {
