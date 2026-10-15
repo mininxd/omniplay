@@ -553,82 +553,50 @@ class LyricsController(
                 updateLyricsProgress(service.getCurrentPosition().toLong())
             }
 
-            if (clickedView != null && clickedView is TextView) {
-                val startLoc = IntArray(2)
-                clickedView.getLocationOnScreen(startLoc)
+            val startLoc = IntArray(2)
+            binding.lyricsCard.getLocationOnScreen(startLoc)
 
-                val rootContentView = activity.findViewById<ViewGroup>(android.R.id.content)
-                val rootLoc = IntArray(2)
-                rootContentView.getLocationOnScreen(rootLoc)
+            val rootLoc = IntArray(2)
+            val rootContentView = activity.findViewById<ViewGroup>(android.R.id.content)
+            rootContentView.getLocationOnScreen(rootLoc)
 
-                // Adjust to get absolute coordinate relative to root view
-                val startY = startLoc[1].toFloat() - rootLoc[1].toFloat()
-                val startX = startLoc[0].toFloat() - rootLoc[0].toFloat()
+            val startX = startLoc[0].toFloat() - rootLoc[0].toFloat()
+            val startY = startLoc[1].toFloat() - rootLoc[1].toFloat()
+            val startW = binding.lyricsCard.width.toFloat()
+            val startH = binding.lyricsCard.height.toFloat()
 
-                val tempTextView = TextView(activity).apply {
-                    text = clickedView.text
-                    typeface = clickedView.typeface
-                    textSize = clickedView.textSize / activity.resources.displayMetrics.scaledDensity
-                    setTextColor(clickedView.currentTextColor)
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    )
-                    x = startX
-                    y = startY
-                    pivotX = 0f
-                    pivotY = 0f
-                }
+            val targetW = binding.fullscreenLyricsContainer.width.toFloat()
+            val targetH = binding.fullscreenLyricsContainer.height.toFloat()
 
-                rootContentView.addView(tempTextView)
+            if (targetW > 0 && targetH > 0 && startW > 0 && startH > 0) {
+                val scaleX = startW / targetW
+                val scaleY = startH / targetH
 
-                val density = activity.resources.displayMetrics.scaledDensity
-                val targetSizePx = (fullScreenLyricAdapter?.baseFontSizeSp ?: baseFontSizeSp) * density
-                val scaleRatio = targetSizePx / clickedView.textSize
+                binding.fullscreenLyricsContainer.pivotX = 0f
+                binding.fullscreenLyricsContainer.pivotY = 0f
+                binding.fullscreenLyricsContainer.scaleX = scaleX
+                binding.fullscreenLyricsContainer.scaleY = scaleY
+                binding.fullscreenLyricsContainer.translationX = startX
+                binding.fullscreenLyricsContainer.translationY = startY
 
-                binding.fullscreenLyricsContainer.alpha = 0f
-                val startTransY = dpToPx(160).toFloat()
-                binding.fullscreenLyricsContainer.translationY = startTransY
-
-                val targetMidY = rootContentView.height.toFloat() / 2f
-
-                val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 750L
-                    interpolator = LinearInterpolator()
-                    addUpdateListener { animation ->
-                        val fraction = animation.animatedFraction
-
-                        // Text View Animation
-                        tempTextView.scaleX = 1f + (scaleRatio - 1f) * fraction
-                        tempTextView.scaleY = 1f + (scaleRatio - 1f) * fraction
-
-                        val currentHeight = tempTextView.height.toFloat() * tempTextView.scaleY
-                        val screenMidY = targetMidY - currentHeight / 2f
-                        tempTextView.y = startY + (screenMidY - startY) * fraction
-
-                        // Container Animation
-                        binding.fullscreenLyricsContainer.alpha = fraction
-                        binding.fullscreenLyricsContainer.translationY = startTransY * (1f - fraction)
-                    }
-                    addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) {
-                            rootContentView.removeView(tempTextView)
-                        }
-                    })
-                }
-                animator.start()
+                binding.fullscreenLyricsContainer.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .translationX(0f)
+                    .translationY(0f)
+                    .setDuration(220L)
+                    .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+                    .start()
             } else {
-                binding.fullscreenLyricsContainer.apply {
-                    alpha = 0f
-                    val startY = dpToPx(160).toFloat()
-                    translationY = startY
-                    animate()
-                        .alpha(1f)
-                        .translationY(0f)
-                        .setDuration(750L)
-                        .setInterpolator(LinearInterpolator())
-                        .start()
-                }
+                binding.fullscreenLyricsContainer.alpha = 0f
+                binding.fullscreenLyricsContainer.translationY = dpToPx(160).toFloat()
+                binding.fullscreenLyricsContainer.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(220L)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator())
+                    .start()
             }
         }
     }
