@@ -401,7 +401,7 @@ class PlaybackService : Service() {
                 override fun onPlay() { play() }
                 override fun onPause() { pause() }
                 override fun onSkipToNext() { skipNext(forceNext = true) }
-                override fun onSkipToPrevious() { skipPrevious(forcePrevious = true) }
+                override fun onSkipToPrevious() { skipPrevious(forcePrevious = false) }
                 override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
                 override fun onStop() { pause() }
             })
@@ -1007,7 +1007,7 @@ class PlaybackService : Service() {
         val wasPlaying = isPlaying()
 
         if (isExternalSongActive) {
-            if (!forcePrevious && getCurrentPosition() > 10000) {
+            if (!forcePrevious && getCurrentPosition() > 15000) {
                 seekTo(0)
                 return
             }
@@ -1033,7 +1033,7 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
 
-        if (!forcePrevious && getCurrentPosition() > 10000) {
+        if (!forcePrevious && getCurrentPosition() > 15000) {
             seekTo(0)
             return
         }
@@ -1349,7 +1349,7 @@ class PlaybackService : Service() {
             ACTION_PAUSE -> pause()
             ACTION_TOGGLE -> togglePlayPause()
             ACTION_NEXT -> skipNext(forceNext = true)
-            ACTION_PREVIOUS -> skipPrevious(forcePrevious = true)
+            ACTION_PREVIOUS -> skipPrevious(forcePrevious = false)
         }
         return START_NOT_STICKY
     }
