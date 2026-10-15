@@ -1007,7 +1007,7 @@ class PlaybackService : Service() {
         val wasPlaying = isPlaying()
 
         if (isExternalSongActive) {
-            if (!forcePrevious && getCurrentPosition() > 3000) {
+            if (!forcePrevious && getCurrentPosition() > 10000) {
                 seekTo(0)
                 return
             }
@@ -1033,7 +1033,7 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
 
-        if (!forcePrevious && getCurrentPosition() > 3000) {
+        if (!forcePrevious && getCurrentPosition() > 10000) {
             seekTo(0)
             return
         }
