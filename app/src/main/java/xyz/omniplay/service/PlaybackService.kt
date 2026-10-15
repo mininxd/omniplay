@@ -401,7 +401,7 @@ class PlaybackService : Service() {
                 override fun onPlay() { play() }
                 override fun onPause() { pause() }
                 override fun onSkipToNext() { skipNext(forceNext = true) }
-                override fun onSkipToPrevious() { skipPrevious(forcePrevious = false) }
+                override fun onSkipToPrevious() { skipPrevious(forcePrevious = true) }
                 override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
                 override fun onStop() { pause() }
             })
@@ -1349,7 +1349,7 @@ class PlaybackService : Service() {
             ACTION_PAUSE -> pause()
             ACTION_TOGGLE -> togglePlayPause()
             ACTION_NEXT -> skipNext(forceNext = true)
-            ACTION_PREVIOUS -> skipPrevious(forcePrevious = false)
+            ACTION_PREVIOUS -> skipPrevious(forcePrevious = true)
         }
         return START_NOT_STICKY
     }
