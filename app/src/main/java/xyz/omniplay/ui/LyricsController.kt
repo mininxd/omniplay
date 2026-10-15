@@ -13,6 +13,7 @@ import android.view.ScaleGestureDetector
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.TextView
@@ -585,8 +586,8 @@ class LyricsController(
                     animate()
                         .alpha(1f)
                         .translationY(0f)
-                        .setDuration(220L)
-                        .setInterpolator(DecelerateInterpolator())
+                        .setDuration(2000L)
+                        .setInterpolator(AccelerateInterpolator())
                         .withEndAction {
                             rootContentView.removeView(tempTextView)
                             getPlaybackService()?.let { service ->
@@ -599,8 +600,8 @@ class LyricsController(
                 val targetMidY = rootContentView.height.toFloat() / 2f
 
                 val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                    duration = 220L
-                    interpolator = DecelerateInterpolator()
+                    duration = 2000L
+                    interpolator = AccelerateInterpolator()
                     addUpdateListener { animation ->
                         val fraction = animation.animatedFraction
                         tempTextView.scaleX = 1f + (scaleRatio - 1f) * fraction
@@ -620,8 +621,8 @@ class LyricsController(
                     animate()
                         .alpha(1f)
                         .translationY(0f)
-                        .setDuration(220L)
-                        .setInterpolator(DecelerateInterpolator())
+                        .setDuration(2000L)
+                        .setInterpolator(AccelerateInterpolator())
                         .withEndAction {
                             getPlaybackService()?.let { service ->
                                 updateLyricsProgress(service.getCurrentPosition().toLong())
