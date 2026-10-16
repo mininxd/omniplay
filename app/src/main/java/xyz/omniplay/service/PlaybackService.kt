@@ -728,18 +728,24 @@ class PlaybackService : Service() {
                 fadeOutPlayer = oldPlayer
 
                 // Setup new player
+                progressJob?.cancel()
+                crossfadeJob?.cancel()
+                crossfadeJob = null
+                fadeOutPlayer?.volume = 1f
+
+                newPlayer.stop()
+                newPlayer.clearMediaItems()
                 val mediaItem = MediaItem.fromUri(song.contentUri)
-                player?.setMediaItem(mediaItem)
-                player?.prepare()
-                player?.volume = 0f
-                player?.play()
+                newPlayer.setMediaItem(mediaItem)
+                newPlayer.prepare()
+                newPlayer.volume = 0f
+                newPlayer.play()
                 xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
 
                 // Start crossfade animation
-                crossfadeJob?.cancel()
                 crossfadeJob = serviceScope.launch {
                     val steps = 20
-                    val delayMs = crossfadeDurationMs / steps
+                    val delayMs = (crossfadeDurationMs / steps).coerceAtLeast(10L)
 
                     for (i in 1..steps) {
                         if (!isActive) break
@@ -752,14 +758,19 @@ class PlaybackService : Service() {
                     if (isActive) {
                         player?.volume = 1f
                         fadeOutPlayer?.stop()
+                        fadeOutPlayer?.clearMediaItems()
                         fadeOutPlayer?.volume = 1f
                     }
                 }
             } else {
+                progressJob?.cancel()
                 p.stop()
                 p.volume = 1f
                 fadeOutPlayer?.stop()
+                fadeOutPlayer?.clearMediaItems()
+                fadeOutPlayer?.volume = 1f
                 crossfadeJob?.cancel()
+                crossfadeJob = null
 
                 if (song.contentUri != Uri.EMPTY) {
                     val mediaItem = MediaItem.fromUri(song.contentUri)
@@ -1103,7 +1114,9 @@ class PlaybackService : Service() {
     fun seekTo(positionMs: Int) {
         try {
             crossfadeJob?.cancel()
+            crossfadeJob = null
             fadeOutPlayer?.stop()
+            fadeOutPlayer?.clearMediaItems()
             fadeOutPlayer?.volume = 1f
             player?.volume = 1f
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
@@ -1122,7 +1135,8 @@ class PlaybackService : Service() {
     fun getCurrentPosition(): Int {
         return try {
             if (player?.isPlaying == true || currentSong != null) {
-                player?.currentPosition?.toInt()?.coerceAtLeast(0) ?: 0
+                val pos = player?.currentPosition?.takeIf { it >= 0L && it != C.TIME_UNSET }?.toInt() ?: 0
+                pos.coerceAtLeast(0)
             } else 0
         } catch (e: Exception) {
             0
@@ -1132,8 +1146,8 @@ class PlaybackService : Service() {
     fun getDuration(): Int {
         return try {
             if (currentSong != null) {
-                val dur = player?.duration?.toInt()?.takeIf { it > 0 }
-                dur ?: (currentSong?.duration?.toInt() ?: 0)
+                val dur = player?.duration?.takeIf { it > 0L && it != C.TIME_UNSET }?.toInt()
+                dur ?: (currentSong?.duration?.toInt()?.takeIf { it > 0 } ?: 0)
             } else 0
         } catch (e: Exception) {
             0
@@ -1191,11 +1205,11 @@ class PlaybackService : Service() {
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, current.toLong())
                 }
 
-                val prefs = getSharedPreferences("omniplay_prefs", Context.MODE_PRIVATE)
-                val crossfadeDurationSec = prefs.getInt("key_crossfade_duration", 0)
+                val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                val crossfadeDurationSec = prefs.getInt(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_DURATION, 0)
                 if (crossfadeDurationSec > 0 && total > 0 && !crossfadeTriggered) {
                     val crossfadeDurationMs = crossfadeDurationSec * 1000L
-                    if (total - current <= crossfadeDurationMs) {
+                    if (total > crossfadeDurationMs && current >= crossfadeDurationMs && total - current <= crossfadeDurationMs) {
                         crossfadeTriggered = true
                         skipNext(forceNext = false)
                     }
