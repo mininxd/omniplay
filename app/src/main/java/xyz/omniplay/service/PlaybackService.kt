@@ -68,12 +68,8 @@ class PlaybackService : Service() {
         const val REPEAT_OFF = 0
         const val REPEAT_ALL = 1
         const val REPEAT_ONE = 2
-
-        const val RESTART_THRESHOLD_MS = 3000L
-        const val DOUBLE_PRESS_WINDOW_MS = 2500L
     }
 
-    private var lastRestartOrPrevTime: Long = 0L
     private val binder = LocalBinder()
     private var player: ExoPlayer? = null
     private var fadeOutPlayer: ExoPlayer? = null
@@ -475,7 +471,6 @@ class PlaybackService : Service() {
     }
 
     fun playSongFromPlaylist(song: Song, index: Int = -1, startPlaying: Boolean = true) {
-        lastRestartOrPrevTime = 0L
         isExternalSongActive = false
         externalSong = null
         if (isShuffleEnabled) {
@@ -691,13 +686,12 @@ class PlaybackService : Service() {
     }
 
     fun playExternalSong(song: Song) {
-        lastRestartOrPrevTime = 0L
         isExternalSongActive = true
         externalSong = song
         playSong(song, startPlaying = true)
     }
 
-    fun playSong(song: Song, startPlaying: Boolean = true) {
+    fun playSong(song: Song, startPlaying: Boolean = true, allowCrossfade: Boolean = true) {
         if (xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
             return
         }
@@ -724,7 +718,7 @@ class PlaybackService : Service() {
 
             val p = player ?: return
 
-            if (crossfadeDurationSec > 0 && p.isPlaying && startPlaying && song.contentUri != Uri.EMPTY) {
+            if (allowCrossfade && crossfadeDurationSec > 0 && p.isPlaying && startPlaying && song.contentUri != Uri.EMPTY) {
                 // Perform crossfade
                 val oldPlayer = p
                 val newPlayer = fadeOutPlayer ?: return
@@ -932,7 +926,6 @@ class PlaybackService : Service() {
     }
 
     fun skipNext(forceNext: Boolean = false) {
-        lastRestartOrPrevTime = 0L
         val wasPlaying = if (forceNext) isPlaying() else true
 
         if (isExternalSongActive) {
@@ -1012,30 +1005,26 @@ class PlaybackService : Service() {
 
     fun skipPrevious(forcePrevious: Boolean = false) {
         val wasPlaying = isPlaying()
-        val now = SystemClock.elapsedRealtime()
-        val currentPos = getCurrentPosition().toLong()
-
-        val shouldRestart = !forcePrevious &&
-                (now - lastRestartOrPrevTime >= DOUBLE_PRESS_WINDOW_MS) &&
-                (currentPos > RESTART_THRESHOLD_MS)
 
         if (isExternalSongActive) {
-            if (shouldRestart) {
-                lastRestartOrPrevTime = now
+            if (!forcePrevious && getCurrentPosition() > 3000) {
                 seekTo(0)
                 return
             }
-            lastRestartOrPrevTime = now
             isExternalSongActive = false
             externalSong = null
             if (queue.isNotEmpty()) {
                 val targetIndex = if (currentIndex in queue.indices) {
-                    if (currentIndex - 1 < 0) queue.size - 1 else currentIndex - 1
+                    if (forcePrevious) {
+                        if (currentIndex - 1 < 0) queue.size - 1 else currentIndex - 1
+                    } else {
+                        currentIndex
+                    }
                 } else {
                     0
                 }
                 currentIndex = targetIndex
-                playSong(queue[targetIndex], startPlaying = wasPlaying)
+                playSong(queue[targetIndex], startPlaying = wasPlaying, allowCrossfade = false)
             } else {
                 seekTo(0)
             }
@@ -1044,20 +1033,17 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
 
-        if (shouldRestart) {
-            lastRestartOrPrevTime = now
+        if (!forcePrevious && getCurrentPosition() > 3000) {
             seekTo(0)
             return
         }
-
-        lastRestartOrPrevTime = now
 
         if (isShuffleEnabled) {
             if (queue.size > 1) {
                 val prev = queue.removeAt(queue.size - 1)
                 queue.add(0, prev)
                 currentIndex = 0
-                playSong(prev, startPlaying = wasPlaying)
+                playSong(prev, startPlaying = wasPlaying, allowCrossfade = false)
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
                 seekTo(0)
@@ -1081,7 +1067,7 @@ class PlaybackService : Service() {
             }
         }
 
-        playSong(queue[currentIndex], startPlaying = wasPlaying)
+        playSong(queue[currentIndex], startPlaying = wasPlaying, allowCrossfade = false)
     }
 
     fun getNextSong(): Song? {
@@ -1116,6 +1102,10 @@ class PlaybackService : Service() {
 
     fun seekTo(positionMs: Int) {
         try {
+            crossfadeJob?.cancel()
+            fadeOutPlayer?.stop()
+            fadeOutPlayer?.volume = 1f
+            player?.volume = 1f
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
                 player?.seekTo(positionMs.toLong())
             }
