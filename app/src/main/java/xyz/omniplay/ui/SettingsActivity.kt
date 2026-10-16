@@ -154,9 +154,31 @@ class SettingsActivity : AppCompatActivity() {
         binding.sliderCrossfade.value = crossfadeDuration.toFloat()
         binding.textCrossfadeDuration.text = if (crossfadeDuration > 0) "${crossfadeDuration}s" else "Off"
 
+        // Crossfade on Next Button Setting
+        binding.titleCrossfadeOnNext.isSelected = true
+        val isCrossfadeOnNext = prefs.getBoolean(MainActivity.KEY_CROSSFADE_ON_NEXT, false)
+        binding.switchCrossfadeOnNext.isChecked = isCrossfadeOnNext
+        binding.settingCrossfadeOnNext.alpha = if (crossfadeDuration > 0) 1f else 0.5f
+        binding.switchCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+        binding.settingCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+
+        binding.switchCrossfadeOnNext.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_CROSSFADE_ON_NEXT, isChecked).apply()
+        }
+
+        binding.settingCrossfadeOnNext.setOnClickListener {
+            if (binding.switchCrossfadeOnNext.isEnabled) {
+                binding.switchCrossfadeOnNext.toggle()
+            }
+        }
+
         binding.sliderCrossfade.addOnChangeListener { _, value, _ ->
             val duration = value.toInt()
             binding.textCrossfadeDuration.text = if (duration > 0) "${duration}s" else "Off"
+            val isEnabled = duration > 0
+            binding.settingCrossfadeOnNext.alpha = if (isEnabled) 1f else 0.5f
+            binding.switchCrossfadeOnNext.isEnabled = isEnabled
+            binding.settingCrossfadeOnNext.isEnabled = isEnabled
         }
 
         binding.sliderCrossfade.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {

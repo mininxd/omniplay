@@ -552,12 +552,14 @@ class PlaybackService : Service() {
     fun playSongFromPlaylist(song: Song, index: Int = -1, startPlaying: Boolean = true) {
         isExternalSongActive = false
         externalSong = null
+        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val crossfadeOnNext = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_ON_NEXT, false)
         if (isShuffleEnabled) {
             val matching = originalQueue.find { it.id == song.id } ?: queue.find { it.id == song.id } ?: song
             val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
             queue = (listOf(matching) + remaining).toMutableList()
             currentIndex = 0
-            playSong(matching, startPlaying = startPlaying)
+            playSong(matching, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
             listeners.forEach { it.onQueueChanged(queue.toList()) }
         } else {
             val targetIndex = if (index in queue.indices && queue[index].id == song.id) {
@@ -568,7 +570,7 @@ class PlaybackService : Service() {
             }
             if (queue.isNotEmpty() && targetIndex in queue.indices) {
                 currentIndex = targetIndex
-                playSong(queue[currentIndex], startPlaying = startPlaying)
+                playSong(queue[currentIndex], startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
             }
         }
     }
@@ -1037,6 +1039,9 @@ class PlaybackService : Service() {
 
     fun skipNext(forceNext: Boolean = false) {
         val wasPlaying = if (forceNext) isPlaying() else true
+        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val crossfadeOnNext = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_ON_NEXT, false)
+        val allowCrossfade = !forceNext || crossfadeOnNext
 
         if (isExternalSongActive) {
             isExternalSongActive = false
@@ -1048,7 +1053,7 @@ class PlaybackService : Service() {
                     0
                 }
                 currentIndex = targetIndex
-                playSong(queue[targetIndex], startPlaying = wasPlaying)
+                playSong(queue[targetIndex], startPlaying = wasPlaying, allowCrossfade = allowCrossfade)
             } else {
                 currentSong = null
                 currentAlbumArt = null
@@ -1070,7 +1075,7 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
         if (!forceNext && repeatMode == REPEAT_ONE) {
-            currentSong?.let { playSong(it, startPlaying = wasPlaying) }
+            currentSong?.let { playSong(it, startPlaying = wasPlaying, allowCrossfade = allowCrossfade) }
             return
         }
 
@@ -1080,17 +1085,17 @@ class PlaybackService : Service() {
                 queue.add(finished)
                 currentIndex = 0
                 val nextSong = queue[0]
-                playSong(nextSong, startPlaying = wasPlaying)
+                playSong(nextSong, startPlaying = wasPlaying, allowCrossfade = allowCrossfade)
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
-                currentSong?.let { playSong(it, startPlaying = wasPlaying) }
+                currentSong?.let { playSong(it, startPlaying = wasPlaying, allowCrossfade = allowCrossfade) }
             }
             return
         }
 
         if (queue.size <= 1) {
             if (repeatMode == REPEAT_ALL || forceNext) {
-                currentSong?.let { playSong(it, startPlaying = wasPlaying) }
+                currentSong?.let { playSong(it, startPlaying = wasPlaying, allowCrossfade = allowCrossfade) }
             } else {
                 pause()
                 seekTo(0)
@@ -1110,7 +1115,7 @@ class PlaybackService : Service() {
             }
         }
 
-        playSong(queue[currentIndex], startPlaying = wasPlaying)
+        playSong(queue[currentIndex], startPlaying = wasPlaying, allowCrossfade = allowCrossfade)
     }
 
     fun skipPrevious(forcePrevious: Boolean = false) {
