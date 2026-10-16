@@ -382,7 +382,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             lyricsController = lyricsController,
             drawerFilterController = drawerFilterController,
             onSkipNext = { playbackService?.skipNext(forceNext = true) },
-            onSkipPrevious = { playbackService?.skipPrevious(forcePrevious = false) },
+            onSkipPrevious = { playbackService?.skipPrevious(forcePrevious = true) },
             onAlbumArtTap = { playlistPanelController.expand() }
         )
     }
@@ -827,7 +827,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnPrevious.setOnClickListener {
             if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) return@setOnClickListener
             if (isBound) {
-                playbackService?.skipPrevious(forcePrevious = false)
+                playbackService?.skipPrevious(forcePrevious = true)
             }
         }
 
