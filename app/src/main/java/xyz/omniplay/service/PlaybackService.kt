@@ -68,8 +68,12 @@ class PlaybackService : Service() {
         const val REPEAT_OFF = 0
         const val REPEAT_ALL = 1
         const val REPEAT_ONE = 2
+
+        const val RESTART_THRESHOLD_MS = 3000L
+        const val DOUBLE_PRESS_WINDOW_MS = 2500L
     }
 
+    private var lastRestartOrPrevTime: Long = 0L
     private val binder = LocalBinder()
     private var player: ExoPlayer? = null
     private var fadeOutPlayer: ExoPlayer? = null
@@ -401,7 +405,7 @@ class PlaybackService : Service() {
                 override fun onPlay() { play() }
                 override fun onPause() { pause() }
                 override fun onSkipToNext() { skipNext(forceNext = true) }
-                override fun onSkipToPrevious() { skipPrevious(forcePrevious = true) }
+                override fun onSkipToPrevious() { skipPrevious(forcePrevious = false) }
                 override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
                 override fun onStop() { pause() }
             })
@@ -471,6 +475,7 @@ class PlaybackService : Service() {
     }
 
     fun playSongFromPlaylist(song: Song, index: Int = -1, startPlaying: Boolean = true) {
+        lastRestartOrPrevTime = 0L
         isExternalSongActive = false
         externalSong = null
         if (isShuffleEnabled) {
@@ -686,6 +691,7 @@ class PlaybackService : Service() {
     }
 
     fun playExternalSong(song: Song) {
+        lastRestartOrPrevTime = 0L
         isExternalSongActive = true
         externalSong = song
         playSong(song, startPlaying = true)
@@ -926,6 +932,7 @@ class PlaybackService : Service() {
     }
 
     fun skipNext(forceNext: Boolean = false) {
+        lastRestartOrPrevTime = 0L
         val wasPlaying = if (forceNext) isPlaying() else true
 
         if (isExternalSongActive) {
@@ -1003,23 +1010,27 @@ class PlaybackService : Service() {
         playSong(queue[currentIndex], startPlaying = wasPlaying)
     }
 
-    fun skipPrevious(forcePrevious: Boolean = true) {
+    fun skipPrevious(forcePrevious: Boolean = false) {
         val wasPlaying = isPlaying()
+        val now = SystemClock.elapsedRealtime()
+        val currentPos = getCurrentPosition().toLong()
+
+        val shouldRestart = !forcePrevious &&
+                (now - lastRestartOrPrevTime >= DOUBLE_PRESS_WINDOW_MS) &&
+                (currentPos > RESTART_THRESHOLD_MS)
 
         if (isExternalSongActive) {
-            if (!forcePrevious && getCurrentPosition() > 15000) {
+            if (shouldRestart) {
+                lastRestartOrPrevTime = now
                 seekTo(0)
                 return
             }
+            lastRestartOrPrevTime = now
             isExternalSongActive = false
             externalSong = null
             if (queue.isNotEmpty()) {
                 val targetIndex = if (currentIndex in queue.indices) {
-                    if (forcePrevious) {
-                        if (currentIndex - 1 < 0) queue.size - 1 else currentIndex - 1
-                    } else {
-                        currentIndex
-                    }
+                    if (currentIndex - 1 < 0) queue.size - 1 else currentIndex - 1
                 } else {
                     0
                 }
@@ -1033,10 +1044,13 @@ class PlaybackService : Service() {
 
         if (queue.isEmpty()) return
 
-        if (!forcePrevious && getCurrentPosition() > 15000) {
+        if (shouldRestart) {
+            lastRestartOrPrevTime = now
             seekTo(0)
             return
         }
+
+        lastRestartOrPrevTime = now
 
         if (isShuffleEnabled) {
             if (queue.size > 1) {
@@ -1349,7 +1363,7 @@ class PlaybackService : Service() {
             ACTION_PAUSE -> pause()
             ACTION_TOGGLE -> togglePlayPause()
             ACTION_NEXT -> skipNext(forceNext = true)
-            ACTION_PREVIOUS -> skipPrevious(forcePrevious = true)
+            ACTION_PREVIOUS -> skipPrevious(forcePrevious = false)
         }
         return START_NOT_STICKY
     }

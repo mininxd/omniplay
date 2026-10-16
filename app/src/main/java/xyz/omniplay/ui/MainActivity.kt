@@ -827,7 +827,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnPrevious.setOnClickListener {
             if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) return@setOnClickListener
             if (isBound) {
-                playbackService?.skipPrevious(forcePrevious = true)
+                playbackService?.skipPrevious(forcePrevious = false)
             }
         }
 
