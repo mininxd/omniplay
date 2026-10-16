@@ -23,6 +23,9 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.media.AudioAttributesCompat
+import androidx.media.AudioFocusRequestCompat
+import androidx.media.AudioManagerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -75,6 +78,87 @@ class PlaybackService : Service() {
     private var fadeOutPlayer: ExoPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private lateinit var audioManager: android.media.AudioManager
+    private var audioFocusRequest: AudioFocusRequestCompat? = null
+    private var isPausedByTransientLossOfFocus = false
+
+    private val audioFocusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            android.media.AudioManager.AUDIOFOCUS_GAIN -> {
+                if (isPausedByTransientLossOfFocus) {
+                    isPausedByTransientLossOfFocus = false
+                    play()
+                }
+                if (crossfadeJob?.isActive != true) {
+                    player?.volume = 1f
+                }
+            }
+            android.media.AudioManager.AUDIOFOCUS_LOSS -> {
+                isPausedByTransientLossOfFocus = false
+                pause()
+            }
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (isPlaying()) {
+                    isPausedByTransientLossOfFocus = true
+                    pause()
+                }
+            }
+            android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (isPlaying() && crossfadeJob?.isActive != true) {
+                    player?.volume = 0.2f
+                }
+            }
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        if (audioFocusRequest != null) return true
+        return try {
+            val audioAttributes = AudioAttributesCompat.Builder()
+                .setUsage(AudioAttributesCompat.USAGE_MEDIA)
+                .setContentType(AudioAttributesCompat.CONTENT_TYPE_MUSIC)
+                .build()
+
+            val request = AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttributes)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+
+            val result = AudioManagerCompat.requestAudioFocus(audioManager, request)
+            if (result == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                audioFocusRequest = request
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            true
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        try {
+            audioFocusRequest?.let {
+                AudioManagerCompat.abandonAudioFocusRequest(audioManager, it)
+                audioFocusRequest = null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun cancelAndResetCrossfade() {
+        crossfadeJob?.cancel()
+        crossfadeJob = null
+        try {
+            fadeOutPlayer?.stop()
+            fadeOutPlayer?.clearMediaItems()
+            fadeOutPlayer?.volume = 1f
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        player?.volume = 1f
+    }
 
     // Android 14+ Bit-Perfect Audio variables (activated silently for USB DACs)
     private var audioDeviceCallback: AudioDeviceCallback? = null
@@ -189,7 +273,7 @@ class PlaybackService : Service() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                true // Auto handle audio focus (pause on call, duck, resume)
+                false // Audio focus managed by PlaybackService for dual-player crossfade
             )
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -201,7 +285,7 @@ class PlaybackService : Service() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                true
+                false // Audio focus managed by PlaybackService
             )
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
@@ -224,12 +308,7 @@ class PlaybackService : Service() {
                         updatePlaybackState(state, exoInstance.currentPosition.coerceAtLeast(0L))
                     }
                     Player.STATE_ENDED -> {
-                        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-                        val crossfadeDurationSec = prefs.getInt(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_DURATION, 0)
-                        if (crossfadeDurationSec > 0) {
-                            // Let the progressTracker trigger crossfade, or if we ended before tracking could, skipNext
-                            skipNext(forceNext = false)
-                        } else {
+                        if (crossfadeJob?.isActive != true) {
                             skipNext(forceNext = false)
                         }
                     }
@@ -719,6 +798,12 @@ class PlaybackService : Service() {
             val p = player ?: return
 
             if (allowCrossfade && crossfadeDurationSec > 0 && p.isPlaying && startPlaying && song.contentUri != Uri.EMPTY) {
+                // Ensure audio focus is active
+                requestAudioFocus()
+
+                // Cancel any previous crossfade and clean up previous fadeOutPlayer
+                cancelAndResetCrossfade()
+
                 // Perform crossfade
                 val oldPlayer = p
                 val newPlayer = fadeOutPlayer ?: return
@@ -729,10 +814,6 @@ class PlaybackService : Service() {
 
                 // Setup new player
                 progressJob?.cancel()
-                crossfadeJob?.cancel()
-                crossfadeJob = null
-                fadeOutPlayer?.volume = 1f
-
                 newPlayer.stop()
                 newPlayer.clearMediaItems()
                 val mediaItem = MediaItem.fromUri(song.contentUri)
@@ -744,15 +825,27 @@ class PlaybackService : Service() {
 
                 // Start crossfade animation
                 crossfadeJob = serviceScope.launch {
-                    val steps = 20
-                    val delayMs = (crossfadeDurationMs / steps).coerceAtLeast(10L)
+                    // Wait for newPlayer to become ready or start playing
+                    var waitMs = 0L
+                    while (isActive && newPlayer.playbackState != Player.STATE_READY && waitMs < 1000L) {
+                        delay(20L)
+                        waitMs += 20L
+                    }
 
-                    for (i in 1..steps) {
+                    val stepIntervalMs = 25L
+                    val totalSteps = (crossfadeDurationMs / stepIntervalMs).toInt().coerceAtLeast(1)
+
+                    for (step in 1..totalSteps) {
                         if (!isActive) break
-                        val volume = i.toFloat() / steps
-                        player?.volume = volume
-                        fadeOutPlayer?.volume = 1f - volume
-                        delay(delayMs)
+                        val t = step.toFloat() / totalSteps
+                        // Equal-power crossfade curve: cos^2(angle) + sin^2(angle) == 1
+                        val angle = (t * (Math.PI / 2.0)).toFloat()
+                        val fadeInVol = kotlin.math.sin(angle)
+                        val fadeOutVol = kotlin.math.cos(angle)
+
+                        player?.volume = fadeInVol
+                        fadeOutPlayer?.volume = fadeOutVol
+                        delay(stepIntervalMs)
                     }
 
                     if (isActive) {
@@ -760,25 +853,24 @@ class PlaybackService : Service() {
                         fadeOutPlayer?.stop()
                         fadeOutPlayer?.clearMediaItems()
                         fadeOutPlayer?.volume = 1f
+                        crossfadeJob = null
                     }
                 }
             } else {
                 progressJob?.cancel()
+                cancelAndResetCrossfade()
                 p.stop()
                 p.volume = 1f
-                fadeOutPlayer?.stop()
-                fadeOutPlayer?.clearMediaItems()
-                fadeOutPlayer?.volume = 1f
-                crossfadeJob?.cancel()
-                crossfadeJob = null
 
                 if (song.contentUri != Uri.EMPTY) {
                     val mediaItem = MediaItem.fromUri(song.contentUri)
                     p.setMediaItem(mediaItem)
                     p.prepare()
                     if (startPlaying) {
-                        p.play()
-                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
+                        if (requestAudioFocus()) {
+                            p.play()
+                            xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
+                        }
                     } else {
                         stopProgressTracker()
                         updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, 0L)
@@ -891,25 +983,32 @@ class PlaybackService : Service() {
             return
         }
 
-        player?.let {
-            if (!it.isPlaying) {
-                it.play()
-                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, getCurrentPosition().toLong())
-                startProgressTracker()
-                try {
-                    startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
-                } catch (e: Exception) {
-                    e.printStackTrace()
+        if (requestAudioFocus()) {
+            player?.let {
+                if (crossfadeJob?.isActive != true) {
+                    it.volume = 1f
                 }
-                listeners.forEach { l -> l.onPlaybackStateChanged(true) }
-                currentSong?.let { s ->
-                    xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(s), getCurrentPosition().toLong())
+                if (!it.isPlaying) {
+                    it.play()
+                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, getCurrentPosition().toLong())
+                    startProgressTracker()
+                    try {
+                        startForeground(NOTIFICATION_ID, buildNotification(isPlaying = true))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    listeners.forEach { l -> l.onPlaybackStateChanged(true) }
+                    currentSong?.let { s ->
+                        xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(s), getCurrentPosition().toLong())
+                    }
                 }
             }
         }
     }
 
     fun pause() {
+        cancelAndResetCrossfade()
+        abandonAudioFocus()
         player?.let {
             if (it.isPlaying) {
                 it.pause()
@@ -1113,12 +1212,7 @@ class PlaybackService : Service() {
 
     fun seekTo(positionMs: Int) {
         try {
-            crossfadeJob?.cancel()
-            crossfadeJob = null
-            fadeOutPlayer?.stop()
-            fadeOutPlayer?.clearMediaItems()
-            fadeOutPlayer?.volume = 1f
-            player?.volume = 1f
+            cancelAndResetCrossfade()
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
                 player?.seekTo(positionMs.toLong())
             }
@@ -1207,11 +1301,15 @@ class PlaybackService : Service() {
 
                 val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 val crossfadeDurationSec = prefs.getInt(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_DURATION, 0)
-                if (crossfadeDurationSec > 0 && total > 0 && !crossfadeTriggered) {
-                    val crossfadeDurationMs = crossfadeDurationSec * 1000L
-                    if (total > crossfadeDurationMs && current >= crossfadeDurationMs && total - current <= crossfadeDurationMs) {
-                        crossfadeTriggered = true
-                        skipNext(forceNext = false)
+                if (crossfadeDurationSec > 0 && total > 0 && !crossfadeTriggered && crossfadeJob?.isActive != true) {
+                    val hasNext = repeatMode == REPEAT_ONE || getNextSong() != null || isShuffleEnabled || (isExternalSongActive && queue.isNotEmpty())
+                    if (hasNext) {
+                        val crossfadeDurationMs = crossfadeDurationSec * 1000L
+                        val effectiveCrossfadeMs = crossfadeDurationMs.coerceAtMost((total / 2L).coerceAtLeast(1000L))
+                        if (current > 0 && total - current <= effectiveCrossfadeMs) {
+                            crossfadeTriggered = true
+                            skipNext(forceNext = false)
+                        }
                     }
                 }
 
@@ -1381,6 +1479,8 @@ class PlaybackService : Service() {
         sync.hostPlaybackPositionProvider = null
         sync.hostIsPlayingProvider = null
 
+        cancelAndResetCrossfade()
+        abandonAudioFocus()
         teardownBitPerfectAudio()
         stopProgressTracker()
         try {
@@ -1389,6 +1489,10 @@ class PlaybackService : Service() {
         try {
             player?.release()
             player = null
+        } catch (e: Exception) {}
+        try {
+            fadeOutPlayer?.release()
+            fadeOutPlayer = null
         } catch (e: Exception) {}
         mediaSession?.release()
         super.onDestroy()
