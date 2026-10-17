@@ -67,11 +67,8 @@ class SquigglySeekBar @JvmOverloads constructor(
     }
     private var currentProgressMs: Long = 0L
 
-    var progress: Long
+    val progress: Long
         get() = currentProgressMs
-        set(value) {
-            setProgress(value)
-        }
 
     private var displayedProgressMs: Float = 0f
     private var isUserDragging: Boolean = false
