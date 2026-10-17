@@ -66,6 +66,36 @@ class MusicScanner(private val context: Context) {
     }
 
     /**
+     * Verifies if a song's underlying file still actually exists and is accessible.
+     */
+    fun isSongAccessible(song: Song): Boolean {
+        return fileActuallyExists(context, song.filePath, song.contentUri)
+    }
+
+    /**
+     * Checks if a file actually exists on storage. Fast-paths via File.exists(),
+     * and double-checks via openAssetFileDescriptor to prevent ghost MediaStore records.
+     */
+    fun fileActuallyExists(context: Context, filePath: String, contentUri: Uri): Boolean {
+        if (filePath.isNotEmpty()) {
+            val file = File(filePath)
+            if (file.isAbsolute) {
+                if (file.exists()) return true
+                return try {
+                    context.contentResolver.openAssetFileDescriptor(contentUri, "r")?.use { true } ?: false
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        }
+        return try {
+            context.contentResolver.openAssetFileDescriptor(contentUri, "r")?.use { true } ?: false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Unindexed file info for deferred parallel extraction.
      */
     private data class UnindexedFileInfo(
@@ -247,8 +277,9 @@ class MusicScanner(private val context: Context) {
                 val existingNames = songsList.map {
                     (if (it.filePath.isNotEmpty()) File(it.filePath).name else it.title).lowercase(Locale.ROOT)
                 }.toSet()
-                val missingFromSaf = mediaStoreSongs.filter {
-                    File(it.filePath).name.lowercase(Locale.ROOT) !in existingNames
+                val missingFromSaf = mediaStoreSongs.filter { msSong ->
+                    File(msSong.filePath).name.lowercase(Locale.ROOT) !in existingNames &&
+                            fileActuallyExists(context, msSong.filePath, msSong.contentUri)
                 }
                 if (missingFromSaf.isNotEmpty()) {
                     songsList.addAll(missingFromSaf.map { msSong ->
@@ -264,7 +295,7 @@ class MusicScanner(private val context: Context) {
             }
             songsList
         } else if (mediaStoreSongs.isNotEmpty()) {
-            mediaStoreSongs.map { msSong ->
+            mediaStoreSongs.filter { fileActuallyExists(context, it.filePath, it.contentUri) }.map { msSong ->
                 if (msSong.folderName.isEmpty() || msSong.folderName.equals("Music", ignoreCase = true)) {
                     msSong.copy(folderName = rootFolderName)
                 } else if (!msSong.folderName.startsWith(rootFolderName, ignoreCase = true)) {
@@ -372,7 +403,8 @@ class MusicScanner(private val context: Context) {
                 val lastSeg = cleanPath.substringAfterLast('/')
                 list.addAll(scanMediaStoreForFolder(lastSeg))
             }
-            list.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
+            list.filter { fileActuallyExists(context, it.filePath, it.contentUri) }
+                .distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -410,7 +442,8 @@ class MusicScanner(private val context: Context) {
                 val matchingSaf = safSongs.filter { s ->
                     val sFolder = s.folderName.lowercase(Locale.ROOT)
                     val sPath = s.filePath.lowercase(Locale.ROOT)
-                    sFolder.contains(pLower) || sPath.contains(pLower)
+                    (sFolder.contains(pLower) || sPath.contains(pLower)) &&
+                            fileActuallyExists(context, s.filePath, s.contentUri)
                 }
                 prioritySongs.addAll(matchingSaf)
             } catch (e: Exception) {
@@ -889,6 +922,10 @@ class MusicScanner(private val context: Context) {
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 id
             )
+
+            if (!fileActuallyExists(context, filePath, contentUri)) {
+                continue
+            }
 
             val albumArtUri = if (albumId > 0) {
                 ContentUris.withAppendedId(albumArtBaseUri, albumId)

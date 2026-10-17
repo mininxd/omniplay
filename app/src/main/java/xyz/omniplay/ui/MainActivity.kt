@@ -987,6 +987,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
                 if (!isRescan && cachedSongs.isNotEmpty()) {
                     updateSongList(cachedSongs)
+                    // Fast background accessibility check to prune any deleted songs from cache
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val validCached = cachedSongs.filter { song ->
+                            musicScanner.isSongAccessible(song)
+                        }
+                        if (validCached.size != cachedSongs.size) {
+                            musicDatabase.replaceAllSongs(validCached)
+                            withContext(Dispatchers.Main) {
+                                updateSongList(validCached)
+                            }
+                        }
+                    }
                     return@launch
                 }
 
@@ -1000,12 +1012,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
                 // Stage 1: Prioritize nested or specific folder if currently being browsed
                 val priorityFolder = drawerFilterController.getActiveBrowsingFolder()
+                var prioritySongsSnapshot: List<Song> = emptyList()
                 if (!priorityFolder.isNullOrBlank() && isRescan) {
                     val prioritySongs = withContext(Dispatchers.IO) {
                         musicScanner.scanPriorityFolder(priorityFolder, folderUris, cachedSongs = cachedSongs)
                     }
                     if (prioritySongs.isNotEmpty()) {
-                        val mergedPriority = (prioritySongs + allScannedSongs).distinctBy {
+                        prioritySongsSnapshot = prioritySongs
+                        val mergedPriority = (prioritySongs + allScannedSongs.filter { song ->
+                            musicScanner.isSongAccessible(song)
+                        }).distinctBy {
                             it.filePath.ifEmpty { it.contentUri.toString() }
                         }
                         allScannedSongs = mergedPriority
@@ -1025,11 +1041,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             onProgressBatch = { batch ->
                                 lifecycleScope.launch(Dispatchers.Main) {
                                     if (batch.isNotEmpty()) {
-                                        val merged = (batch + allScannedSongs).distinctBy {
+                                        val currentBatchUnique = (allSongs + batch + prioritySongsSnapshot).distinctBy {
                                             it.filePath.ifEmpty { it.contentUri.toString() }
                                         }
-                                        allScannedSongs = merged
-                                        scannedSongs = merged
+                                        allScannedSongs = currentBatchUnique
+                                        scannedSongs = currentBatchUnique
                                         applyCurrentFilter()
                                     }
                                 }
@@ -1223,6 +1239,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         scannedSongs = songs
         if (drawerFilterController.activeOngoingQueue.isEmpty() || drawerFilterController.activeOngoingQueueTitle == null) {
             drawerFilterController.activeOngoingQueue = songs
+        } else {
+            val validSongIds = songs.map { it.id }.toSet()
+            drawerFilterController.activeOngoingQueue = drawerFilterController.activeOngoingQueue.filter { it.id in validSongIds }
         }
         binding.drawerSubtitleText.text = "${songs.size} songs"
         drawerFilterController.updateAllTracksCardUI(isActive = drawerFilterController.isAllTracksDrillDown)
