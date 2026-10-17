@@ -338,11 +338,11 @@ class SettingsActivity : AppCompatActivity() {
                     val pathText = itemView.findViewById<TextView>(R.id.folder_path_text)
                     val btnRemove = itemView.findViewById<ImageButton>(R.id.btn_remove_folder)
 
-                    nameText.text = MusicFolderManager.getDisplayName(this, folderUriString)
+                    nameText.text = MusicFolderManager.getRootFolderTitle(this, folderUriString)
                     pathText.text = MusicFolderManager.getDisplayPath(this, folderUriString)
 
                     btnRemove.setOnClickListener {
-                        val removedName = MusicFolderManager.getDisplayName(this, folderUriString)
+                        val removedName = MusicFolderManager.getRootFolderTitle(this, folderUriString)
                         MusicFolderManager.removeFolder(this, folderUriString)
                         isFolderChanged = true
                         prepareResult()

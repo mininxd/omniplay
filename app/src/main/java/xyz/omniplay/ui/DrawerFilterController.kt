@@ -21,6 +21,7 @@ import xyz.omniplay.databinding.ActivityMainBinding
 import xyz.omniplay.model.Song
 import xyz.omniplay.sync.OmniSyncManager
 import xyz.omniplay.sync.OmniSyncRole
+import xyz.omniplay.util.MusicFolderManager
 import xyz.omniplay.util.ThemeColors
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -530,6 +531,27 @@ class DrawerFilterController(
     }
 
     fun getSongFolderSegments(song: Song): List<String> {
+        if (MusicFolderManager.hasDuplicateFolderNames(activity)) {
+            val rootTitle = MusicFolderManager.getSongRootFolderTitle(activity, song)
+            if (rootTitle != null) {
+                val rawFolder = song.folderName.trim().trim('/')
+                if (rawFolder.startsWith(rootTitle, ignoreCase = true)) {
+                    val segs = rawFolder.split('/').filter { it.isNotBlank() }
+                    if (segs.isNotEmpty()) return segs
+                }
+                val matchedFolderUri = MusicFolderManager.findMatchingFolderUri(activity, song)
+                val subPath = if (matchedFolderUri != null) {
+                    MusicFolderManager.getSubPathWithinFolder(activity, matchedFolderUri, song)
+                } else null
+
+                if (!subPath.isNullOrEmpty()) {
+                    val subSegs = subPath.split('/').filter { it.isNotBlank() }
+                    return listOf(rootTitle) + subSegs
+                }
+                return listOf(rootTitle)
+            }
+        }
+
         val filePath = song.filePath.trim()
         if (filePath.isNotEmpty() && (filePath.contains('/') || filePath.contains(File.separator))) {
             val pClean = filePath
@@ -569,7 +591,7 @@ class DrawerFilterController(
     }
 
     fun getCommonFolderPrefixDepth(allSegments: List<List<String>>): Int {
-        if (allSegments.isEmpty()) return 0
+        if (allSegments.isEmpty() || MusicFolderManager.hasDuplicateFolderNames(activity)) return 0
         val genericRoots = setOf("music", "audio", "audios", "sound", "sounds")
         val first = allSegments[0]
         var depth = 0
@@ -1245,7 +1267,9 @@ class DrawerFilterController(
     fun updateFolderFilterVisibility() {
         val allScannedSongs = getAllScannedSongs()
         val allSongSegs = allScannedSongs.map { getSongFolderSegments(it) }
-        val hasMultipleFolders = allSongSegs.mapNotNull { it.firstOrNull() }.distinct().size > 1 ||
+        val hasMultipleFolders = MusicFolderManager.hasDuplicateFolderNames(activity) ||
+                MusicFolderManager.getFolders(activity).size > 1 ||
+                allSongSegs.mapNotNull { it.firstOrNull() }.distinct().size > 1 ||
                 allSongSegs.flatten().distinct().size > 1 ||
                 allScannedSongs.map { it.getResolvedFolderName() }.filter { it.isNotBlank() }.distinct().size > 1
         binding.btnFilterFolders.visibility = if (hasMultipleFolders) View.VISIBLE else View.GONE

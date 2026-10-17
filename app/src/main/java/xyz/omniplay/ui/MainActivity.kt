@@ -1111,9 +1111,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val segs = drawerFilterController.getSongFolderSegments(song)
                         val folderPath = segs.joinToString("/")
                         folderPath.equals(filterVal, ignoreCase = true) ||
-                                folderPath.endsWith("/$filterVal", ignoreCase = true) ||
-                                segs.any { it.equals(filterVal, ignoreCase = true) } ||
-                                song.getResolvedFolderName().equals(filterVal, ignoreCase = true)
+                                folderPath.startsWith("$filterVal/", ignoreCase = true) ||
+                                (segs.isNotEmpty() && segs[0].equals(filterVal, ignoreCase = true)) ||
+                                (!MusicFolderManager.hasDuplicateFolderNames(this) && (segs.any { it.equals(filterVal, ignoreCase = true) } || song.getResolvedFolderName().equals(filterVal, ignoreCase = true)))
                     }
                 }
             }

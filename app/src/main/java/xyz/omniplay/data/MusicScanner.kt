@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import xyz.omniplay.model.Song
 import xyz.omniplay.util.AudioInfoExtractor
+import xyz.omniplay.util.MusicFolderManager
 import java.io.File
 import java.util.Locale
 
@@ -195,7 +196,7 @@ class MusicScanner(private val context: Context) {
         val cachedByName = cachedSongs.groupBy { (if (it.filePath.isNotEmpty()) File(it.filePath).name else it.title).lowercase(Locale.ROOT) }
 
         // 3. Direct SAF traversal using DocumentsContract to discover all actual files on disk
-        val rootFolderName = folderRelativePath?.substringAfterLast('/')?.ifEmpty { "Music" } ?: "Music"
+        val rootFolderName = MusicFolderManager.getRootFolderTitle(context, treeUri.toString())
         try {
             val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
                 DocumentsContract.getDocumentId(treeUri)
@@ -250,12 +251,28 @@ class MusicScanner(private val context: Context) {
                     File(it.filePath).name.lowercase(Locale.ROOT) !in existingNames
                 }
                 if (missingFromSaf.isNotEmpty()) {
-                    songsList.addAll(missingFromSaf)
+                    songsList.addAll(missingFromSaf.map { msSong ->
+                        if (msSong.folderName.isEmpty() || msSong.folderName.equals("Music", ignoreCase = true)) {
+                            msSong.copy(folderName = rootFolderName)
+                        } else if (!msSong.folderName.startsWith(rootFolderName, ignoreCase = true)) {
+                            msSong.copy(folderName = "$rootFolderName/${msSong.folderName}")
+                        } else {
+                            msSong
+                        }
+                    })
                 }
             }
             songsList
         } else if (mediaStoreSongs.isNotEmpty()) {
-            mediaStoreSongs
+            mediaStoreSongs.map { msSong ->
+                if (msSong.folderName.isEmpty() || msSong.folderName.equals("Music", ignoreCase = true)) {
+                    msSong.copy(folderName = rootFolderName)
+                } else if (!msSong.folderName.startsWith(rootFolderName, ignoreCase = true)) {
+                    msSong.copy(folderName = "$rootFolderName/${msSong.folderName}")
+                } else {
+                    msSong
+                }
+            }
         } else if (folderRelativePath.isNullOrEmpty()) {
             scanMediaStore()
         } else {
@@ -372,7 +389,7 @@ class MusicScanner(private val context: Context) {
         val pLower = cleanPath.substringAfterLast('/').lowercase(Locale.ROOT)
         for (treeUri in folderUris) {
             try {
-                val rootFolderName = getRelativePathFromTreeUri(treeUri)?.substringAfterLast('/')?.ifEmpty { "Music" } ?: "Music"
+                val rootFolderName = MusicFolderManager.getRootFolderTitle(context, treeUri.toString())
                 val rootDocId = if (DocumentsContract.isDocumentUri(context, treeUri)) {
                     DocumentsContract.getDocumentId(treeUri)
                 } else {
