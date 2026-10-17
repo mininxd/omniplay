@@ -150,6 +150,10 @@ class OmniSyncManager private constructor(private val context: Context) {
     var currentStreamDurationMs: Long = 0L
         private set
 
+    fun getListenerCurrentPosition(): Long {
+        return listenerPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+    }
+
     @Volatile
     var currentTrackFormat: String = ""
         private set

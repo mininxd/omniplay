@@ -32,6 +32,8 @@ import xyz.omniplay.lyrics.LyricsResult
 import xyz.omniplay.lyrics.LrcLibClient
 import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
+import xyz.omniplay.sync.OmniSyncManager
+import xyz.omniplay.sync.OmniSyncRole
 import kotlin.math.abs
 
 class LyricsController(
@@ -56,8 +58,8 @@ class LyricsController(
         get() = isLyricsShowing || isFullScreenLyricsShowing
 
     fun getActiveSong(): Song? {
-        val syncManager = xyz.omniplay.sync.OmniSyncManager.getInstance(activity)
-        if (syncManager.currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+        val syncManager = OmniSyncManager.getInstance(activity)
+        if (syncManager.currentRole == OmniSyncRole.LISTENER) {
             val rawTitle = syncManager.currentTrackTitle.trim()
             if (rawTitle.isNotEmpty() && !rawTitle.equals("Waiting for stream…", ignoreCase = true)) {
                 var title = rawTitle
@@ -539,8 +541,8 @@ class LyricsController(
                 binding.lyricsCard.scaleX = 1f
                 binding.lyricsCard.scaleY = 1f
                 binding.lyricsCard.alpha = 1f
-                val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
-                    binding.playbackSlider.progress.toLong()
+                val currentPos = if (OmniSyncManager.getInstance(activity).currentRole == OmniSyncRole.LISTENER) {
+                    OmniSyncManager.getInstance(activity).getListenerCurrentPosition()
                 } else {
                     getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
                 }
@@ -595,8 +597,8 @@ class LyricsController(
 
         // Ensure the container is laid out before calculating animations
         binding.fullscreenLyricsContainer.post {
-            val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
-                binding.playbackSlider.progress.toLong()
+            val currentPos = if (OmniSyncManager.getInstance(activity).currentRole == OmniSyncRole.LISTENER) {
+                OmniSyncManager.getInstance(activity).getListenerCurrentPosition()
             } else {
                 getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
             }
@@ -804,8 +806,8 @@ class LyricsController(
                     binding.fullscreenLyricsRecyclerView.visibility = View.VISIBLE
                     fullScreenLyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
 
-                    val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
-                        binding.playbackSlider.progress.toLong()
+                    val currentPos = if (OmniSyncManager.getInstance(activity).currentRole == OmniSyncRole.LISTENER) {
+                        OmniSyncManager.getInstance(activity).getListenerCurrentPosition()
                     } else {
                         getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
                     }

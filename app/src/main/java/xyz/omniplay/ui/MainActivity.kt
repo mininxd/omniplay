@@ -1657,7 +1657,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnOmnisync.setColorFilter(tint)
     }
 
-    private val omniSyncListener = object : OmniSyncManager.OmniSyncListener {
+    private val omniSyncListener: OmniSyncManager.OmniSyncListener = object : OmniSyncManager.OmniSyncListener {
         override fun onRoleChanged(role: OmniSyncRole) {
             runOnUiThread {
                 updateOmniSyncButtonState(role)
@@ -1716,7 +1716,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val activeTitle = OmniSyncManager.getInstance(this@MainActivity).currentTrackTitle
                     val activeArtist = OmniSyncManager.getInstance(this@MainActivity).currentTrackArtist
                     if (activeTitle.isNotEmpty()) {
-                        omniSyncListener.onTrackInfoChanged(activeTitle, activeArtist)
+                        onTrackInfoChanged(activeTitle, activeArtist)
                     }
                 } else if (role == OmniSyncRole.IDLE) {
                     binding.playbackSlider.isSeekable = true

@@ -66,6 +66,13 @@ class SquigglySeekBar @JvmOverloads constructor(
         refreshThemeColors()
     }
     private var currentProgressMs: Long = 0L
+
+    var progress: Long
+        get() = currentProgressMs
+        set(value) {
+            setProgress(value)
+        }
+
     private var displayedProgressMs: Float = 0f
     private var isUserDragging: Boolean = false
     private var isPlaying: Boolean = false
