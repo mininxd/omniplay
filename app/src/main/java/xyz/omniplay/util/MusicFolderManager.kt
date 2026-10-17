@@ -12,12 +12,14 @@ import java.util.Locale
 
 object MusicFolderManager {
 
-    private data class FolderMetadata(
+    data class FolderMetadata(
         val uri: String,
         val displayName: String,
         val parentLabel: String,
         val rootTitle: String,
-        val relativePathLower: String
+        val relativePathLower: String,
+        val volumeId: String,
+        val basePathPrefixLower: String
     )
 
     @Volatile
@@ -109,7 +111,7 @@ object MusicFolderManager {
         return removed
     }
 
-    private fun extractDocId(uriString: String): String {
+    fun extractDocId(uriString: String): String {
         return try {
             val uri = Uri.parse(uriString)
             try {
@@ -123,6 +125,37 @@ object MusicFolderManager {
             }
         } catch (_: Exception) {
             uriString
+        }
+    }
+
+    fun getFolderStorageInfo(uriString: String): Pair<String, String> {
+        val docId = extractDocId(uriString)
+        return when {
+            docId.startsWith("raw:") -> {
+                val raw = docId.removePrefix("raw:").trim('/')
+                Pair("", raw)
+            }
+            docId.contains(':') -> {
+                val vol = docId.substringBefore(':')
+                val path = docId.substringAfter(':').trim('/')
+                Pair(vol, path)
+            }
+            else -> Pair("", docId.trim('/'))
+        }
+    }
+
+    fun getFolderBasePathPrefix(uriString: String): String {
+        val (vol, path) = getFolderStorageInfo(uriString)
+        return when {
+            vol.equals("primary", ignoreCase = true) -> {
+                if (path.isEmpty()) "/storage/emulated/0" else "/storage/emulated/0/$path"
+            }
+            vol.isNotEmpty() -> {
+                if (path.isEmpty()) "/storage/$vol" else "/storage/$vol/$path"
+            }
+            path.startsWith('/') -> path
+            path.isNotEmpty() -> "/$path"
+            else -> ""
         }
     }
 
@@ -250,7 +283,7 @@ object MusicFolderManager {
         }
     }
 
-    private fun ensureMetadataCache(context: Context): List<FolderMetadata> {
+    fun ensureMetadataCache(context: Context): List<FolderMetadata> {
         val currentFolders = getFolders(context)
         val existing = cachedMetadataList
         if (existing != null && cachedFoldersList == currentFolders) {
@@ -267,14 +300,18 @@ object MusicFolderManager {
             val parentLabel = if (isDup) getFolderParentLabel(context, uriStr) else ""
             val title = if (isDup && parentLabel.isNotBlank()) "$disp ($parentLabel)" else disp
             val relPath = extractRelativePathFromDocId(extractDocId(uriStr)).lowercase(Locale.ROOT)
+            val storageInfo = getFolderStorageInfo(uriStr)
+            val basePrefix = getFolderBasePathPrefix(uriStr).lowercase(Locale.ROOT)
             FolderMetadata(
                 uri = uriStr,
                 displayName = disp,
                 parentLabel = parentLabel,
                 rootTitle = title,
-                relativePathLower = relPath
+                relativePathLower = relPath,
+                volumeId = storageInfo.first,
+                basePathPrefixLower = basePrefix
             )
-        }.sortedByDescending { it.relativePathLower.length }
+        }.sortedByDescending { it.basePathPrefixLower.length }
 
         cachedFoldersList = currentFolders
         cachedMetadataList = metadataList
@@ -302,6 +339,66 @@ object MusicFolderManager {
     }
 
     /**
+     * Checks if a song belongs to the specified folder metadata.
+     */
+    fun isSongInFolder(folderMeta: FolderMetadata, song: Song): Boolean {
+        val filePathLower = song.filePath.lowercase(Locale.ROOT).trim()
+        val basePrefix = folderMeta.basePathPrefixLower
+
+        // 1. Direct path check: song filePath starts with basePathPrefix
+        if (filePathLower.isNotEmpty() && basePrefix.isNotEmpty()) {
+            if (filePathLower.startsWith("$basePrefix/") || filePathLower == basePrefix) {
+                return true
+            }
+            if (folderMeta.volumeId.isNotEmpty() && !folderMeta.volumeId.equals("primary", ignoreCase = true)) {
+                val volLower = folderMeta.volumeId.lowercase(Locale.ROOT)
+                val relLower = folderMeta.relativePathLower
+                if (filePathLower.contains("/$volLower/") && (relLower.isEmpty() || filePathLower.contains("/$relLower/"))) {
+                    return true
+                }
+            }
+        }
+
+        // 2. SAF contentUri matching
+        val songUriStr = song.contentUri.toString()
+        if (songUriStr.contains(folderMeta.uri, ignoreCase = true)) {
+            return true
+        }
+
+        val decodedUri = try { Uri.decode(songUriStr) } catch (_: Exception) { "" }
+        if (folderMeta.volumeId.isNotEmpty()) {
+            val volLower = folderMeta.volumeId.lowercase(Locale.ROOT)
+            val relLower = folderMeta.relativePathLower
+            if (decodedUri.contains(volLower, ignoreCase = true)) {
+                if (relLower.isEmpty() || decodedUri.contains(relLower, ignoreCase = true)) {
+                    return true
+                }
+            }
+        }
+
+        // 3. Fallback: folderName matching
+        val songFolder = song.folderName.trim()
+        if (songFolder.isNotEmpty()) {
+            if (songFolder.equals(folderMeta.rootTitle, ignoreCase = true) ||
+                songFolder.startsWith("${folderMeta.rootTitle}/", ignoreCase = true)
+            ) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * Verifies if a song belongs to ANY of the currently configured music folders.
+     */
+    fun isSongInConfiguredFolders(context: Context, song: Song): Boolean {
+        val metadata = ensureMetadataCache(context)
+        if (metadata.isEmpty()) return false
+        return metadata.any { isSongInFolder(it, song) }
+    }
+
+    /**
      * Finds the configured folder URI that this song belongs to.
      */
     fun findMatchingFolderUri(context: Context, song: Song): String? {
@@ -309,32 +406,9 @@ object MusicFolderManager {
         if (metadata.isEmpty()) return null
         if (metadata.size == 1) return metadata[0].uri
 
-        // 1. Fast match if song.folderName already has rootTitle
-        val songFolder = song.folderName.trim()
-        if (songFolder.isNotEmpty()) {
-            for (meta in metadata) {
-                if (songFolder.equals(meta.rootTitle, ignoreCase = true) ||
-                    songFolder.startsWith("${meta.rootTitle}/", ignoreCase = true)
-                ) {
-                    return meta.uri
-                }
-            }
-        }
-
-        // 2. Match against filePath or contentUri
-        val filePathLower = song.filePath.lowercase(Locale.ROOT)
-        val decodedUri = try { Uri.decode(song.contentUri.toString()) } catch (_: Exception) { "" }
-
         for (meta in metadata) {
-            val rel = meta.relativePathLower
-            if (rel.isNotEmpty()) {
-                if (filePathLower.contains("/$rel/") ||
-                    filePathLower.endsWith("/$rel") ||
-                    (decodedUri.isNotEmpty() && decodedUri.contains(rel, ignoreCase = true)) ||
-                    songFolder.contains(rel, ignoreCase = true)
-                ) {
-                    return meta.uri
-                }
+            if (isSongInFolder(meta, song)) {
+                return meta.uri
             }
         }
 
@@ -345,6 +419,12 @@ object MusicFolderManager {
      * Returns the root folder title for a song, disambiguated if there are same-named roots.
      */
     fun getSongRootFolderTitle(context: Context, song: Song): String? {
+        val metadata = ensureMetadataCache(context)
+        for (meta in metadata) {
+            if (isSongInFolder(meta, song)) {
+                return meta.rootTitle
+            }
+        }
         val matchingUri = findMatchingFolderUri(context, song) ?: return null
         return getRootFolderTitle(context, matchingUri)
     }

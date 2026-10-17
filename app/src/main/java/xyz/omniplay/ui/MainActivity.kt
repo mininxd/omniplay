@@ -220,6 +220,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         } else if (folderChanged) {
             val folders = MusicFolderManager.getFolders(this)
             if (folders.isNotEmpty()) {
+                val validSongs = allScannedSongs.filter { MusicFolderManager.isSongInConfiguredFolders(this, it) }
+                allScannedSongs = validSongs
+                scannedSongs = validSongs
+                updateSongList(validSongs)
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val dbSongs = musicDatabase.getAllSongs().filter { MusicFolderManager.isSongInConfiguredFolders(this@MainActivity, it) }
+                    musicDatabase.replaceAllSongs(dbSongs)
+                }
                 loadMusicFromConfiguredFolders(isUserInitiated = true, isRescan = true)
             } else {
                 lifecycleScope.launch(Dispatchers.IO) {
@@ -986,10 +994,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
 
                 if (!isRescan && cachedSongs.isNotEmpty()) {
-                    updateSongList(cachedSongs)
+                    val validConfigured = cachedSongs.filter { MusicFolderManager.isSongInConfiguredFolders(this@MainActivity, it) }
+                    updateSongList(validConfigured)
                     // Fast background accessibility check to prune any deleted songs from cache
                     lifecycleScope.launch(Dispatchers.IO) {
-                        val validCached = cachedSongs.filter { song ->
+                        val validCached = validConfigured.filter { song ->
                             musicScanner.isSongAccessible(song)
                         }
                         if (validCached.size != cachedSongs.size) {
@@ -1020,7 +1029,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     if (prioritySongs.isNotEmpty()) {
                         prioritySongsSnapshot = prioritySongs
                         val mergedPriority = (prioritySongs + allScannedSongs.filter { song ->
-                            musicScanner.isSongAccessible(song)
+                            musicScanner.isSongAccessible(song) && MusicFolderManager.isSongInConfiguredFolders(this@MainActivity, song)
                         }).distinctBy {
                             it.filePath.ifEmpty { it.contentUri.toString() }
                         }
@@ -1056,9 +1065,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         e.printStackTrace()
                     }
                 }
-                val distinctSongs = allSongs.distinctBy {
-                    it.filePath.ifEmpty { it.contentUri.toString() }
-                }
+                val distinctSongs = allSongs
+                    .filter { MusicFolderManager.isSongInConfiguredFolders(this@MainActivity, it) }
+                    .distinctBy {
+                        it.filePath.ifEmpty { it.contentUri.toString() }
+                    }
 
                 withContext(Dispatchers.IO) {
                     musicDatabase.replaceAllSongs(distinctSongs)

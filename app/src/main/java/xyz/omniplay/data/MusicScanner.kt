@@ -207,12 +207,18 @@ class MusicScanner(private val context: Context) {
         onProgressBatch: ((List<Song>) -> Unit)? = null
     ): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
-        val folderRelativePath = getRelativePathFromTreeUri(treeUri)
+        val storageInfo = MusicFolderManager.getFolderStorageInfo(treeUri.toString())
+        val basePathPrefix = MusicFolderManager.getFolderBasePathPrefix(treeUri.toString())
+        val folderRelativePath = storageInfo.second.ifEmpty { getRelativePathFromTreeUri(treeUri) ?: "" }
 
         // 1. MediaStore-First Fast Path:
-        // Pre-query MediaStore for this folder tree. MediaStore has all audio metadata pre-indexed in SQLite.
-        val mediaStoreSongs = if (!folderRelativePath.isNullOrEmpty()) {
-            scanMediaStoreForFolder(folderRelativePath)
+        // Pre-query MediaStore strictly scoped to this folder and volume.
+        val mediaStoreSongs = if (basePathPrefix.isNotEmpty() || folderRelativePath.isNotEmpty()) {
+            scanMediaStoreForFolder(
+                folderPath = folderRelativePath,
+                basePathPrefix = basePathPrefix,
+                volumeId = storageInfo.first
+            )
         } else {
             emptyList()
         }
@@ -279,7 +285,8 @@ class MusicScanner(private val context: Context) {
                 }.toSet()
                 val missingFromSaf = mediaStoreSongs.filter { msSong ->
                     File(msSong.filePath).name.lowercase(Locale.ROOT) !in existingNames &&
-                            fileActuallyExists(context, msSong.filePath, msSong.contentUri)
+                            fileActuallyExists(context, msSong.filePath, msSong.contentUri) &&
+                            (basePathPrefix.isEmpty() || msSong.filePath.startsWith(basePathPrefix, ignoreCase = true))
                 }
                 if (missingFromSaf.isNotEmpty()) {
                     songsList.addAll(missingFromSaf.map { msSong ->
@@ -295,7 +302,10 @@ class MusicScanner(private val context: Context) {
             }
             songsList
         } else if (mediaStoreSongs.isNotEmpty()) {
-            mediaStoreSongs.filter { fileActuallyExists(context, it.filePath, it.contentUri) }.map { msSong ->
+            mediaStoreSongs.filter {
+                fileActuallyExists(context, it.filePath, it.contentUri) &&
+                        (basePathPrefix.isEmpty() || it.filePath.startsWith(basePathPrefix, ignoreCase = true))
+            }.map { msSong ->
                 if (msSong.folderName.isEmpty() || msSong.folderName.equals("Music", ignoreCase = true)) {
                     msSong.copy(folderName = rootFolderName)
                 } else if (!msSong.folderName.startsWith(rootFolderName, ignoreCase = true)) {
@@ -304,8 +314,6 @@ class MusicScanner(private val context: Context) {
                     msSong
                 }
             }
-        } else if (folderRelativePath.isNullOrEmpty()) {
-            scanMediaStore()
         } else {
             emptyList()
         }
@@ -314,11 +322,25 @@ class MusicScanner(private val context: Context) {
     }
 
     /**
-     * Queries MediaStore for audio files within a specific folder path.
+     * Queries MediaStore for audio files within a specific folder path and optional volume/basePath prefix.
      */
-    suspend fun scanMediaStoreForFolder(folderPath: String): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun scanMediaStoreForFolder(
+        folderPath: String,
+        basePathPrefix: String = "",
+        volumeId: String = ""
+    ): List<Song> = withContext(Dispatchers.IO) {
         val songsList = mutableListOf<Song>()
-        val collection: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val collection: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && volumeId.isNotEmpty()) {
+            try {
+                if (volumeId.equals("primary", ignoreCase = true)) {
+                    MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                } else {
+                    MediaStore.Audio.Media.getContentUri(volumeId.lowercase(Locale.ROOT))
+                }
+            } catch (_: Exception) {
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
         } else {
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -338,8 +360,7 @@ class MusicScanner(private val context: Context) {
         )
 
         val cleanPath = folderPath.trim('/')
-        val selection: String
-        val selectionArgs: Array<String>
+        val cleanPrefix = basePathPrefix.trimEnd('/')
 
         val audioFilter = "(${MediaStore.Audio.Media.IS_MUSIC} != 0 OR " +
                 "${MediaStore.Audio.Media.MIME_TYPE} LIKE 'audio/%' OR " +
@@ -349,19 +370,28 @@ class MusicScanner(private val context: Context) {
                 "${MediaStore.Audio.Media.DATA} LIKE '%.m4a' OR " +
                 "${MediaStore.Audio.Media.DATA} LIKE '%.wav')"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            selection = "$audioFilter AND (" +
-                    "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
-                    "${MediaStore.Audio.Media.RELATIVE_PATH} = ? OR " +
-                    "${MediaStore.Audio.Media.DATA} LIKE ?)"
-            selectionArgs = arrayOf(
-                "$cleanPath/%",
-                "$cleanPath/",
-                "%$cleanPath/%"
+        val (selection, selectionArgs) = if (cleanPrefix.isNotEmpty()) {
+            Pair(
+                "$audioFilter AND (${MediaStore.Audio.Media.DATA} LIKE ? OR ${MediaStore.Audio.Media.DATA} = ?)",
+                arrayOf("$cleanPrefix/%", cleanPrefix)
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            Pair(
+                "$audioFilter AND (" +
+                        "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR " +
+                        "${MediaStore.Audio.Media.RELATIVE_PATH} = ? OR " +
+                        "${MediaStore.Audio.Media.DATA} LIKE ?)",
+                arrayOf(
+                    "$cleanPath/%",
+                    "$cleanPath/",
+                    "%$cleanPath/%"
+                )
             )
         } else {
-            selection = "$audioFilter AND (${MediaStore.Audio.Media.DATA} LIKE ?)"
-            selectionArgs = arrayOf("%/$cleanPath/%")
+            Pair(
+                "$audioFilter AND (${MediaStore.Audio.Media.DATA} LIKE ?)",
+                arrayOf("%/$cleanPath/%")
+            )
         }
 
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
@@ -395,16 +425,24 @@ class MusicScanner(private val context: Context) {
         val prioritySongs = mutableListOf<Song>()
         val cleanPath = folderPath.trim('/')
 
-        // 1. Fast MediaStore query for this folder path
+        // 1. Fast MediaStore query for this folder path across configured folderUris
         val msSongs = try {
             val list = mutableListOf<Song>()
-            list.addAll(scanMediaStoreForFolder(cleanPath))
-            if (cleanPath.contains('/')) {
-                val lastSeg = cleanPath.substringAfterLast('/')
-                list.addAll(scanMediaStoreForFolder(lastSeg))
+            for (treeUri in folderUris) {
+                val prefix = MusicFolderManager.getFolderBasePathPrefix(treeUri.toString())
+                val storageInfo = MusicFolderManager.getFolderStorageInfo(treeUri.toString())
+                list.addAll(
+                    scanMediaStoreForFolder(
+                        folderPath = storageInfo.second,
+                        basePathPrefix = prefix,
+                        volumeId = storageInfo.first
+                    )
+                )
             }
-            list.filter { fileActuallyExists(context, it.filePath, it.contentUri) }
-                .distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
+            list.filter {
+                fileActuallyExists(context, it.filePath, it.contentUri) &&
+                        MusicFolderManager.isSongInConfiguredFolders(context, it)
+            }.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -443,7 +481,8 @@ class MusicScanner(private val context: Context) {
                     val sFolder = s.folderName.lowercase(Locale.ROOT)
                     val sPath = s.filePath.lowercase(Locale.ROOT)
                     (sFolder.contains(pLower) || sPath.contains(pLower)) &&
-                            fileActuallyExists(context, s.filePath, s.contentUri)
+                            fileActuallyExists(context, s.filePath, s.contentUri) &&
+                            MusicFolderManager.isSongInConfiguredFolders(context, s)
                 }
                 prioritySongs.addAll(matchingSaf)
             } catch (e: Exception) {
@@ -451,7 +490,8 @@ class MusicScanner(private val context: Context) {
             }
         }
 
-        prioritySongs.distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
+        prioritySongs.filter { MusicFolderManager.isSongInConfiguredFolders(context, it) }
+            .distinctBy { it.filePath.ifEmpty { it.contentUri.toString() } }
     }
 
     private suspend fun scanFolderDocumentsContract(
