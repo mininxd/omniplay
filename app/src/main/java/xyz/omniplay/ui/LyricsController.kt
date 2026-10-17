@@ -55,6 +55,40 @@ class LyricsController(
     val isAnyLyricsShowing: Boolean
         get() = isLyricsShowing || isFullScreenLyricsShowing
 
+    fun getActiveSong(): Song? {
+        val syncManager = xyz.omniplay.sync.OmniSyncManager.getInstance(activity)
+        if (syncManager.currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+            val rawTitle = syncManager.currentTrackTitle.trim()
+            if (rawTitle.isNotEmpty() && !rawTitle.equals("Waiting for stream…", ignoreCase = true)) {
+                var title = rawTitle
+                var artist = syncManager.currentTrackArtist.trim()
+                if (artist.equals("OmniSync Stream", ignoreCase = true) || artist.equals("Host Broadcast", ignoreCase = true)) {
+                    artist = ""
+                }
+                if (artist.isEmpty() && title.contains(" - ")) {
+                    val pArtist = title.substringBefore(" - ").trim()
+                    val pTitle = title.substringAfter(" - ").trim()
+                    if (pArtist.isNotEmpty() && pTitle.isNotEmpty()) {
+                        artist = pArtist
+                        title = pTitle
+                    }
+                }
+                val dur = syncManager.currentStreamDurationMs
+                val songId = (java.util.UUID.nameUUIDFromBytes((title + artist).toByteArray()).mostSignificantBits and Long.MAX_VALUE).let { if (it == 0L) 1L else it }
+                return Song(
+                    id = songId,
+                    title = title,
+                    artist = artist,
+                    album = "",
+                    duration = dur,
+                    contentUri = android.net.Uri.EMPTY
+                )
+            }
+            return null
+        }
+        return getPlaybackService()?.currentSong
+    }
+
     private var isUserScrollingLyrics = false
     private val lyricsScrollResetHandler = Handler(Looper.getMainLooper())
     private val resetUserScrollingRunnable = Runnable { isUserScrollingLyrics = false }
@@ -116,17 +150,19 @@ class LyricsController(
         lyricAdapter = LyricAdapter(
             isFullScreen = false,
             onLineClick = { line ->
-                val service = getPlaybackService()
-                service?.seekTo(line.timeMs.toInt())
-                binding.playbackSlider.setProgress(line.timeMs)
-                binding.currentTimeText.text = Song.formatTime(line.timeMs)
-                binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
-                binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
-                isUserScrollingLyrics = false
-                try {
-                    binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                } catch (ignored: Exception) {}
-                onSeek(line.timeMs)
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole != xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    val service = getPlaybackService()
+                    service?.seekTo(line.timeMs.toInt())
+                    binding.playbackSlider.setProgress(line.timeMs)
+                    binding.currentTimeText.text = Song.formatTime(line.timeMs)
+                    binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
+                    isUserScrollingLyrics = false
+                    try {
+                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    } catch (ignored: Exception) {}
+                    onSeek(line.timeMs)
+                }
             },
             onLineDoubleTap = { view ->
                 openFullScreenLyrics(view)
@@ -152,17 +188,19 @@ class LyricsController(
         fullScreenLyricAdapter = LyricAdapter(
             isFullScreen = true,
             onLineClick = { line ->
-                val service = getPlaybackService()
-                service?.seekTo(line.timeMs.toInt())
-                binding.playbackSlider.setProgress(line.timeMs)
-                binding.currentTimeText.text = Song.formatTime(line.timeMs)
-                binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
-                binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
-                isUserScrollingFullScreenLyrics = false
-                try {
-                    binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                } catch (ignored: Exception) {}
-                onSeek(line.timeMs)
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole != xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    val service = getPlaybackService()
+                    service?.seekTo(line.timeMs.toInt())
+                    binding.playbackSlider.setProgress(line.timeMs)
+                    binding.currentTimeText.text = Song.formatTime(line.timeMs)
+                    binding.fullscreenPlaybackSlider.setProgress(line.timeMs)
+                    binding.fullscreenCurrentTimeText.text = Song.formatTime(line.timeMs)
+                    isUserScrollingFullScreenLyrics = false
+                    try {
+                        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    } catch (ignored: Exception) {}
+                    onSeek(line.timeMs)
+                }
             }
         ).apply {
             baseFontSizeSp = this@LyricsController.baseFontSizeSp
@@ -226,10 +264,16 @@ class LyricsController(
     }
 
     private fun prepareFullscreenLyricsForOpen() {
-        val song = getPlaybackService()?.currentSong
+        val song = getActiveSong()
         if (song != null) {
             binding.fullscreenLyricsSongTitle.text = song.title
-            binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty { activity.getString(R.string.unknown_artist) }
+            binding.fullscreenLyricsArtistName.text = song.artist.trim().ifEmpty {
+                if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    "OmniSync Stream"
+                } else {
+                    activity.getString(R.string.unknown_artist)
+                }
+            }
         }
         val currLyrics = currentLyrics
         val currentBadge = when {
@@ -495,9 +539,12 @@ class LyricsController(
                 binding.lyricsCard.scaleX = 1f
                 binding.lyricsCard.scaleY = 1f
                 binding.lyricsCard.alpha = 1f
-                getPlaybackService()?.let { service ->
-                    updateLyricsProgress(service.getCurrentPosition().toLong())
+                val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                    binding.playbackSlider.progress.toLong()
+                } else {
+                    getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
                 }
+                updateLyricsProgress(currentPos)
             }
             .start()
     }
@@ -548,10 +595,12 @@ class LyricsController(
 
         // Ensure the container is laid out before calculating animations
         binding.fullscreenLyricsContainer.post {
-            // Sync background immediately before animation begins
-            getPlaybackService()?.let { service ->
-                updateLyricsProgress(service.getCurrentPosition().toLong())
+            val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                binding.playbackSlider.progress.toLong()
+            } else {
+                getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
             }
+            updateLyricsProgress(currentPos)
 
             // Fallback to albumArtCard if lyricsCard is invisible or 0-width (e.g. direct fullscreen)
             val startView = if (binding.lyricsCard.visibility == View.VISIBLE && binding.lyricsCard.width > 0) {
@@ -626,7 +675,7 @@ class LyricsController(
     }
 
     fun prepareLyricsForDisplay() {
-        val song = getPlaybackService()?.currentSong ?: return
+        val song = getActiveSong() ?: return
         val lyrics = currentLyrics ?: LrcLibClient.getCachedLyrics(activity, song)?.also {
             currentLyrics = it
         }
@@ -643,7 +692,7 @@ class LyricsController(
     }
 
     fun loadLyricsForCurrentSong(forceRefresh: Boolean = false) {
-        val song = getPlaybackService()?.currentSong ?: return
+        val song = getActiveSong() ?: return
         loadLyricsForSong(song, forceRefresh)
     }
 
@@ -668,7 +717,7 @@ class LyricsController(
         lastOnlineLyricsSongId = song.id
         lyricsFetchJob = activity.lifecycleScope.launch {
             val result = LrcLibClient.getLyrics(activity, song, forceRefresh)
-            if (getPlaybackService()?.currentSong?.id == song.id) {
+            if (getActiveSong()?.id == song.id) {
                 when (result) {
                     is LyricsResult.Success -> {
                         currentLyrics = result.lyrics
@@ -755,9 +804,12 @@ class LyricsController(
                     binding.fullscreenLyricsRecyclerView.visibility = View.VISIBLE
                     fullScreenLyricAdapter?.submitLines(lyrics.syncedLyrics ?: emptyList())
 
-                    getPlaybackService()?.let { service ->
-                        updateLyricsProgress(service.getCurrentPosition().toLong())
+                    val currentPos = if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                        binding.playbackSlider.progress.toLong()
+                    } else {
+                        getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
                     }
+                    updateLyricsProgress(currentPos)
                     updateLyricsSourceBadge(lyrics.source, result.isOffline)
                     return
                 }

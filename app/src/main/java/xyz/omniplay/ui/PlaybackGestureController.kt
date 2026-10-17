@@ -110,6 +110,11 @@ class PlaybackGestureController(
         var peekLoadJob: Job? = null
 
         fun updatePeekCard(direction: Int) {
+            if (xyz.omniplay.sync.OmniSyncManager.getInstance(activity).currentRole == xyz.omniplay.sync.OmniSyncRole.LISTENER) {
+                binding.peekAlbumArtCard.visibility = View.INVISIBLE
+                currentPeekSong = null
+                return
+            }
             val service = getPlaybackService()
             val peekSong = if (direction == -1) {
                 service?.getNextSong()

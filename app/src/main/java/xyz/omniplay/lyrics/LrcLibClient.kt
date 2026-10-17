@@ -103,8 +103,17 @@ object LrcLibClient {
         }
 
         val durationSec = (song.duration / 1000).toInt()
-        val cleanTitle = cleanTrackName(rawTitle)
-        val cleanArtist = cleanArtistName(rawArtist)
+        var cleanTitle = cleanTrackName(rawTitle)
+        var cleanArtist = cleanArtistName(rawArtist)
+
+        if (cleanArtist.isEmpty() && rawTitle.contains(" - ")) {
+            val pArtist = cleanArtistName(rawTitle.substringBefore(" - "))
+            val pTitle = cleanTrackName(rawTitle.substringAfter(" - "))
+            if (pArtist.isNotEmpty() && pTitle.isNotEmpty()) {
+                cleanArtist = pArtist
+                cleanTitle = pTitle
+            }
+        }
 
         var lastHttpCode = 200
 
@@ -470,7 +479,13 @@ object LrcLibClient {
     }
 
     fun cleanArtistName(name: String): String {
-        var a = name
+        var a = name.trim()
+        if (a.equals("OmniSync Stream", ignoreCase = true) ||
+            a.equals("Host Broadcast", ignoreCase = true) ||
+            a.equals("Unknown Artist", ignoreCase = true)
+        ) {
+            return ""
+        }
         a = a.replace(Regex("""\s*(feat\.|ft\.).*""", RegexOption.IGNORE_CASE), "")
         val primary = a.split(',', '/', ';').firstOrNull()?.trim()
         return if (!primary.isNullOrEmpty()) primary else a.trim()

@@ -279,7 +279,8 @@
                         android:id="@+id/stream_quality_desc_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
+                        android:layout_marginTop="2dp"
+                        android:lineSpacingExtra="1dp"
                         android:text="High Quality"
                         android:textColor="?attr/colorOutline"
                         android:textSize="11sp" />

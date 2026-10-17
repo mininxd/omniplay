@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="400dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Dynamic Surface Container Background -->
+    <path
+        android:fillColor="?attr/colorSurfaceContainer"
+        android:pathData="M0,0h48v48h-48z" />
+
+    <!-- Dynamic Primary Container Circle Badge -->
+    <path
+        android:fillColor="?attr/colorSurfaceContainerHigh"
+        android:pathData="M24,24m-18,0a18,18 0 1,0 36,0a18,18 0 1,0 -36,0" />
+
+    <!-- Dynamic Subtle Inner Accent Ring -->
+    <path
+        android:strokeColor="?attr/colorPrimary"
+        android:strokeAlpha="0.35"
+        android:strokeWidth="1"
+        android:pathData="M24,24m-15,0a15,15 0 1,0 30,0a15,15 0 1,0 -30,0" />
+
+    <!-- Dynamic OmniSync Streaming Icon (Material You Primary Color) -->
+    <group
+        android:scaleX="1.0"
+        android:scaleY="1.0"
+        android:translateX="12"
+        android:translateY="12">
+        <path
+            android:fillColor="?attr/colorPrimary"
+            android:pathData="M11.18,18.83Q10,17.65 10,16t1.18,-2.83T14,12q0.58,0 1.06,0.14T16,12.55V4h6V7H18v9q0,1.65 -1.18,2.82T14,20T11.18,18.83ZM2,16Q2,13.52 2.95,11.34T5.53,7.52T9.34,4.95T14,4V6Q11.95,6 10.13,6.79T6.94,8.94Q5.58,10.3 4.79,12.11T4,16H2Zm4,0Q6,14.35 6.64,12.89T8.36,10.34T10.9,8.63T14,8v2q-2.5,0 -4.25,1.75T8,16H6Z" />
+    </group>
+
+</vector>

@@ -236,13 +236,13 @@ class OmniSyncManager private constructor(private val context: Context) {
         return when (quality) {
             OmniSyncQuality.HIGH -> {
                 if (isAudioFloatSupported()) {
-                    "High Quality • $bitDepth-bit Float Engine ($srText)"
+                    "High Quality\n$bitDepth-bit Float Engine ($srText)"
                 } else {
-                    "High Quality • $bitDepth-bit Native Engine ($srText)"
+                    "High Quality\n$bitDepth-bit Native Engine ($srText)"
                 }
             }
             OmniSyncQuality.LOW -> {
-                "Low Quality • $bitDepth-bit Standard PCM ($srText)"
+                "Low Quality\n$bitDepth-bit Standard PCM ($srText)"
             }
         }
     }
