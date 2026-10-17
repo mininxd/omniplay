@@ -28,6 +28,10 @@ import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import java.util.Locale
 
+private val STORAGE_EMULATED_REGEX = Regex("^/storage/emulated/[0-9]+/")
+private val STORAGE_NAMED_REGEX = Regex("^/storage/[^/]+/")
+private val SDCARD_REGEX = Regex("^/(sdcard|mnt/sdcard)/")
+
 class DrawerFilterController(
     private val activity: AppCompatActivity,
     private val binding: ActivityMainBinding,
@@ -531,10 +535,10 @@ class DrawerFilterController(
     }
 
     fun getSongFolderSegments(song: Song): List<String> {
+        val rawFolder = song.folderName.trim().trim('/')
         if (MusicFolderManager.hasDuplicateFolderNames(activity)) {
             val rootTitle = MusicFolderManager.getSongRootFolderTitle(activity, song)
             if (rootTitle != null) {
-                val rawFolder = song.folderName.trim().trim('/')
                 if (rawFolder.startsWith(rootTitle, ignoreCase = true)) {
                     val segs = rawFolder.split('/').filter { it.isNotBlank() }
                     if (segs.isNotEmpty()) return segs
@@ -555,9 +559,9 @@ class DrawerFilterController(
         val filePath = song.filePath.trim()
         if (filePath.isNotEmpty() && (filePath.contains('/') || filePath.contains(File.separator))) {
             val pClean = filePath
-                .replace(Regex("^/storage/emulated/[0-9]+/"), "")
-                .replace(Regex("^/storage/[^/]+/"), "")
-                .replace(Regex("^/(sdcard|mnt/sdcard)/"), "")
+                .replace(STORAGE_EMULATED_REGEX, "")
+                .replace(STORAGE_NAMED_REGEX, "")
+                .replace(SDCARD_REGEX, "")
                 .trimStart('/')
             if (pClean.contains('/')) {
                 val dirPart = pClean.substringBeforeLast('/')
@@ -581,8 +585,8 @@ class DrawerFilterController(
             }
         }
 
-        if (song.folderName.isNotBlank()) {
-            val segs = song.folderName.trim().trim('/').split('/').filter { it.isNotBlank() }
+        if (rawFolder.isNotBlank()) {
+            val segs = rawFolder.split('/').filter { it.isNotBlank() }
             if (segs.isNotEmpty()) return segs
         }
 

@@ -1123,13 +1123,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (filterVal.isNullOrEmpty()) {
                     allScannedSongs
                 } else {
+                    val hasDuplicates = MusicFolderManager.hasDuplicateFolderNames(this)
                     allScannedSongs.filter { song ->
                         val segs = drawerFilterController.getSongFolderSegments(song)
                         val folderPath = segs.joinToString("/")
                         folderPath.equals(filterVal, ignoreCase = true) ||
                                 folderPath.startsWith("$filterVal/", ignoreCase = true) ||
                                 (segs.isNotEmpty() && segs[0].equals(filterVal, ignoreCase = true)) ||
-                                (!MusicFolderManager.hasDuplicateFolderNames(this) && (segs.any { it.equals(filterVal, ignoreCase = true) } || song.getResolvedFolderName().equals(filterVal, ignoreCase = true)))
+                                (!hasDuplicates && (segs.any { it.equals(filterVal, ignoreCase = true) } || song.getResolvedFolderName().equals(filterVal, ignoreCase = true)))
                     }
                 }
             }
