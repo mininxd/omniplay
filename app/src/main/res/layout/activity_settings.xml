@@ -517,7 +517,7 @@
                     android:id="@+id/icon_volume_normalization"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
-                    android:src="@drawable/ic_audio_quality"
+                    android:src="@drawable/ic_volume_up"
                     app:tint="?attr/colorPrimary" />
 
                 <LinearLayout

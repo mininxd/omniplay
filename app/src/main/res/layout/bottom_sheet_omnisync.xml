@@ -280,7 +280,7 @@
                             <ImageView
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
-                                android:src="@drawable/ic_music_note"
+                                android:src="@drawable/ic_volume_up"
                                 app:tint="?attr/colorOnSurfaceVariant" />
 
                             <com.google.android.material.slider.Slider
