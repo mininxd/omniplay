@@ -13,6 +13,7 @@ import android.view.ScaleGestureDetector
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.WindowManager
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
@@ -52,7 +53,20 @@ class LyricsController(
         private set
 
     var isFullScreenLyricsShowing: Boolean = false
-        private set
+        private set(value) {
+            field = value
+            updateKeepScreenOnState()
+        }
+
+    private fun updateKeepScreenOnState() {
+        if (isFullScreenLyricsShowing) {
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            binding.fullscreenLyricsContainer.keepScreenOn = true
+        } else {
+            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            binding.fullscreenLyricsContainer.keepScreenOn = false
+        }
+    }
 
     val isAnyLyricsShowing: Boolean
         get() = isLyricsShowing || isFullScreenLyricsShowing
@@ -1094,5 +1108,7 @@ class LyricsController(
         lyricsFetchJob?.cancel()
         lyricsScrollResetHandler.removeCallbacks(resetUserScrollingRunnable)
         fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
+        activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        binding.fullscreenLyricsContainer.keepScreenOn = false
     }
 }
