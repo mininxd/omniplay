@@ -733,14 +733,6 @@ class OmniSyncManager private constructor(private val context: Context) {
         streamServer.broadcastEvent(json)
     }
 
-    fun setListenerVolume(volume: Float) {
-        val clamped = volume.coerceIn(0f, 1f)
-        try {
-            listenerPlayer?.volume = clamped
-        } catch (_: Throwable) {}
-        notifyVolumeChanged(clamped)
-    }
-
     private fun notifyVolumeChanged(volume: Float) {
         mainHandler.post {
             listeners.forEach { it.onVolumeChanged(volume) }
@@ -1518,11 +1510,13 @@ class OmniSyncManager private constructor(private val context: Context) {
     }
 
     fun setListenerVolume(volume: Float) {
-        listenerVolume = volume.coerceIn(0f, 1f)
+        val clamped = volume.coerceIn(0f, 1f)
+        listenerVolume = clamped
         mainHandler.post {
             try {
-                listenerPlayer?.volume = listenerVolume
+                listenerPlayer?.volume = clamped
             } catch (ignored: Exception) {}
+            notifyVolumeChanged(clamped)
         }
     }
 
