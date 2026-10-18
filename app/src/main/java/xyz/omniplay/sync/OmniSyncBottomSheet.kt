@@ -14,6 +14,7 @@ import xyz.omniplay.R
 import xyz.omniplay.model.Song
 import xyz.omniplay.databinding.BottomSheetOmnisyncBinding
 import xyz.omniplay.databinding.ItemOmnisyncHostBinding
+import xyz.omniplay.databinding.ItemOmnisyncPeerBinding
 import xyz.omniplay.util.ThemeColors
 import xyz.omniplay.util.ThemeHelper
 
@@ -56,6 +57,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         syncManager = OmniSyncManager.getInstance(requireContext())
         syncManager.addListener(this)
 
+        if (syncManager.currentRole == OmniSyncRole.LISTENER) {
+            binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
+        } else {
+            binding.syncModeToggleGroup.check(R.id.btn_tab_host)
+        }
+
         setupTabs()
         setupStreamQuality()
         setupHostView()
@@ -85,23 +92,112 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
     private fun setupTabs() {
         binding.syncModeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
-                when (checkedId) {
-                    R.id.btn_tab_host -> {
-                        binding.hostLayoutContainer.visibility = View.VISIBLE
-                        binding.listenerLayoutContainer.visibility = View.GONE
-                        if (syncManager.currentRole == OmniSyncRole.IDLE) {
-                            syncManager.stopScanningHosts()
-                        }
+                updateContainerVisibility(checkedId)
+            }
+        }
+    }
+
+    private fun updateContainerVisibility(checkedId: Int = binding.syncModeToggleGroup.checkedButtonId) {
+        if (_binding == null) return
+        val role = syncManager.currentRole
+
+        when (checkedId) {
+            R.id.btn_tab_host -> {
+                binding.hostLayoutContainer.visibility = View.VISIBLE
+                binding.listenerLayoutContainer.visibility = View.GONE
+
+                if (role == OmniSyncRole.LISTENER) {
+                    binding.hostControlsContainer.visibility = View.GONE
+                    binding.listenerHostInfoContainer.visibility = View.VISIBLE
+                    updateHostInfoView()
+                } else {
+                    binding.hostControlsContainer.visibility = View.VISIBLE
+                    binding.listenerHostInfoContainer.visibility = View.GONE
+                }
+
+                if (role == OmniSyncRole.IDLE) {
+                    syncManager.stopScanningHosts()
+                }
+            }
+            R.id.btn_tab_listener -> {
+                binding.hostLayoutContainer.visibility = View.GONE
+                binding.listenerLayoutContainer.visibility = View.VISIBLE
+
+                when (role) {
+                    OmniSyncRole.HOST -> {
+                        binding.hostConnectedDevicesContainer.visibility = View.VISIBLE
+                        binding.listenerConnectedContainer.visibility = View.GONE
+                        binding.listenerDiscoveryContainer.visibility = View.GONE
+                        binding.streamQualityContainer.visibility = View.GONE
+                        updateConnectedDevicesList(syncManager.connectedPeers)
                     }
-                    R.id.btn_tab_listener -> {
-                        binding.hostLayoutContainer.visibility = View.GONE
-                        binding.listenerLayoutContainer.visibility = View.VISIBLE
-                        if (syncManager.currentRole == OmniSyncRole.IDLE) {
-                            syncManager.startScanningHosts()
-                        }
+                    OmniSyncRole.LISTENER -> {
+                        binding.hostConnectedDevicesContainer.visibility = View.GONE
+                        binding.listenerConnectedContainer.visibility = View.VISIBLE
+                        binding.listenerDiscoveryContainer.visibility = View.GONE
+                        binding.streamQualityContainer.visibility = View.VISIBLE
+                    }
+                    OmniSyncRole.IDLE -> {
+                        binding.hostConnectedDevicesContainer.visibility = View.GONE
+                        binding.listenerConnectedContainer.visibility = View.GONE
+                        binding.listenerDiscoveryContainer.visibility = View.VISIBLE
+                        binding.streamQualityContainer.visibility = View.VISIBLE
+                        syncManager.startScanningHosts()
+                        onHostsDiscovered(syncManager.discoveredHosts)
                     }
                 }
             }
+        }
+    }
+
+    private fun updateConnectedDevicesList(peers: List<OmniSyncPeer>) {
+        if (_binding == null) return
+        val count = peers.size
+        binding.hostListenersCountText.text = if (count == 1) "1 listener connected" else "$count listeners connected"
+        binding.connectedDevicesBadge.text = if (count == 1) "1 Device" else "$count Devices"
+
+        val ip = syncManager.getLocalIPv4Address() ?: "Wi-Fi / Hotspot"
+        binding.devicesBroadcastIpText.text = "$ip:${OmniSyncManager.STREAM_PORT}"
+
+        val container = binding.connectedDevicesList
+        container.removeAllViews()
+
+        if (peers.isEmpty()) {
+            binding.hostNoDevicesCard.visibility = View.VISIBLE
+        } else {
+            binding.hostNoDevicesCard.visibility = View.GONE
+            val inflater = LayoutInflater.from(requireContext())
+            for (peer in peers) {
+                val itemBinding = ItemOmnisyncPeerBinding.inflate(inflater, container, false)
+                itemBinding.peerNameText.text = peer.name.ifEmpty { "Connected Device" }
+                itemBinding.peerAddressText.text = peer.ip
+                itemBinding.peerStatusBadge.text = "Connected"
+                container.addView(itemBinding.root)
+            }
+        }
+    }
+
+    private fun updateHostInfoView() {
+        if (_binding == null) return
+        val host = syncManager.currentHost
+        val roomName = syncManager.currentHostRoomName ?: host?.name ?: "Host Room"
+        val address = host?.address ?: "Unknown"
+        val port = host?.streamPort ?: OmniSyncManager.STREAM_PORT
+
+        binding.hostInfoRoomName.text = roomName
+        binding.hostInfoAddress.text = "$address:$port"
+        binding.hostInfoStatusBadge.text = if (syncManager.isStreamPlaying) "STREAMING" else "HOST ACTIVE"
+        binding.hostInfoQualityText.text = syncManager.getStreamQualityDescription(syncManager.streamQuality)
+
+        val latency = syncManager.currentLatencyMs
+        binding.hostInfoLatencyText.text = if (latency > 0L) "${latency}ms" else "< 15ms"
+
+        if (syncManager.currentTrackTitle.isNotEmpty()) {
+            binding.hostInfoSongTitle.text = syncManager.currentTrackTitle
+            binding.hostInfoSongArtist.text = syncManager.currentTrackArtist.ifEmpty { "Host Broadcast" }
+        } else {
+            binding.hostInfoSongTitle.text = "Waiting for stream…"
+            binding.hostInfoSongArtist.text = "Host Broadcast"
         }
     }
 
@@ -109,6 +205,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         binding.hostRoomNameText.text = syncManager.deviceName
         val ip = syncManager.getLocalIPv4Address() ?: "Wi-Fi / Hotspot"
         binding.hostIpText.text = "$ip:${OmniSyncManager.STREAM_PORT}"
+        binding.devicesBroadcastIpText.text = "$ip:${OmniSyncManager.STREAM_PORT}"
 
         val currentSong = syncManager.hostSongProvider?.invoke()
         if (currentSong != null) {
@@ -125,6 +222,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             } else {
                 syncManager.startHost(syncManager.deviceName)
             }
+        }
+
+        binding.btnDevicesStopHost.setOnClickListener {
+            syncManager.stopHost()
         }
     }
 
@@ -167,6 +268,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
             syncManager.startScanningHosts()
         }
+
+        binding.btnHostInfoDisconnect.setOnClickListener {
+            syncManager.disconnectListener()
+            binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
+            syncManager.startScanningHosts()
+        }
     }
 
     private fun updateUIForCurrentRole(role: OmniSyncRole) {
@@ -174,16 +281,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
         when (role) {
             OmniSyncRole.HOST -> {
-                binding.hostLayoutContainer.visibility = View.VISIBLE
-                binding.listenerLayoutContainer.visibility = View.GONE
-                binding.syncModeToggleGroup.check(R.id.btn_tab_host)
                 binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_stop_host)
                 binding.hostStatusBadge.text = "STREAMING"
                 binding.hostStatusBadge.setTextColor(ThemeColors.getPrimary(requireContext()))
                 binding.syncBadge.text = "Host Active"
                 binding.btnManualConnect.isEnabled = false
-                onPeersChanged(syncManager.connectedPeers)
 
                 val song = syncManager.hostSongProvider?.invoke()
                 if (song != null) {
@@ -191,20 +294,18 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 } else {
                     binding.hostNowPlayingText.text = "No track playing in Omniplay"
                 }
+
+                updateConnectedDevicesList(syncManager.connectedPeers)
+                updateContainerVisibility()
             }
             OmniSyncRole.LISTENER -> {
-                binding.hostLayoutContainer.visibility = View.GONE
-                binding.listenerLayoutContainer.visibility = View.VISIBLE
-                binding.listenerDiscoveryContainer.visibility = View.GONE
-                binding.listenerConnectedContainer.visibility = View.VISIBLE
-                binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
+                binding.syncBadge.text = "Listener"
                 binding.btnHostAction.isEnabled = false
                 binding.btnHostAction.text = "Cannot Host While Listening"
 
                 val host = syncManager.currentHost
                 binding.connectedHostNameText.text = syncManager.currentHostRoomName ?: host?.name ?: "Connected Host"
                 binding.connectedHostIpText.text = host?.address ?: ""
-                binding.syncBadge.text = "Listener"
 
                 if (syncManager.currentTrackTitle.isNotEmpty()) {
                     binding.connectedSongTitleText.text = syncManager.currentTrackTitle
@@ -220,11 +321,11 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 } else {
                     binding.listenerLatencyBadge.visibility = View.GONE
                 }
+
+                updateHostInfoView()
+                updateContainerVisibility()
             }
             OmniSyncRole.IDLE -> {
-                val isHostTab = binding.syncModeToggleGroup.checkedButtonId == R.id.btn_tab_host
-                binding.hostLayoutContainer.visibility = if (isHostTab) View.VISIBLE else View.GONE
-                binding.listenerLayoutContainer.visibility = if (isHostTab) View.GONE else View.VISIBLE
                 binding.btnHostAction.isEnabled = true
                 binding.btnHostAction.text = getString(R.string.omnisync_start_host)
                 binding.hostStatusBadge.text = "IDLE"
@@ -234,10 +335,8 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
                 binding.listenerLatencyBadge.visibility = View.GONE
-                if (!isHostTab) {
-                    syncManager.startScanningHosts()
-                }
-                onHostsDiscovered(syncManager.discoveredHosts)
+
+                updateContainerVisibility()
             }
         }
     }
@@ -248,6 +347,11 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     override fun onRoleChanged(role: OmniSyncRole) {
         if (_binding != null) {
+            when (role) {
+                OmniSyncRole.HOST -> binding.syncModeToggleGroup.check(R.id.btn_tab_host)
+                OmniSyncRole.LISTENER -> binding.syncModeToggleGroup.check(R.id.btn_tab_listener)
+                OmniSyncRole.IDLE -> {}
+            }
             updateUIForCurrentRole(role)
         }
     }
@@ -291,20 +395,25 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
 
     override fun onPeersChanged(peers: List<OmniSyncPeer>) {
         if (_binding == null) return
-        val count = peers.size
-        binding.hostListenersCountText.text = if (count == 1) "1 listener connected" else "$count listeners connected"
+        updateConnectedDevicesList(peers)
     }
 
     override fun onTrackInfoChanged(title: String, artist: String) {
         if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
-            binding.connectedSongTitleText.text = title.ifEmpty { "Waiting for stream…" }
-            binding.connectedSongArtistText.text = artist.ifEmpty { "Host Broadcast" }
+            val displayTitle = title.ifEmpty { "Waiting for stream…" }
+            val displayArtist = artist.ifEmpty { "Host Broadcast" }
+            binding.connectedSongTitleText.text = displayTitle
+            binding.connectedSongArtistText.text = displayArtist
+            binding.hostInfoSongTitle.text = displayTitle
+            binding.hostInfoSongArtist.text = displayArtist
         }
     }
 
     override fun onPlaybackStateChanged(isPlaying: Boolean) {
         if (_binding != null && syncManager.currentRole == OmniSyncRole.LISTENER) {
-            binding.listenerStatusBadge.text = if (isPlaying) "STREAMING" else "PAUSED"
+            val stateText = if (isPlaying) "STREAMING" else "PAUSED"
+            binding.listenerStatusBadge.text = stateText
+            binding.hostInfoStatusBadge.text = stateText
         }
     }
 
@@ -325,8 +434,10 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             if (latencyMs > 0L) {
                 binding.listenerLatencyBadge.text = "${latencyMs}ms"
                 binding.listenerLatencyBadge.visibility = View.VISIBLE
+                binding.hostInfoLatencyText.text = "${latencyMs}ms"
             } else {
                 binding.listenerLatencyBadge.visibility = View.GONE
+                binding.hostInfoLatencyText.text = "< 15ms"
             }
         }
     }
@@ -338,12 +449,14 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.streamQualityToggleGroup.check(targetBtnId)
             }
             updateStreamQualityUI(quality)
+            binding.hostInfoQualityText.text = syncManager.getStreamQualityDescription(quality)
         }
     }
 
     override fun onTrackAudioInfoChanged(format: String, quality: String, isHiRes: Boolean) {
         if (_binding != null) {
             updateStreamQualityUI(syncManager.streamQuality)
+            binding.hostInfoQualityText.text = syncManager.getStreamQualityDescription(syncManager.streamQuality)
         }
     }
 
