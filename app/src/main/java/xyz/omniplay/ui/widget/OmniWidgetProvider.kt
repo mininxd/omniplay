@@ -98,7 +98,13 @@ class OmniWidgetProvider : AppWidgetProvider() {
             // Track metadata
             if (song != null) {
                 views.setTextViewText(R.id.widget_title, song.title)
-                views.setTextViewText(R.id.widget_artist, "${song.artist} • ${song.album}")
+                val artistText = when {
+                    !song.artist.isNullOrBlank() && !song.album.isNullOrBlank() -> "${song.artist} • ${song.album}"
+                    !song.artist.isNullOrBlank() -> song.artist
+                    !song.album.isNullOrBlank() -> song.album
+                    else -> ""
+                }
+                views.setTextViewText(R.id.widget_artist, artistText)
             } else {
                 views.setTextViewText(R.id.widget_title, context.getString(R.string.widget_no_track))
                 views.setTextViewText(R.id.widget_artist, context.getString(R.string.app_name))
@@ -108,14 +114,37 @@ class OmniWidgetProvider : AppWidgetProvider() {
             val playPauseRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
             views.setImageViewResource(R.id.widget_btn_play_pause, playPauseRes)
 
-            // Artwork
-            if (albumArt != null) {
-                views.setImageViewBitmap(R.id.widget_album_art, albumArt)
+            // Dynamic color tinting
+            val textPrimary = androidx.core.content.ContextCompat.getColor(context, R.color.text_primary)
+            val onPrimary = androidx.core.content.ContextCompat.getColor(context, R.color.on_primary)
+            views.setInt(R.id.widget_btn_prev, "setColorFilter", textPrimary)
+            views.setInt(R.id.widget_btn_next, "setColorFilter", textPrimary)
+            views.setInt(R.id.widget_btn_play_pause, "setColorFilter", onPrimary)
+
+            // Artwork with rounded corners
+            if (albumArt != null && !albumArt.isRecycled) {
+                val roundedArt = getRoundedBitmap(albumArt, 16f, context.resources.displayMetrics.density)
+                views.setImageViewBitmap(R.id.widget_album_art, roundedArt)
             } else {
                 views.setImageViewResource(R.id.widget_album_art, R.drawable.ic_music_note)
             }
 
             return views
+        }
+
+        private fun getRoundedBitmap(src: Bitmap, cornerRadiusDp: Float, density: Float): Bitmap {
+            return try {
+                val radius = cornerRadiusDp * density
+                val output = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(output)
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                val rect = android.graphics.RectF(0f, 0f, src.width.toFloat(), src.height.toFloat())
+                paint.shader = android.graphics.BitmapShader(src, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+                canvas.drawRoundRect(rect, radius, radius, paint)
+                output
+            } catch (_: Throwable) {
+                src
+            }
         }
     }
 
