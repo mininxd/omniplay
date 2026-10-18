@@ -997,6 +997,8 @@ class OmniSyncManager private constructor(private val context: Context) {
             if (title.isNotEmpty()) {
                 val streamUrl = "$baseUrl/stream?id=$songId"
                 playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying)
+            } else {
+                notifyTrackInfo("", "")
             }
 
             // 2. Real-Time RFC 6455 WebSocket Live Synchronization Channel
@@ -1106,6 +1108,8 @@ class OmniSyncManager private constructor(private val context: Context) {
                 if (title.isNotEmpty()) {
                     val streamUrl = "http://${host.address}:$targetPort/stream?id=$songId"
                     playListenerStream(streamUrl, songId, pos, title, artist, startPlaying = isHostPlaying, durationMs = dur, hostTimestamp = hostTimestamp)
+                } else {
+                    notifyTrackInfo("", "")
                 }
             }
             "PLAY" -> {

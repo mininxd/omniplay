@@ -413,6 +413,9 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             binding.connectedSongArtistText.text = displayArtist
             binding.hostInfoSongTitle.text = displayTitle
             binding.hostInfoSongArtist.text = displayArtist
+            val host = syncManager.currentHost
+            binding.connectedHostNameText.text = syncManager.currentHostRoomName ?: host?.name ?: "Connected Host"
+            updateHostInfoView()
         }
     }
 

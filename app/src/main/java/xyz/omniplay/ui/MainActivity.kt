@@ -179,6 +179,16 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 playExternalAudioUri(pendingUri)
             }
 
+            if (OmniSyncManager.getInstance(this@MainActivity).currentRole == OmniSyncRole.LISTENER) {
+                val sync = OmniSyncManager.getInstance(this@MainActivity)
+                val hostName = sync.currentHostRoomName?.takeIf { it.isNotBlank() }
+                    ?: sync.currentHost?.name?.takeIf { it.isNotBlank() }
+                    ?: "Listening"
+                binding.albumNameText.text = "OmniSync • $hostName"
+                binding.albumArtImage.setImageResource(R.drawable.omnisync_album_art)
+                return
+            }
+
             val currentQueueList = displayedSongs.ifEmpty { scannedSongs }
             if (currentQueueList.isNotEmpty()) {
                 if (playbackService?.currentSong != null) {
@@ -416,6 +426,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         songAdapter?.setShowAlbumArt(isShowArt)
         if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) {
+            val sync = OmniSyncManager.getInstance(this)
+            val hostName = sync.currentHostRoomName?.takeIf { it.isNotBlank() }
+                ?: sync.currentHost?.name?.takeIf { it.isNotBlank() }
+                ?: "Listening"
+            binding.albumNameText.text = "OmniSync • $hostName"
             binding.albumArtImage.setImageResource(R.drawable.omnisync_album_art)
         }
     }
@@ -509,6 +524,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun setupDefaultView() {
+        if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) {
+            val sync = OmniSyncManager.getInstance(this)
+            val hostName = sync.currentHostRoomName?.takeIf { it.isNotBlank() }
+                ?: sync.currentHost?.name?.takeIf { it.isNotBlank() }
+                ?: "Listening"
+            binding.albumNameText.text = "OmniSync • $hostName"
+            return
+        }
         binding.songTitleText.text = getString(R.string.no_track_selected)
         binding.songTitleText.isSelected = true
         binding.artistNameText.text = ""
@@ -1671,8 +1694,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             runOnUiThread {
                 updateOmniSyncButtonState(role)
                 if (role == OmniSyncRole.LISTENER) {
-                    val hostName = OmniSyncManager.getInstance(this@MainActivity).currentHostRoomName
-                    binding.albumNameText.text = "OmniSync • ${hostName ?: "Listening"}"
+                    val sync = OmniSyncManager.getInstance(this@MainActivity)
+                    val hostName = sync.currentHostRoomName?.takeIf { it.isNotBlank() }
+                        ?: sync.currentHost?.name?.takeIf { it.isNotBlank() }
+                        ?: "Listening"
+                    binding.albumNameText.text = "OmniSync • $hostName"
                     binding.albumArtImage.setImageResource(R.drawable.omnisync_album_art)
                     binding.albumArtCard.translationX = 0f
                     binding.albumArtCard.rotation = 0f
@@ -1714,7 +1740,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.fullscreenBtnPrevious.setColorFilter(getInactiveControlTint())
                     binding.fullscreenBtnNext.setColorFilter(getInactiveControlTint())
                     updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
-                    val dur = OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
+                    val dur = sync.currentStreamDurationMs
                     if (dur > 0L) {
                         binding.playbackSlider.updateDuration(dur)
                         binding.totalTimeText.text = Song.formatTime(dur)
@@ -1722,11 +1748,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         binding.fullscreenTotalTimeText.text = Song.formatTime(dur)
                     }
                     updatePlayPauseButton(isPlaying = true)
-                    val activeTitle = OmniSyncManager.getInstance(this@MainActivity).currentTrackTitle
-                    val activeArtist = OmniSyncManager.getInstance(this@MainActivity).currentTrackArtist
-                    if (activeTitle.isNotEmpty()) {
-                        onTrackInfoChanged(activeTitle, activeArtist)
-                    }
+                    val activeTitle = sync.currentTrackTitle
+                    val activeArtist = sync.currentTrackArtist
+                    onTrackInfoChanged(activeTitle, activeArtist)
                 } else if (role == OmniSyncRole.IDLE) {
                     binding.playbackSlider.isSeekable = true
                     binding.playbackSlider.setNeutralMode(false)
@@ -1767,11 +1791,17 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         override fun onTrackInfoChanged(title: String, artist: String) {
             runOnUiThread {
                 if (OmniSyncManager.getInstance(this@MainActivity).currentRole == OmniSyncRole.LISTENER) {
+                    val sync = OmniSyncManager.getInstance(this@MainActivity)
+                    val hostName = sync.currentHostRoomName?.takeIf { it.isNotBlank() }
+                        ?: sync.currentHost?.name?.takeIf { it.isNotBlank() }
+                        ?: "Listening"
+                    binding.albumNameText.text = "OmniSync • $hostName"
+                    binding.albumArtImage.setImageResource(R.drawable.omnisync_album_art)
+
                     if (title.isNotEmpty()) {
                         binding.songTitleText.text = title
                         binding.artistNameText.text = if (artist.isNotEmpty()) artist else "OmniSync Stream"
-                        binding.albumArtImage.setImageResource(R.drawable.omnisync_album_art)
-                        val dur = OmniSyncManager.getInstance(this@MainActivity).currentStreamDurationMs
+                        val dur = sync.currentStreamDurationMs
                         if (dur > 0L) {
                             binding.playbackSlider.updateDuration(dur)
                             binding.totalTimeText.text = Song.formatTime(dur)
@@ -1801,11 +1831,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                             id = (java.util.UUID.nameUUIDFromBytes((trackTitle + trackArtist).toByteArray()).mostSignificantBits and Long.MAX_VALUE).let { if (it == 0L) 1L else it },
                             title = trackTitle,
                             artist = trackArtist,
-                            album = "",
+                            album = "OmniSync • $hostName",
                             duration = dur,
                             contentUri = Uri.EMPTY
                         )
                         lyricsController.onTrackChanged(streamSong)
+                    } else {
+                        binding.songTitleText.text = "Waiting for host…"
+                        binding.artistNameText.text = "OmniSync Stream"
                     }
                 }
             }
