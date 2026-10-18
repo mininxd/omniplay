@@ -123,7 +123,7 @@ class OmniWidgetProvider : AppWidgetProvider() {
 
             // Artwork with rounded corners
             if (albumArt != null && !albumArt.isRecycled) {
-                val roundedArt = getRoundedBitmap(albumArt, 16f, context.resources.displayMetrics.density)
+                val roundedArt = getRoundedBitmap(albumArt, 12f, context.resources.displayMetrics.density)
                 views.setImageViewBitmap(R.id.widget_album_art, roundedArt)
             } else {
                 views.setImageViewResource(R.id.widget_album_art, R.drawable.ic_music_note)
