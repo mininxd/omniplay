@@ -58,14 +58,27 @@ class LyricsController(
             updateKeepScreenOnState()
         }
 
-    private fun updateKeepScreenOnState() {
-        if (isFullScreenLyricsShowing) {
+    fun isMusicCurrentlyPlaying(): Boolean {
+        val sync = OmniSyncManager.getInstance(activity)
+        if (sync.currentRole == OmniSyncRole.LISTENER) {
+            return sync.isStreamPlaying
+        }
+        return getPlaybackService()?.isPlaying() == true
+    }
+
+    fun updateKeepScreenOnState() {
+        val shouldKeepOn = isFullScreenLyricsShowing && isMusicCurrentlyPlaying()
+        if (shouldKeepOn) {
             activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             binding.fullscreenLyricsContainer.keepScreenOn = true
         } else {
             activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             binding.fullscreenLyricsContainer.keepScreenOn = false
         }
+    }
+
+    fun onPlaybackStateChanged(isPlaying: Boolean) {
+        updateKeepScreenOnState()
     }
 
     val isAnyLyricsShowing: Boolean
@@ -1070,8 +1083,10 @@ class LyricsController(
 
         if (newSong == null) {
             renderLyricsResult(LyricsResult.NotFound("No song is currently playing"))
+            updateKeepScreenOnState()
             return
         }
+        updateKeepScreenOnState()
 
         if (isLyricsShowing || isFullScreenLyricsShowing) {
             val cached = LrcLibClient.getCachedLyrics(activity, newSong)

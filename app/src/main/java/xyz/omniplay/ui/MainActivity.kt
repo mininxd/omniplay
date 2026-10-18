@@ -1575,6 +1575,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             updatePlayPauseButton(isPlaying)
             binding.playbackSlider.setPlaying(isPlaying)
             binding.fullscreenPlaybackSlider.setPlaying(isPlaying)
+            lyricsController.onPlaybackStateChanged(isPlaying)
         }
     }
 
@@ -1866,6 +1867,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     updatePlayPauseButton(isPlaying)
                     binding.playbackSlider.setPlaying(isPlaying)
                     binding.fullscreenPlaybackSlider.setPlaying(isPlaying)
+                    lyricsController.onPlaybackStateChanged(isPlaying)
                 }
             }
         }
