@@ -83,6 +83,8 @@ class OmniSyncStreamServer(
                     try {
                         val client = server.accept()
                         client.tcpNoDelay = true
+                        try { client.sendBufferSize = 64 * 1024 } catch (ignored: Exception) {}
+                        try { client.receiveBufferSize = 64 * 1024 } catch (ignored: Exception) {}
                         try { client.setSoLinger(true, 2) } catch (ignored: Exception) {}
                         activeSockets.add(client)
                         launch(Dispatchers.IO) {
