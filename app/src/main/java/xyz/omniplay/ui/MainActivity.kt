@@ -68,6 +68,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_SORT_ASCENDING = "key_sort_ascending"
         const val KEY_CUSTOM_SONG_ORDER = "key_custom_song_order"
         const val KEY_UNIVERSAL_SEARCH = "key_universal_search"
+        const val KEY_IGNORE_SHORT_AUDIO = "key_ignore_short_audio"
+        const val KEY_VOLUME_NORMALIZATION = "key_volume_normalization"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -1250,15 +1252,22 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun updateSongList(songs: List<Song>) {
-        allScannedSongs = songs
-        scannedSongs = songs
-        if (drawerFilterController.activeOngoingQueue.isEmpty() || drawerFilterController.activeOngoingQueueTitle == null) {
-            drawerFilterController.activeOngoingQueue = songs
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val ignoreShort = prefs.getBoolean(KEY_IGNORE_SHORT_AUDIO, true)
+        val filtered = if (ignoreShort) {
+            songs.filterNot { it.duration in 1..29_999L }
         } else {
-            val validSongIds = songs.map { it.id }.toSet()
+            songs
+        }
+        allScannedSongs = filtered
+        scannedSongs = filtered
+        if (drawerFilterController.activeOngoingQueue.isEmpty() || drawerFilterController.activeOngoingQueueTitle == null) {
+            drawerFilterController.activeOngoingQueue = filtered
+        } else {
+            val validSongIds = filtered.map { it.id }.toSet()
             drawerFilterController.activeOngoingQueue = drawerFilterController.activeOngoingQueue.filter { it.id in validSongIds }
         }
-        binding.drawerSubtitleText.text = "${songs.size} songs"
+        binding.drawerSubtitleText.text = "${filtered.size} songs"
         drawerFilterController.updateAllTracksCardUI(isActive = drawerFilterController.isAllTracksDrillDown)
         drawerFilterController.updateFolderFilterVisibility()
         drawerFilterController.updateFilterSubList()

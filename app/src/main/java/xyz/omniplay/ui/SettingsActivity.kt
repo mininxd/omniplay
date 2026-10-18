@@ -106,6 +106,21 @@ class SettingsActivity : AppCompatActivity() {
             showManageFoldersDialog()
         }
 
+        // Filter Short Audio Switch & Row Click
+        binding.titleFilterShortAudio.isSelected = true
+        val isFilterShortAudio = prefs.getBoolean(MainActivity.KEY_IGNORE_SHORT_AUDIO, true)
+        binding.switchFilterShortAudio.isChecked = isFilterShortAudio
+
+        binding.switchFilterShortAudio.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_IGNORE_SHORT_AUDIO, isChecked).apply()
+            isRescanRequested = true
+            prepareResult()
+        }
+
+        binding.settingFilterShortAudio.setOnClickListener {
+            binding.switchFilterShortAudio.toggle()
+        }
+
         // 3. Show Album Art Switch & Row Click (Unified Row)
         binding.titleAlbumArt.isSelected = true
         val isShowArt = prefs.getBoolean(MainActivity.KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
@@ -188,6 +203,19 @@ class SettingsActivity : AppCompatActivity() {
                 prefs.edit().putInt(MainActivity.KEY_CROSSFADE_DURATION, duration).apply()
             }
         })
+
+        // Volume Normalization Switch & Row Click
+        binding.titleVolumeNormalization.isSelected = true
+        val isVolumeNormalization = prefs.getBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, false)
+        binding.switchVolumeNormalization.isChecked = isVolumeNormalization
+
+        binding.switchVolumeNormalization.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, isChecked).apply()
+        }
+
+        binding.settingVolumeNormalization.setOnClickListener {
+            binding.switchVolumeNormalization.toggle()
+        }
 
         // 4. Rescan Music
         binding.settingRescanMusic.setOnClickListener {

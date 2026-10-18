@@ -84,6 +84,7 @@ class OmniSyncManager private constructor(private val context: Context) {
         fun onProgressUpdate(currentPositionMs: Long, durationMs: Long) {}
         fun onLatencyUpdate(latencyMs: Long) {}
         fun onStreamQualityChanged(quality: OmniSyncQuality) {}
+        fun onVolumeChanged(volume: Float) {}
     }
 
     init {
@@ -718,6 +719,34 @@ class OmniSyncManager private constructor(private val context: Context) {
         streamServer.broadcastEvent(json)
     }
 
+    var hostMasterVolume: Float = 1.0f
+
+    fun broadcastVolume(volume: Float) {
+        val clamped = volume.coerceIn(0f, 1f)
+        hostMasterVolume = clamped
+        if (currentRole != OmniSyncRole.HOST) return
+        val json = JSONObject().apply {
+            put("action", "VOLUME")
+            put("volume", clamped.toDouble())
+            put("timestamp", System.currentTimeMillis())
+        }.toString()
+        streamServer.broadcastEvent(json)
+    }
+
+    fun setListenerVolume(volume: Float) {
+        val clamped = volume.coerceIn(0f, 1f)
+        try {
+            listenerPlayer?.volume = clamped
+        } catch (_: Throwable) {}
+        notifyVolumeChanged(clamped)
+    }
+
+    private fun notifyVolumeChanged(volume: Float) {
+        mainHandler.post {
+            listeners.forEach { it.onVolumeChanged(volume) }
+        }
+    }
+
     // =========================================================================
     // LISTENER MODE
     // =========================================================================
@@ -1068,6 +1097,10 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val dur = json.optLong("durationMs", 0L)
                 val isHostPlaying = json.optBoolean("isPlaying", false)
                 val hostTimestamp = json.optLong("timestamp", 0L)
+                val initVol = json.optDouble("volume", -1.0).toFloat()
+                if (initVol in 0f..1f) {
+                    setListenerVolume(initVol)
+                }
                 if (dur > 0L) currentStreamDurationMs = dur
                 if (format.isNotEmpty()) {
                     currentTrackFormat = format
@@ -1147,6 +1180,12 @@ class OmniSyncManager private constructor(private val context: Context) {
             }
             "STOP" -> {
                 disconnectListener("Host stopped broadcasting")
+            }
+            "VOLUME" -> {
+                val vol = json.optDouble("volume", -1.0).toFloat()
+                if (vol in 0f..1f) {
+                    setListenerVolume(vol)
+                }
             }
         }
     }

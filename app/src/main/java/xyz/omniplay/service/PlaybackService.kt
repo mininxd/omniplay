@@ -52,11 +52,18 @@ import xyz.omniplay.dsd.DsdExtractor
 import xyz.omniplay.util.AlbumArtLoader
 import xyz.omniplay.util.AudioInfoExtractor
 import xyz.omniplay.util.AudioTrackInfo
+import android.os.Bundle
+import android.media.audiofx.LoudnessEnhancer
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.MediaDescriptionCompat
+import androidx.media.MediaBrowserServiceCompat
+import xyz.omniplay.util.ReplayGainHelper
+import xyz.omniplay.ui.widget.OmniWidgetProvider
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 
 @OptIn(UnstableApi::class)
-class PlaybackService : Service() {
+class PlaybackService : MediaBrowserServiceCompat() {
 
     companion object {
         const val CHANNEL_ID = "omniplay_playback_channel"
@@ -71,15 +78,130 @@ class PlaybackService : Service() {
         const val REPEAT_OFF = 0
         const val REPEAT_ALL = 1
         const val REPEAT_ONE = 2
+
+        const val MEDIA_ROOT_ID = "omniplay_root"
+        const val MEDIA_TRACKS_ID = "omniplay_tracks"
+        const val MEDIA_QUEUE_ID = "omniplay_queue"
     }
 
     private val binder = LocalBinder()
+    private var loudnessEnhancer: LoudnessEnhancer? = null
     private var player: ExoPlayer? = null
     private var fadeOutPlayer: ExoPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private lateinit var audioManager: android.media.AudioManager
     private var audioFocusRequest: AudioFocusRequestCompat? = null
     private var isPausedByTransientLossOfFocus = false
+
+    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
+        return BrowserRoot(MEDIA_ROOT_ID, null)
+    }
+
+    override fun onLoadChildren(parentId: String, result: Result<MutableList<MediaBrowserCompat.MediaItem>>) {
+        val mediaItems = mutableListOf<MediaBrowserCompat.MediaItem>()
+        if (parentId == MEDIA_ROOT_ID) {
+            val tracksDesc = MediaDescriptionCompat.Builder()
+                .setMediaId(MEDIA_TRACKS_ID)
+                .setTitle(getString(R.string.all_tracks))
+                .setSubtitle(getString(R.string.music_library))
+                .build()
+            mediaItems.add(MediaBrowserCompat.MediaItem(tracksDesc, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE))
+
+            val queueDesc = MediaDescriptionCompat.Builder()
+                .setMediaId(MEDIA_QUEUE_ID)
+                .setTitle(getString(R.string.queue_title))
+                .setSubtitle("${queue.size} tracks")
+                .build()
+            mediaItems.add(MediaBrowserCompat.MediaItem(queueDesc, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE))
+            result.sendResult(mediaItems)
+        } else if (parentId == MEDIA_TRACKS_ID) {
+            result.detach()
+            serviceScope.launch(Dispatchers.IO) {
+                val songs = xyz.omniplay.data.MusicDatabase.getInstance(applicationContext).getAllSongs()
+                val items = songs.map { song ->
+                    val desc = MediaDescriptionCompat.Builder()
+                        .setMediaId(song.id.toString())
+                        .setTitle(song.title)
+                        .setSubtitle(song.artist)
+                        .setDescription(song.album)
+                        .setIconUri(song.albumArtUri)
+                        .setMediaUri(song.contentUri)
+                        .build()
+                    MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
+                }.toMutableList()
+                result.sendResult(items)
+            }
+        } else if (parentId == MEDIA_QUEUE_ID) {
+            val items = queue.map { song ->
+                val desc = MediaDescriptionCompat.Builder()
+                    .setMediaId(song.id.toString())
+                    .setTitle(song.title)
+                    .setSubtitle(song.artist)
+                    .setDescription(song.album)
+                    .setIconUri(song.albumArtUri)
+                    .setMediaUri(song.contentUri)
+                    .build()
+                MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
+            }.toMutableList()
+            result.sendResult(items)
+        } else {
+            result.sendResult(mediaItems)
+        }
+    }
+
+    private fun setupLoudnessEnhancer(audioSessionId: Int) {
+        try {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId > 0) {
+                loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+            }
+        } catch (ignored: Throwable) {}
+        applyVolumeNormalization(currentSong)
+    }
+
+    private fun applyVolumeNormalization(song: Song?) {
+        if (crossfadeJob?.isActive == true) return
+        val p = player ?: return
+
+        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val isNormalizationEnabled = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_VOLUME_NORMALIZATION, false)
+
+        if (!isNormalizationEnabled) {
+            try {
+                loudnessEnhancer?.enabled = false
+            } catch (ignored: Throwable) {}
+            p.volume = 1.0f
+            return
+        }
+
+        if (song == null) {
+            p.volume = 1.0f
+            return
+        }
+
+        serviceScope.launch(Dispatchers.IO) {
+            val gainDb = ReplayGainHelper.extractReplayGainDb(applicationContext, song)
+            withContext(Dispatchers.Main) {
+                if (crossfadeJob?.isActive == true) return@withContext
+                if (gainDb != null) {
+                    val linearGain = ReplayGainHelper.dbToLinear(gainDb)
+                    player?.volume = linearGain
+                    try {
+                        loudnessEnhancer?.enabled = false
+                    } catch (ignored: Throwable) {}
+                } else {
+                    player?.volume = 1.0f
+                    try {
+                        loudnessEnhancer?.let { enhancer ->
+                            enhancer.setTargetGain(250)
+                            enhancer.enabled = true
+                        }
+                    } catch (ignored: Throwable) {}
+                }
+            }
+        }
+    }
 
     private val audioFocusChangeListener = android.media.AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
@@ -362,6 +484,12 @@ class PlaybackService : Service() {
                 // If a playback error occurs, advance safely without hanging
                 skipNext(forceNext = false)
             }
+
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (exoInstance == player) {
+                    setupLoudnessEnhancer(audioSessionId)
+                }
+            }
         }
 
         exo.addListener(createListener(exo))
@@ -483,9 +611,56 @@ class PlaybackService : Service() {
                 override fun onSkipToPrevious() { skipPrevious(forcePrevious = false) }
                 override fun onSeekTo(pos: Long) { seekTo(pos.toInt()) }
                 override fun onStop() { pause() }
+
+                override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
+                    if (mediaId == null) return
+                    val songId = mediaId.toLongOrNull() ?: return
+                    serviceScope.launch(Dispatchers.IO) {
+                        val dbSongs = xyz.omniplay.data.MusicDatabase.getInstance(applicationContext).getAllSongs()
+                        val targetSong = dbSongs.find { it.id == songId } ?: queue.find { it.id == songId }
+                        if (targetSong != null) {
+                            withContext(Dispatchers.Main) {
+                                val targetIndex = dbSongs.indexOfFirst { it.id == songId }
+                                if (targetIndex >= 0) {
+                                    setSongQueue(dbSongs, targetIndex, startPlaying = true)
+                                } else {
+                                    playSong(targetSong, startPlaying = true)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                override fun onPlayFromSearch(query: String?, extras: Bundle?) {
+                    if (query.isNullOrBlank()) {
+                        play()
+                        return
+                    }
+                    serviceScope.launch(Dispatchers.IO) {
+                        val dbSongs = xyz.omniplay.data.MusicDatabase.getInstance(applicationContext).getAllSongs()
+                        val match = dbSongs.find {
+                            it.title.contains(query, ignoreCase = true) ||
+                            it.artist.contains(query, ignoreCase = true) ||
+                            it.album.contains(query, ignoreCase = true)
+                        }
+                        if (match != null) {
+                            withContext(Dispatchers.Main) {
+                                val idx = dbSongs.indexOfFirst { it.id == match.id }
+                                setSongQueue(dbSongs, idx, startPlaying = true)
+                            }
+                        }
+                    }
+                }
+
+                override fun onPrepare() {
+                    if (currentSong != null) {
+                        player?.prepare()
+                    }
+                }
             })
             isActive = true
         }
+        sessionToken = mediaSession?.sessionToken
     }
 
     fun addListener(listener: PlaybackListener) {
@@ -856,6 +1031,7 @@ class PlaybackService : Service() {
                         fadeOutPlayer?.clearMediaItems()
                         fadeOutPlayer?.volume = 1f
                         crossfadeJob = null
+                        applyVolumeNormalization(song)
                     }
                 }
             } else {
@@ -871,6 +1047,7 @@ class PlaybackService : Service() {
                     if (startPlaying) {
                         if (requestAudioFocus()) {
                             p.play()
+                            applyVolumeNormalization(song)
                             xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
                         }
                     } else {
@@ -1345,6 +1522,12 @@ class PlaybackService : Service() {
             builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
         }
         mediaSession?.setMetadata(builder.build())
+        OmniWidgetProvider.updateWidget(
+            applicationContext,
+            song,
+            isPlaying(),
+            art
+        )
     }
 
     private fun updatePlaybackState(state: Int, positionMs: Long = getCurrentPosition().toLong()) {
@@ -1361,6 +1544,12 @@ class PlaybackService : Service() {
             .setState(state, positionMs.coerceAtLeast(0L), speed, SystemClock.elapsedRealtime())
             .build()
         mediaSession?.setPlaybackState(playbackState)
+        OmniWidgetProvider.updateWidget(
+            applicationContext,
+            currentSong,
+            state == PlaybackStateCompat.STATE_PLAYING,
+            currentAlbumArt
+        )
     }
 
     private fun buildNotification(isPlaying: Boolean): Notification {
@@ -1475,9 +1664,19 @@ class PlaybackService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder = binder
+    override fun onBind(intent: Intent?): IBinder? {
+        if (intent?.action == "android.media.browse.MediaBrowserService") {
+            return super.onBind(intent)
+        }
+        return binder
+    }
 
     override fun onDestroy() {
+        try {
+            loudnessEnhancer?.release()
+            loudnessEnhancer = null
+        } catch (_: Throwable) {}
+
         val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
         sync.removeListener(omniSyncListener)
         sync.hostSongProvider = null

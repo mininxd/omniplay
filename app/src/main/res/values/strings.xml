@@ -106,5 +106,12 @@
     <string name="search_mode">Search mode</string>
     <string name="no_tracks_found_format">No tracks found matching \"%1$s\"</string>
     <string name="sort_songs">Sort Songs</string>
+    <string name="filter_short_audio">Filter short audio</string>
+    <string name="filter_short_audio_desc">Hide tracks shorter than 30 seconds (ringtones, clips)</string>
+    <string name="volume_normalization">Volume normalization</string>
+    <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
+    <string name="omnisync_master_volume">Broadcast Master Volume</string>
+    <string name="widget_name">Omniplay</string>
+    <string name="widget_no_track">No track playing</string>
 </resources>
 

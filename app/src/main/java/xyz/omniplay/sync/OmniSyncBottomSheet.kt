@@ -227,6 +227,15 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         binding.btnDevicesStopHost.setOnClickListener {
             syncManager.stopHost()
         }
+
+        binding.sliderHostMasterVolume.value = (syncManager.hostMasterVolume * 100f).coerceIn(0f, 100f)
+        binding.textHostMasterVolume.text = "${binding.sliderHostMasterVolume.value.toInt()}%"
+        binding.sliderHostMasterVolume.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                binding.textHostMasterVolume.text = "${value.toInt()}%"
+                syncManager.broadcastVolume(value / 100f)
+            }
+        }
     }
 
     private fun setupListenerView() {
@@ -296,12 +305,14 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 }
 
                 updateConnectedDevicesList(syncManager.connectedPeers)
+                binding.cardHostMasterVolume.visibility = View.VISIBLE
                 updateContainerVisibility()
             }
             OmniSyncRole.LISTENER -> {
                 binding.syncBadge.text = "Listener"
                 binding.btnHostAction.isEnabled = false
                 binding.btnHostAction.text = "Cannot Host While Listening"
+                binding.cardHostMasterVolume.visibility = View.GONE
 
                 val host = syncManager.currentHost
                 binding.connectedHostNameText.text = syncManager.currentHostRoomName ?: host?.name ?: "Connected Host"
@@ -332,6 +343,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.hostStatusBadge.setTextColor(ThemeColors.getOnSurfaceVariant(requireContext()))
                 binding.listenerDiscoveryContainer.visibility = View.VISIBLE
                 binding.listenerConnectedContainer.visibility = View.GONE
+                binding.cardHostMasterVolume.visibility = View.GONE
                 binding.btnManualConnect.isEnabled = true
                 binding.syncBadge.text = "Offline P2P"
                 binding.listenerLatencyBadge.visibility = View.GONE
@@ -457,6 +469,18 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
         if (_binding != null) {
             updateStreamQualityUI(syncManager.streamQuality)
             binding.hostInfoQualityText.text = syncManager.getStreamQualityDescription(syncManager.streamQuality)
+        }
+    }
+
+    override fun onVolumeChanged(volume: Float) {
+        if (_binding != null) {
+            val percent = (volume * 100f).coerceIn(0f, 100f)
+            if (syncManager.currentRole == OmniSyncRole.HOST) {
+                binding.sliderHostMasterVolume.value = percent
+                binding.textHostMasterVolume.text = "${percent.toInt()}%"
+            } else {
+                binding.listenerVolumeSlider.progress = percent.toInt()
+            }
         }
     }
 

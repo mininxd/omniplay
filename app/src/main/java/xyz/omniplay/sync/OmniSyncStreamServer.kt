@@ -307,6 +307,7 @@ class OmniSyncStreamServer(
             put("durationMs", dur)
             put("isPlaying", isLive)
             put("timestamp", System.currentTimeMillis())
+            put("volume", OmniSyncManager.getInstance(context).hostMasterVolume.toDouble())
         }.toString()
         session.sendText(initEvent)
 
@@ -387,6 +388,8 @@ class OmniSyncStreamServer(
             put("positionMs", pos)
             put("durationMs", dur)
             put("isPlaying", isLive)
+            put("timestamp", System.currentTimeMillis())
+            put("volume", OmniSyncManager.getInstance(context).hostMasterVolume.toDouble())
         }.toString()
         writer.print("data: $initEvent\n\n")
         writer.flush()

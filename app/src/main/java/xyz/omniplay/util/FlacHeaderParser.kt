@@ -17,7 +17,9 @@ data class FlacHeader(
     val pictureData: ByteArray? = null,
     val pictureMime: String? = null,
     val musicbrainzReleaseId: String? = null,
-    val musicbrainzReleaseGroupId: String? = null
+    val musicbrainzReleaseGroupId: String? = null,
+    val replayGainTrackGain: Float? = null,
+    val replayGainAlbumGain: Float? = null
 )
 
 object FlacHeaderParser {
@@ -84,6 +86,8 @@ object FlacHeaderParser {
         var pictureMime: String? = null
         var mbReleaseId: String? = null
         var mbReleaseGroupId: String? = null
+        var rgTrackGain: Float? = null
+        var rgAlbumGain: Float? = null
 
         val blockHdr = ByteArray(4)
 
@@ -154,6 +158,12 @@ object FlacHeaderParser {
                                             "ALBUM" -> if (album.isNullOrBlank()) album = value
                                             "MUSICBRAINZ_ALBUMID" -> if (mbReleaseId.isNullOrBlank()) mbReleaseId = value
                                             "MUSICBRAINZ_RELEASEGROUPID" -> if (mbReleaseGroupId.isNullOrBlank()) mbReleaseGroupId = value
+                                            "REPLAYGAIN_TRACK_GAIN" -> if (rgTrackGain == null) {
+                                                rgTrackGain = value.replace("dB", "", ignoreCase = true).trim().toFloatOrNull()
+                                            }
+                                            "REPLAYGAIN_ALBUM_GAIN" -> if (rgAlbumGain == null) {
+                                                rgAlbumGain = value.replace("dB", "", ignoreCase = true).trim().toFloatOrNull()
+                                            }
                                         }
                                     }
                                 }
@@ -218,7 +228,9 @@ object FlacHeaderParser {
             pictureData = pictureData,
             pictureMime = pictureMime,
             musicbrainzReleaseId = mbReleaseId,
-            musicbrainzReleaseGroupId = mbReleaseGroupId
+            musicbrainzReleaseGroupId = mbReleaseGroupId,
+            replayGainTrackGain = rgTrackGain,
+            replayGainAlbumGain = rgAlbumGain
         )
     }
 
