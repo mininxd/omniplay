@@ -917,6 +917,11 @@ class OmniSyncManager private constructor(private val context: Context) {
 
         acquireLocks()
 
+        isStutterMitigationActive = false
+        isRelaxedSyncMode = false
+        consecutiveStutterCount = 0
+        recentStutterTimestamps.clear()
+
         clientJob?.cancel()
         clientWebSocket?.close()
         clientWebSocket = null
@@ -1186,19 +1191,34 @@ class OmniSyncManager private constructor(private val context: Context) {
     private val recentStutterTimestamps = ArrayList<Long>()
     @Volatile
     private var isStutterMitigationActive = false
+    @Volatile
+    private var isRelaxedSyncMode = false
+    private var consecutiveStutterCount = 0
 
     private fun handleSilentStutterDetected() {
         val now = SystemClock.elapsedRealtime()
         recentStutterTimestamps.add(now)
-        recentStutterTimestamps.removeAll { now - it > 15000L }
+        recentStutterTimestamps.removeAll { now - it > 30000L }
+        consecutiveStutterCount++
 
-        // If 2 or more stutters occur in 15 seconds, silently adapt buffer and audio processing
-        if (recentStutterTimestamps.size >= 2 && !isStutterMitigationActive) {
+        // If 2 or more stutters occur in 30 seconds, activate silent low-end mitigation
+        if (recentStutterTimestamps.size >= 2) {
             isStutterMitigationActive = true
-            if (streamQuality == OmniSyncQuality.HIGH && isAudioFloatSupported()) {
-                mainHandler.post {
-                    recreateListenerPlayerForQuality()
-                }
+        }
+
+        // When multiple stutters are detected (3+ times):
+        // Low-end listener devices struggle to render host audio and lock tight 1:1 timers.
+        // Relax the drift synchronization: lock playback to smooth, natural 1.0x speed
+        // and stop aggressive seeking/resampling to keep playback fluent and eliminate CPU spikes.
+        if (recentStutterTimestamps.size >= 3 || consecutiveStutterCount >= 3) {
+            isRelaxedSyncMode = true
+            mainHandler.post {
+                try {
+                    val player = listenerPlayer ?: return@post
+                    if (player.playbackParameters.speed != 1.0f) {
+                        player.playbackParameters = PlaybackParameters(1.0f)
+                    }
+                } catch (ignored: Exception) {}
             }
         }
     }
@@ -1224,8 +1244,26 @@ class OmniSyncManager private constructor(private val context: Context) {
                 val drift = current - expectedHostPos
 
                 val isLowEnd = benchmarkResult.tier == OmniSyncDeviceTier.LOW_END || isStutterMitigationActive
-                val deadband = if (isLowEnd) 120L else benchmarkResult.driftDeadbandMs
-                val snapThreshold = if (isLowEnd) 650L else benchmarkResult.driftSeekSnapMs
+
+                if (isRelaxedSyncMode) {
+                    // Stutter-tolerant relaxed mode:
+                    // Stop forcing 1:1 millisecond lockstep to prevent stuttering on low-end device.
+                    // Keep steady 1.0x playback speed (no Sonic resampling overhead).
+                    try {
+                        if (player.playbackParameters.speed != 1.0f) {
+                            player.playbackParameters = PlaybackParameters(1.0f)
+                        }
+                    } catch (ignored: Exception) {}
+
+                    // Only snap seek if user deliberately scrubbed/seeked far away on the host (> 8000ms drift)
+                    if (abs(drift) > 8000L) {
+                        player.seekTo(expectedHostPos)
+                    }
+                    return@post
+                }
+
+                val deadband = if (isLowEnd) 250L else benchmarkResult.driftDeadbandMs
+                val snapThreshold = if (isLowEnd) 2500L else benchmarkResult.driftSeekSnapMs
 
                 if (abs(drift) > snapThreshold) {
                     // Significant drift: snap seek directly to expected position
@@ -1245,12 +1283,12 @@ class OmniSyncManager private constructor(private val context: Context) {
                 } else {
                     // Outside deadband: smooth speed adjustment, throttled for low-end CPU conservation
                     val now = SystemClock.elapsedRealtime()
-                    val throttleMs = if (isLowEnd) 1500L else 500L
+                    val throttleMs = if (isLowEnd) 2500L else 500L
                     if (now - lastSpeedAdjustmentTime >= throttleMs) {
                         val speed = if (drift < 0L) {
-                            if (drift < -180L) 1.035f else 1.018f
+                            if (drift < -300L) 1.025f else 1.012f
                         } else {
-                            if (drift > 180L) 0.965f else 0.982f
+                            if (drift > 300L) 0.975f else 0.988f
                         }
                         try {
                             if (player.playbackParameters.speed != speed) {
@@ -1274,10 +1312,10 @@ class OmniSyncManager private constructor(private val context: Context) {
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
 
         val isLowEnd = benchmarkResult.tier == OmniSyncDeviceTier.LOW_END || isStutterMitigationActive
-        val minBuffer = if (isLowEnd) 1500 else benchmarkResult.minBufferMs
-        val maxBuffer = if (isLowEnd) 4500 else benchmarkResult.maxBufferMs
-        val bufferForPlayback = if (isLowEnd) 400 else benchmarkResult.bufferForPlaybackMs
-        val bufferAfterRebuffer = if (isLowEnd) 800 else benchmarkResult.bufferForPlaybackAfterRebufferMs
+        val minBuffer = if (isLowEnd) 4000 else benchmarkResult.minBufferMs
+        val maxBuffer = if (isLowEnd) 12000 else benchmarkResult.maxBufferMs
+        val bufferForPlayback = if (isLowEnd) 1200 else benchmarkResult.bufferForPlaybackMs
+        val bufferAfterRebuffer = if (isLowEnd) 2000 else benchmarkResult.bufferForPlaybackAfterRebufferMs
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -1561,6 +1599,11 @@ class OmniSyncManager private constructor(private val context: Context) {
             currentStreamDurationMs = 0L
             notifyLatency(0L)
             notifyProgress(0L, 0L)
+
+            isStutterMitigationActive = false
+            isRelaxedSyncMode = false
+            consecutiveStutterCount = 0
+            recentStutterTimestamps.clear()
 
             try {
                 listenerPlayer?.stop()

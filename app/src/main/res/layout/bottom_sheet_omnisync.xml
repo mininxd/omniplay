@@ -860,14 +860,15 @@
                                 android:src="@drawable/ic_volume_up"
                                 app:tint="?attr/colorPrimary" />
 
-                            <SeekBar
+                            <com.google.android.material.slider.Slider
                                 android:id="@+id/listener_volume_slider"
-                                android:layout_width="match_parent"
+                                android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:max="100"
-                                android:progress="100"
-                                android:progressTint="?attr/colorPrimary"
-                                android:thumbTint="?attr/colorPrimary" />
+                                android:layout_weight="1"
+                                android:stepSize="1.0"
+                                android:value="100.0"
+                                android:valueFrom="0.0"
+                                android:valueTo="100.0" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>

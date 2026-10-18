@@ -111,7 +111,5 @@
     <string name="volume_normalization">Volume normalization</string>
     <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
     <string name="omnisync_master_volume">Broadcast Master Volume</string>
-    <string name="widget_name">Omniplay</string>
-    <string name="widget_no_track">No track playing</string>
 </resources>
 

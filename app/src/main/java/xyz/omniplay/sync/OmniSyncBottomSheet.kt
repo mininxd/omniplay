@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.SeekBar
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -261,16 +260,12 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
             syncManager.connectToHost(host)
         }
 
-        binding.listenerVolumeSlider.progress = (syncManager.listenerVolume * 100).toInt()
-        binding.listenerVolumeSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    syncManager.setListenerVolume(progress / 100f)
-                }
+        binding.listenerVolumeSlider.value = (syncManager.listenerVolume * 100f).coerceIn(0f, 100f)
+        binding.listenerVolumeSlider.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                syncManager.setListenerVolume(value / 100f)
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
 
         binding.btnDisconnectListener.setOnClickListener {
             syncManager.disconnectListener()
@@ -479,7 +474,7 @@ class OmniSyncBottomSheet : BottomSheetDialogFragment(), OmniSyncManager.OmniSyn
                 binding.sliderHostMasterVolume.value = percent
                 binding.textHostMasterVolume.text = "${percent.toInt()}%"
             } else {
-                binding.listenerVolumeSlider.progress = percent.toInt()
+                binding.listenerVolumeSlider.value = percent
             }
         }
     }

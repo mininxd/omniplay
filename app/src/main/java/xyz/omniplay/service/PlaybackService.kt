@@ -59,7 +59,6 @@ import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaDescriptionCompat
 import androidx.media.MediaBrowserServiceCompat
 import xyz.omniplay.util.ReplayGainHelper
-import xyz.omniplay.ui.widget.OmniWidgetProvider
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -1523,12 +1522,6 @@ class PlaybackService : MediaBrowserServiceCompat() {
             builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
         }
         mediaSession?.setMetadata(builder.build())
-        OmniWidgetProvider.updateWidget(
-            applicationContext,
-            song,
-            isPlaying(),
-            art
-        )
     }
 
     private fun updatePlaybackState(state: Int, positionMs: Long = getCurrentPosition().toLong()) {
@@ -1545,12 +1538,6 @@ class PlaybackService : MediaBrowserServiceCompat() {
             .setState(state, positionMs.coerceAtLeast(0L), speed, SystemClock.elapsedRealtime())
             .build()
         mediaSession?.setPlaybackState(playbackState)
-        OmniWidgetProvider.updateWidget(
-            applicationContext,
-            currentSong,
-            state == PlaybackStateCompat.STATE_PLAYING,
-            currentAlbumArt
-        )
     }
 
     private fun buildNotification(isPlaying: Boolean): Notification {
