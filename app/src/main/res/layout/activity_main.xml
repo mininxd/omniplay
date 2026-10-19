@@ -35,9 +35,23 @@
                 android:text="@string/app_name"
                 android:textColor="?attr/colorOnSurface"
                 android:textSize="23sp"
-                app:layout_constraintEnd_toStartOf="@id/btn_omnisync"
+                app:layout_constraintEnd_toStartOf="@id/btn_equalizer"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageButton
+                android:id="@+id/btn_equalizer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/equalizer"
+                android:padding="12dp"
+                android:src="@drawable/ic_equalizer"
+                app:layout_constraintBottom_toBottomOf="@id/btn_omnisync"
+                app:layout_constraintEnd_toStartOf="@id/btn_omnisync"
+                app:layout_constraintTop_toTopOf="@id/btn_omnisync"
+                app:tint="?attr/colorOnSurface" />
 
             <ImageButton
                 android:id="@+id/btn_omnisync"

@@ -1,0 +1,6 @@
+package com.joaomgcd.taskerm.helper;
+
+/* JADX INFO: loaded from: classes.dex */
+public interface x {
+    String a();
+}

@@ -488,6 +488,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (exoInstance == player) {
                     setupLoudnessEnhancer(audioSessionId)
+                    xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).initAudioSession(audioSessionId)
                 }
             }
         }
@@ -496,6 +497,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
         fadeOutPlayer?.addListener(createListener(fadeOutPlayer!!))
 
         player = exo
+        if (exo.audioSessionId != C.AUDIO_SESSION_ID_UNSET && exo.audioSessionId > 0) {
+            setupLoudnessEnhancer(exo.audioSessionId)
+            xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).initAudioSession(exo.audioSessionId)
+        }
     }
 
     var isBitPerfectActive: Boolean = false
@@ -1663,6 +1668,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
         try {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
+        } catch (_: Throwable) {}
+
+        try {
+            xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).releaseEffects()
         } catch (_: Throwable) {}
 
         val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)

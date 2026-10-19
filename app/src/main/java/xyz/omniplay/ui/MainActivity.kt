@@ -321,6 +321,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         bindPlaybackService()
         checkAndRequestPermissions()
         OmniSyncManager.getInstance(this).addListener(omniSyncListener)
+        xyz.omniplay.audio.EqualizerManager.getInstance(this).addListener(eqListener)
         handleIncomingIntent(intent)
         checkForUpdatesOnStart()
     }
@@ -422,6 +423,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     override fun onResume() {
         super.onResume()
         updateOmniSyncButtonState(OmniSyncManager.getInstance(this).currentRole)
+        updateEqualizerButtonState()
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isShowArt = prefs.getBoolean(KEY_SHOW_ALBUM_ART_IN_PLAYLIST, true)
         songAdapter?.setShowAlbumArt(isShowArt)
@@ -816,6 +818,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     private fun setupListeners() {
         updateOmniSyncButtonState(OmniSyncManager.getInstance(this).currentRole)
+        updateEqualizerButtonState()
+        binding.btnEqualizer.setOnClickListener {
+            EqualizerBottomSheet.show(supportFragmentManager)
+        }
         binding.btnOmnisync.setOnClickListener {
             xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
                 .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)
@@ -1690,6 +1696,24 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnOmnisync.setColorFilter(tint)
     }
 
+    private fun updateEqualizerButtonState() {
+        val isEnabled = xyz.omniplay.audio.EqualizerManager.getInstance(this).isEnabled()
+        val tint = if (isEnabled) {
+            ThemeColors.getPrimary(this)
+        } else {
+            ThemeColors.getOnSurfaceVariant(this)
+        }
+        binding.btnEqualizer.setColorFilter(tint)
+    }
+
+    private val eqListener = object : xyz.omniplay.audio.EqualizerManager.EqualizerListener {
+        override fun onEqualizerConfigChanged() {
+            runOnUiThread {
+                updateEqualizerButtonState()
+            }
+        }
+    }
+
     private val omniSyncListener: OmniSyncManager.OmniSyncListener = object : OmniSyncManager.OmniSyncListener {
         override fun onRoleChanged(role: OmniSyncRole) {
             runOnUiThread {
@@ -1913,6 +1937,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
     override fun onDestroy() {
         OmniSyncManager.getInstance(this).removeListener(omniSyncListener)
+        xyz.omniplay.audio.EqualizerManager.getInstance(this).removeListener(eqListener)
         lyricsController.onDestroy()
         if (isBound) {
             playbackService?.removeListener(this)

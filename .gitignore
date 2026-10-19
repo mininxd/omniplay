@@ -32,3 +32,8 @@ google-services.json
 
 # Audio test files
 *.flac
+
+# Local tooling & search index
+.xerj-data/
+data/
+.mcp.json

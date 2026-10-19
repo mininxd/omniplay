@@ -217,6 +217,12 @@ class SettingsActivity : AppCompatActivity() {
             binding.switchVolumeNormalization.toggle()
         }
 
+        // Equalizer
+        updateEqualizerSubtitle()
+        binding.settingEqualizer.setOnClickListener {
+            EqualizerBottomSheet.show(supportFragmentManager)
+        }
+
         // 4. Rescan Music
         binding.settingRescanMusic.setOnClickListener {
             isRescanRequested = true
@@ -265,6 +271,22 @@ class SettingsActivity : AppCompatActivity() {
                     Toast.makeText(this@SettingsActivity, R.string.check_update_failed, Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateEqualizerSubtitle()
+    }
+
+    private fun updateEqualizerSubtitle() {
+        val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
+        if (eq.isEnabled()) {
+            val preset = eq.presets.find { it.id == eq.getCurrentPresetId() }
+            val presetName = if (preset != null) getString(preset.nameRes) else getString(R.string.preset_custom)
+            binding.subtitleEqualizer.text = getString(R.string.equalizer_preset) + ": " + presetName
+        } else {
+            binding.subtitleEqualizer.setText(R.string.equalizer_desc)
         }
     }
 
