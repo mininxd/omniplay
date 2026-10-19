@@ -1,3 +1,11 @@
+## What's New in v0.14.2
+
+### 🐛 Bug Fixes & Queue Synchronization
+- **Fixed Add to Queue and Play Next Sync**: Resolved an issue where songs added via "Add to Queue" or "Play Next" were not immediately updated or displayed in the queue across both shuffle and non-shuffle modes.
+- **Persistent Ongoing Queue**: Adding songs to queue or setting play next now consistently updates the active queue and ongoing UI state without reverting during drawer or search actions.
+
+---
+
 ## What's New in v0.14.1
 
 ### 🐛 Bug Fixes & Queue Improvements
