@@ -112,22 +112,22 @@
     <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
     <string name="omnisync_master_volume">Broadcast Master Volume</string>
 
-    <!-- Equalizer and Sound Enhancement (DaxUI & SoundEnhancement Cores) -->
+    <!-- Equalizer and Sound Enhancement -->
     <string name="equalizer">Equalizer</string>
-    <string name="equalizer_desc">Dolby Atmos® 10-band EQ &amp; Sony Sound Enhancement</string>
+    <string name="equalizer_desc">10-Band Equalizer &amp; Sound Enhancement</string>
     <string name="equalizer_preset">Preset</string>
     <string name="bass_boost">ClearBass™ (Sub-Bass)</string>
-    <string name="sound_enhancement_desc">Dolby Atmos® 10-Band EQ &amp; Sony Xperia™ Sound Enhancement</string>
+    <string name="sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
     <string name="equalizer_and_sound_enhancement">Equalizer and Sound Enhancement</string>
-    <string name="equalizer_and_sound_enhancement_desc">Dolby Atmos® 10-Band EQ &amp; Sony Xperia™ Sound Enhancement</string>
+    <string name="equalizer_and_sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
     <string name="equalizer_master_switch">Enable Audio Enhancement</string>
-    <string name="dax_equalizer_title">Graphic Equalizer (10 Bands)</string>
-    <string name="dax_equalizer_desc">Dolby DAX 10-band precision frequency tuning</string>
+    <string name="dax_equalizer_title">10-Band Equalizer</string>
+    <string name="dax_equalizer_desc">10-band precision frequency tuning</string>
     <string name="reset_to_flat">Reset to Flat</string>
 
-    <!-- Dolby Intelligent Equalizer & Dialogue Enhancer -->
+    <!-- Intelligent Equalizer & Dialogue Enhancer -->
     <string name="ieq_title">Intelligent Equalizer</string>
-    <string name="ieq_desc">Dolby dynamic audio character tuning</string>
+    <string name="ieq_desc">Dynamic audio character tuning</string>
     <string name="ieq_off">Off</string>
     <string name="ieq_balanced">Balanced</string>
     <string name="ieq_warm">Warm</string>
@@ -135,8 +135,8 @@
     <string name="dialogue_enhancer_title">Dialogue Enhancer</string>
     <string name="dialogue_enhancer_desc">Improves clarity of vocals and spoken dialogue</string>
 
-    <!-- Sony Xperia Sound Enhancement Suite -->
-    <string name="sony_enhancements_title">Sony Xperia™ Sound Enhancement</string>
+    <!-- Sound Enhancement Suite -->
+    <string name="sony_enhancements_title">Sound Enhancement</string>
     <string name="dynamic_normalizer_title">Dynamic normaliser</string>
     <string name="dynamic_normalizer_desc">Minimise volume differences between songs or videos</string>
     <string name="automatic_optimization_title">Automatic optimisation</string>
@@ -148,8 +148,8 @@
     <string name="xloud_desc">Internal speaker volume &amp; dynamic loudness booster</string>
     <string name="sforce_title">S-Force Front Surround 3D</string>
     <string name="sforce_desc">Frontal 3D virtual surround soundstage expansion</string>
-    <string name="vpt_title">VPT (Surround Sound)</string>
-    <string name="vpt_desc">Sony Virtualphones Technology acoustic simulation</string>
+    <string name="vpt_title">Virtualphones Technology (VPT)</string>
+    <string name="vpt_desc">Virtualphones Technology acoustic simulation</string>
     <string name="vpt_off">Off</string>
     <string name="vpt_studio">Studio</string>
     <string name="vpt_club">Club</string>

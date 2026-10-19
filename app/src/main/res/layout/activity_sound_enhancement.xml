@@ -105,7 +105,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 1: Dolby Graphic Equalizer (10 Bands) - No presets -->
+            <!-- SECTION 1: 10-Band Equalizer (Pillars Rack) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_dax_equalizer"
                 android:layout_width="match_parent"
@@ -154,24 +154,26 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btn_reset_dax"
-                            style="@style/Widget.Material3.Button.TextButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/reset_to_flat" />
+                            style="@style/Widget.Material3.Button.IconButton"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            app:icon="@drawable/ic_refresh"
+                            app:iconTint="?attr/colorPrimary"
+                            android:contentDescription="@string/reset_to_flat"
+                            app:tooltipText="@string/reset_to_flat" />
                     </LinearLayout>
 
-                    <!-- 10 Bands Container (smooth, non-dotted sliders) -->
-                    <LinearLayout
-                        android:id="@+id/layout_dax_bands_container"
+                    <!-- 10 Bands Vertical Pillars Rack -->
+                    <xyz.omniplay.ui.DaxEqualizerBarsView
+                        android:id="@+id/dax_eq_bars_view"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="vertical" />
+                        android:layout_height="220dp"
+                        android:layout_marginTop="8dp" />
 
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 2: Dolby Intelligent Equalizer (IEQ) -->
+            <!-- SECTION 2: Intelligent Equalizer (IEQ) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_ieq"
                 android:layout_width="match_parent"
@@ -247,7 +249,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 3: Dolby Dialogue Enhancer (Lower steps with dots slider) -->
+            <!-- SECTION 3: Dialogue Enhancer -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_dialogue_enhancer"
                 android:layout_width="match_parent"
@@ -318,7 +320,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 4: Sony Xperia ClearBass™ (Non-dotted: high step count) -->
+            <!-- SECTION 4: ClearBass™ -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_clear_bass"
                 android:layout_width="match_parent"
@@ -375,7 +377,7 @@
                             android:textSize="14sp" />
                     </LinearLayout>
 
-                    <!-- ClearBass Slider (NON-DOTTED: tickVisible=false) -->
+                    <!-- ClearBass Slider (DOTTED: tickVisible=true) -->
                     <com.google.android.material.slider.Slider
                         android:id="@+id/slider_clear_bass"
                         android:layout_width="match_parent"
@@ -385,11 +387,11 @@
                         android:value="0"
                         android:valueFrom="-10"
                         android:valueTo="10"
-                        app:tickVisible="false" />
+                        app:tickVisible="true" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 5: Sony Xperia VPT (Virtualphones Technology) Surround Sound -->
+            <!-- SECTION 5: Virtualphones Technology (VPT) Surround Sound -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_vpt"
                 android:layout_width="match_parent"
@@ -465,7 +467,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- SECTION 6: Sony Xperia Sound Enhancement Suite -->
+            <!-- SECTION 6: Sound Enhancement Suite -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_sony_suite"
                 android:layout_width="match_parent"

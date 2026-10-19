@@ -6,14 +6,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.color.DynamicColors
-import com.google.android.material.slider.Slider
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
 import xyz.omniplay.databinding.BottomSheetEqualizerBinding
-import xyz.omniplay.databinding.ItemEqualizerBandBinding
 import xyz.omniplay.util.ThemeHelper
 
 /**
@@ -29,8 +26,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     private val binding get() = _binding!!
 
     private lateinit var eqManager: EqualizerManager
-    private val bandSliders = mutableListOf<Slider>()
-    private val bandGainTexts = mutableListOf<TextView>()
 
     private var isUpdatingUi = false
 
@@ -94,47 +89,18 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     }
 
     private fun setupBandSliders() {
-        binding.layoutBandsContainer.removeAllViews()
-        bandSliders.clear()
-        bandGainTexts.clear()
-
-        for (i in 0 until 10) {
-            val bandBinding = ItemEqualizerBandBinding.inflate(
-                layoutInflater,
-                binding.layoutBandsContainer,
-                false
-            )
-
-            val freqHz = eqManager.daxFrequenciesHz[i]
-            bandBinding.tvBandFrequency.text = eqManager.formatFrequency(freqHz)
-
-            // Strictly non-dotted slider
-            bandBinding.sliderBandGain.isTickVisible = false
-            bandBinding.sliderBandGain.valueFrom = -12f
-            bandBinding.sliderBandGain.valueTo = 12f
-            bandBinding.sliderBandGain.stepSize = 1f
-
-            val currentDb = eqManager.getDaxBandLevel(i).toFloat()
-            bandBinding.sliderBandGain.value = currentDb
-            bandBinding.tvBandGain.text = formatDb(currentDb.toInt())
-
-            val bandIndex = i
-            bandBinding.sliderBandGain.addOnChangeListener { _, value, fromUser ->
+        binding.sheetEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        binding.sheetEqBarsView.listener = object : DaxEqualizerBarsView.OnBandGainChangeListener {
+            override fun onBandGainChanged(bandIndex: Int, gainDb: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    val db = value.toInt()
-                    bandBinding.tvBandGain.text = formatDb(db)
-                    eqManager.setDaxBandLevel(bandIndex, db, fromUser = true)
+                    eqManager.setDaxBandLevel(bandIndex, gainDb, fromUser = true)
                 }
             }
-
-            bandSliders.add(bandBinding.sliderBandGain)
-            bandGainTexts.add(bandBinding.tvBandGain)
-            binding.layoutBandsContainer.addView(bandBinding.root)
         }
     }
 
     private fun setupClearBass() {
-        binding.sliderBassBoost.isTickVisible = false
+        binding.sliderBassBoost.isTickVisible = true
         binding.sliderBassBoost.valueFrom = -10f
         binding.sliderBassBoost.valueTo = 10f
         binding.sliderBassBoost.stepSize = 1f
@@ -171,7 +137,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
 
     private fun setupButtons() {
         binding.btnResetEqualizer.setOnClickListener {
-            eqManager.resetAllToFlat()
+            eqManager.resetEqToFlat()
             refreshUI()
         }
 
@@ -208,11 +174,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.switchEqualizer.isChecked = enabled
         updateEnabledState(enabled)
 
-        for (i in 0 until bandSliders.size) {
-            val db = eqManager.getDaxBandLevel(i).toFloat()
-            bandSliders[i].value = db
-            bandGainTexts[i].text = formatDb(db.toInt())
-        }
+        binding.sheetEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
 
         val cb = eqManager.getClearBassLevel().toFloat()
         binding.sliderBassBoost.value = cb
@@ -230,9 +192,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.cardEnhancements.alpha = alpha
         binding.btnResetEqualizer.isEnabled = enabled
 
-        for (slider in bandSliders) {
-            slider.isEnabled = enabled
-        }
+        binding.sheetEqBarsView.isEnabled = enabled
         binding.sliderBassBoost.isEnabled = enabled
 
         for (i in 0 until binding.chipGroupVptSheet.childCount) {

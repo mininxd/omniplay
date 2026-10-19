@@ -13,6 +13,7 @@ import android.graphics.Bitmap
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioMixerAttributes
+import android.media.audiofx.AudioEffect
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
@@ -149,12 +150,44 @@ class PlaybackService : MediaBrowserServiceCompat() {
         }
     }
 
+    private var lastBroadcastSessionId: Int = -1
+
+    private fun broadcastAudioSessionOpened(audioSessionId: Int) {
+        if (audioSessionId <= 0 || audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
+        if (lastBroadcastSessionId == audioSessionId) return
+        broadcastAudioSessionClosed()
+        lastBroadcastSessionId = audioSessionId
+        try {
+            val intent = Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                putExtra(AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
+                putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+            }
+            sendBroadcast(intent)
+        } catch (_: Throwable) {}
+    }
+
+    private fun broadcastAudioSessionClosed() {
+        val sid = lastBroadcastSessionId
+        if (sid > 0) {
+            lastBroadcastSessionId = -1
+            try {
+                val intent = Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                    putExtra(AudioEffect.EXTRA_AUDIO_SESSION, sid)
+                    putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                }
+                sendBroadcast(intent)
+            } catch (_: Throwable) {}
+        }
+    }
+
     private fun setupLoudnessEnhancer(audioSessionId: Int) {
         try {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
             if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId > 0) {
                 loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                broadcastAudioSessionOpened(audioSessionId)
             }
         } catch (ignored: Throwable) {}
         applyVolumeNormalization(currentSong)
@@ -1668,6 +1701,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
             loudnessEnhancer?.release()
             loudnessEnhancer = null
         } catch (_: Throwable) {}
+
+        broadcastAudioSessionClosed()
 
         try {
             xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).releaseEffects()

@@ -166,6 +166,10 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
+    fun getAllDaxBandLevels(): IntArray {
+        return IntArray(10) { getDaxBandLevel(it) }
+    }
+
     fun resetGeqBands() {
         for (i in 0 until 10) {
             prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, 0).apply()
@@ -281,17 +285,23 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    /**
+     * Resets only the Graphic Equalizer (GEQ) 10-bands to 0 dB (Flat)
+     * and sets Intelligent Equalizer (IEQ) to Off.
+     * Leaves ClearBass, VPT, Dynamic Normalizer, Headphone Optimization,
+     * Clear Phase, xLOUD, and S-Force untouched.
+     */
+    fun resetEqToFlat() {
+        for (i in 0 until 10) {
+            prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, 0).apply()
+        }
+        prefs.edit().putInt(KEY_IEQ_PRESET, IEQ_OFF).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
     fun resetAllToFlat() {
-        resetGeqBands()
-        setClearBassLevel(0)
-        setIeqPreset(IEQ_OFF)
-        setDialogEnhancerAmount(0)
-        setVptMode(VPT_OFF)
-        setDynamicNormalizerEnabled(false)
-        setAutomaticOptimizationEnabled(false)
-        setClearPhaseEnabled(false)
-        setXLoudEnabled(false)
-        setSForceEnabled(false)
+        resetEqToFlat()
     }
 
     fun formatFrequency(freqHz: Int): String {

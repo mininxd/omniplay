@@ -61,10 +61,21 @@
                     android:textSize="12sp" />
             </LinearLayout>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset_equalizer"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_refresh"
+                app:iconTint="?attr/colorOnSurfaceVariant"
+                android:contentDescription="@string/reset_to_flat"
+                app:tooltipText="@string/reset_to_flat" />
+
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switch_equalizer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
                 app:thumbIcon="@drawable/asl_switch_thumb" />
         </LinearLayout>
 
@@ -81,12 +92,14 @@
             app:strokeColor="?attr/colorOutlineVariant"
             app:strokeWidth="1dp">
 
-            <LinearLayout
-                android:id="@+id/layout_bands_container"
+            <xyz.omniplay.ui.DaxEqualizerBarsView
+                android:id="@+id/sheet_eq_bars_view"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp" />
+                android:layout_height="210dp"
+                android:paddingStart="8dp"
+                android:paddingTop="12dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="12dp" />
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Sound Enhancements Card (Bass Boost & Virtualizer) -->
@@ -141,7 +154,7 @@
                     android:valueTo="10"
                     android:value="0"
                     android:stepSize="1"
-                    app:tickVisible="false" />
+                    app:tickVisible="true" />
 
                 <!-- Surround Sound (Virtualizer) -->
                 <LinearLayout
@@ -208,29 +221,16 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Action Buttons -->
-        <LinearLayout
+        <!-- Action Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_open_full_suite"
+            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_reset_equalizer"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/reset_to_flat" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_open_full_suite"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="@string/equalizer_and_sound_enhancement" />
-        </LinearLayout>
+            android:text="@string/equalizer_and_sound_enhancement"
+            app:icon="@drawable/ic_settings"
+            app:iconGravity="textStart" />
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

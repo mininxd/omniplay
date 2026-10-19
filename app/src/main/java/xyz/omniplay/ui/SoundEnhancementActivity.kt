@@ -7,7 +7,6 @@ import com.google.android.material.slider.Slider
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
 import xyz.omniplay.databinding.ActivitySoundEnhancementBinding
-import xyz.omniplay.databinding.ItemEqualizerBandBinding
 import xyz.omniplay.util.ThemeHelper
 
 /**
@@ -23,9 +22,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
     private lateinit var binding: ActivitySoundEnhancementBinding
     private lateinit var eqManager: EqualizerManager
-
-    private val bandSliders = mutableListOf<Slider>()
-    private val bandGainTexts = mutableListOf<TextView>()
 
     private var isUpdatingUi = false
 
@@ -54,8 +50,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     override fun onDestroy() {
         super.onDestroy()
         eqManager.removeListener(this)
-        bandSliders.clear()
-        bandGainTexts.clear()
     }
 
     override fun onEqualizerConfigChanged() {
@@ -82,42 +76,13 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupDaxBands() {
-        binding.layoutDaxBandsContainer.removeAllViews()
-        bandSliders.clear()
-        bandGainTexts.clear()
-
-        for (i in 0 until 10) {
-            val bandBinding = ItemEqualizerBandBinding.inflate(
-                layoutInflater,
-                binding.layoutDaxBandsContainer,
-                false
-            )
-
-            val freqHz = eqManager.daxFrequenciesHz[i]
-            bandBinding.tvBandFrequency.text = eqManager.formatFrequency(freqHz)
-
-            // Non-dotted slider (24 steps)
-            bandBinding.sliderBandGain.isTickVisible = false
-            bandBinding.sliderBandGain.valueFrom = -12f
-            bandBinding.sliderBandGain.valueTo = 12f
-            bandBinding.sliderBandGain.stepSize = 1f
-
-            val currentDb = eqManager.getDaxBandLevel(i).toFloat()
-            bandBinding.sliderBandGain.value = currentDb
-            bandBinding.tvBandGain.text = formatDb(currentDb.toInt())
-
-            val bandIndex = i
-            bandBinding.sliderBandGain.addOnChangeListener { _, value, fromUser ->
+        binding.daxEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        binding.daxEqBarsView.listener = object : DaxEqualizerBarsView.OnBandGainChangeListener {
+            override fun onBandGainChanged(bandIndex: Int, gainDb: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    val db = value.toInt()
-                    bandBinding.tvBandGain.text = formatDb(db)
-                    eqManager.setDaxBandLevel(bandIndex, db, fromUser = true)
+                    eqManager.setDaxBandLevel(bandIndex, gainDb, fromUser = true)
                 }
             }
-
-            bandSliders.add(bandBinding.sliderBandGain)
-            bandGainTexts.add(bandBinding.tvBandGain)
-            binding.layoutDaxBandsContainer.addView(bandBinding.root)
         }
     }
 
@@ -159,7 +124,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupClearBass() {
-        binding.sliderClearBass.isTickVisible = false
+        binding.sliderClearBass.isTickVisible = true
         binding.sliderClearBass.valueFrom = -10f
         binding.sliderClearBass.valueTo = 10f
         binding.sliderClearBass.stepSize = 1f
@@ -238,7 +203,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
     private fun setupResetButton() {
         binding.btnResetDax.setOnClickListener {
-            eqManager.resetAllToFlat()
+            eqManager.resetEqToFlat()
             refreshUI()
         }
     }
@@ -270,12 +235,8 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.switchMaster.isChecked = enabled
         updateEnabledState(enabled)
 
-        // Dax 10-Band Sliders
-        for (i in 0 until bandSliders.size) {
-            val db = eqManager.getDaxBandLevel(i).toFloat()
-            bandSliders[i].value = db
-            bandGainTexts[i].text = formatDb(db.toInt())
-        }
+        // Dax 10-Band Pillars Rack
+        binding.daxEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
 
         // IEQ
         updateIeqChipSelection(eqManager.getIeqPreset())
@@ -313,9 +274,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.cardVpt.alpha = alpha
         binding.cardSonySuite.alpha = alpha
 
-        for (slider in bandSliders) {
-            slider.isEnabled = enabled
-        }
+        binding.daxEqBarsView.isEnabled = enabled
         binding.sliderDialogueEnhancer.isEnabled = enabled
         binding.sliderClearBass.isEnabled = enabled
         binding.btnResetDax.isEnabled = enabled
