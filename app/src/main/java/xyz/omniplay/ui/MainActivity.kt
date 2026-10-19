@@ -1480,6 +1480,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 service.addToQueue(song)
             }
+            drawerFilterController.activeOngoingQueue = service.queue.toList()
         } else {
             val mutable = displayedSongs.toMutableList()
             if (playNext) {
@@ -1488,8 +1489,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 mutable.add(song)
             }
             displayedSongs = mutable
+            drawerFilterController.activeOngoingQueue = mutable
             songAdapter?.setSongs(mutable)
         }
+        val actionText = if (playNext) "Play next: ${song.title}" else "Added to queue: ${song.title}"
+        Toast.makeText(this, actionText, Toast.LENGTH_SHORT).show()
+
         if (customSongOrder.isNotEmpty()) {
             val mutable = customSongOrder.toMutableList()
             mutable.remove(song.id)
@@ -1635,21 +1640,24 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     override fun onQueueChanged(queue: List<Song>) {
         runOnUiThread {
             if (!::binding.isInitialized) return@runOnUiThread
-            displayedSongs = queue
-            if (songAdapter?.getSongs() != queue) {
-                songAdapter?.setSongs(queue)
-            }
-            binding.songCountText.text = "${queue.size} songs"
-            if (queue.isNotEmpty()) {
-                binding.emptyStateLayout.visibility = View.GONE
-                binding.songsRecyclerView.visibility = View.VISIBLE
-            } else {
-                binding.emptyStateLayout.visibility = View.VISIBLE
-                binding.songsRecyclerView.visibility = View.GONE
+            drawerFilterController.activeOngoingQueue = queue
+            if (!drawerFilterController.isFilterPreviewActive && currentSearchQuery.isBlank()) {
+                displayedSongs = queue
+                if (songAdapter?.getSongs() != queue) {
+                    songAdapter?.setSongs(queue)
+                }
+                binding.songCountText.text = "${queue.size} songs"
+                if (queue.isNotEmpty()) {
+                    binding.emptyStateLayout.visibility = View.GONE
+                    binding.songsRecyclerView.visibility = View.VISIBLE
+                } else {
+                    binding.emptyStateLayout.visibility = View.VISIBLE
+                    binding.songsRecyclerView.visibility = View.GONE
+                }
             }
             val currentId = playbackService?.currentSong?.id ?: -1L
             songAdapter?.setCurrentPlayingSongId(currentId)
-            if (playbackService?.isShuffleEnabled == true) {
+            if (playbackService?.isShuffleEnabled == true && !drawerFilterController.isFilterPreviewActive) {
                 binding.songsRecyclerView.scrollToPosition(0)
             }
         }
