@@ -217,16 +217,5 @@
             </com.google.android.material.chip.ChipGroup>
         </LinearLayout>
 
-        <!-- Action Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_open_full_suite"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/equalizer_and_sound_enhancement"
-            app:icon="@drawable/ic_settings"
-            app:iconGravity="textStart" />
-
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -360,10 +360,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             getCurrentPlayingSongId = { playbackService?.currentSong?.id },
             getCurrentSortField = { currentSortField },
             isSortAscending = { isSortAscending },
-            onPlaySongRequested = { song, queue, targetIdx, _, _ ->
+            onPlaySongRequested = { song, queue, targetIdx, _, filterValue ->
                 displayedSongs = queue
                 songAdapter?.setSongs(queue)
                 songAdapter?.setCurrentPlayingSongId(song.id)
+                binding.songCountText.text = "${queue.size} songs"
 
                 playbackService?.let { service ->
                     val queueMatches = service.queue.size == queue.size && service.queue.any { it.id == song.id }
@@ -373,6 +374,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         service.setSongQueue(queue, startIndex = targetIdx, startPlaying = true)
                     }
                 }
+                updateSheetTitle(filterValue)
             },
             onApplyFilterRequested = { applyCurrentFilter() },
             onUpdateAppTitle = { updateAppTitle() },
@@ -685,6 +687,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         service.setSongQueue(fullList, startIndex = targetIdx, startPlaying = true)
                     }
                 }
+                updateSheetTitle()
             },
             onStartDragListener = { vh -> songItemTouchHelper.startDrag(vh) },
             onSongLongClicked = { song: Song, anchor: View ->
@@ -857,6 +860,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 playbackService?.let {
                     if (it.currentSong == null && scannedSongs.isNotEmpty()) {
                         it.setSongQueue(scannedSongs, startIndex = 0, startPlaying = true)
+                        updateSheetTitle(getString(R.string.queue_title))
                     } else {
                         it.togglePlayPause()
                     }
@@ -1142,6 +1146,18 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.appTitleText.text = getString(R.string.app_name)
     }
 
+    fun updateSheetTitle(explicitTitle: String? = null) {
+        val title = when {
+            !explicitTitle.isNullOrEmpty() -> explicitTitle
+            !drawerFilterController.selectedFilterValue.isNullOrEmpty() -> drawerFilterController.selectedFilterValue
+            !drawerFilterController.activeOngoingQueueTitle.isNullOrEmpty() -> drawerFilterController.activeOngoingQueueTitle
+            drawerFilterController.isFilterPreviewActive && drawerFilterController.currentFilterMode == LibraryFilterMode.TRACK -> getString(R.string.all_tracks)
+            else -> getString(R.string.queue_title)
+        }
+        binding.sheetTitleText.text = title
+        binding.sheetTitleText.isSelected = true
+    }
+
     private fun applyCurrentFilter() {
         val baseList = when (drawerFilterController.currentFilterMode) {
             LibraryFilterMode.TRACK -> allScannedSongs
@@ -1204,15 +1220,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         songAdapter?.setSongs(filtered)
         playbackService?.currentSong?.let { songAdapter?.setCurrentPlayingSongId(it.id) }
 
-        val filterVal = drawerFilterController.selectedFilterValue
-        if (!filterVal.isNullOrEmpty()) {
-            binding.sheetTitleText.text = filterVal
-        } else if (drawerFilterController.isFilterPreviewActive && drawerFilterController.currentFilterMode == LibraryFilterMode.TRACK) {
-            binding.sheetTitleText.text = getString(R.string.all_tracks)
-        } else {
-            binding.sheetTitleText.text = getString(R.string.queue_title)
-        }
-        binding.sheetTitleText.isSelected = true
+        updateSheetTitle()
         updateAppTitle()
 
         if (filtered.isNotEmpty()) {

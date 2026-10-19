@@ -116,7 +116,7 @@
     <string name="equalizer">Equalizer</string>
     <string name="equalizer_desc">10-Band Equalizer &amp; Sound Enhancement</string>
     <string name="equalizer_preset">Preset</string>
-    <string name="bass_boost">ClearBass™ (Sub-Bass)</string>
+    <string name="bass_boost">Sub-Bass</string>
     <string name="sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
     <string name="equalizer_and_sound_enhancement">Equalizer and Sound Enhancement</string>
     <string name="equalizer_and_sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
@@ -154,7 +154,7 @@
     <string name="vpt_studio">Studio</string>
     <string name="vpt_club">Club</string>
     <string name="vpt_concert_hall">Concert Hall</string>
-    <string name="clear_bass_title">ClearBass™</string>
+    <string name="clear_bass_title">Sub-Bass</string>
     <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
 </resources>
 

@@ -13,6 +13,7 @@ import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.core.graphics.ColorUtils
 import xyz.omniplay.util.ThemeColors
 import kotlin.math.abs
@@ -49,6 +50,12 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
     private var lockedBandIndex: Int = -1
     private var lastTapTime: Long = 0L
     private var lastTapBand: Int = -1
+    private var touchDownY: Float = 0f
+    private var initialBandGain: Float = 0f
+    private var isDragging: Boolean = false
+    private val touchSlop: Float by lazy {
+        ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    }
 
     // Density helpers
     private val Float.dp get() = this * resources.displayMetrics.density
@@ -148,8 +155,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         val topMargin = 28.dp
         val bottomMargin = 26.dp
         val usableTrackHeight = height - paddingTop - paddingBottom - topMargin - bottomMargin
-        val trackTop = paddingTop + topMargin
-        val trackBottom = trackTop + usableTrackHeight
+        if (usableTrackHeight <= 0) return false
 
         val touchedBand = (x / slotWidth).toInt().coerceIn(0, 9)
 
@@ -158,6 +164,9 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(true)
                 lockedBandIndex = touchedBand
                 activeBandIndex = touchedBand
+                touchDownY = y
+                initialBandGain = bandGains[touchedBand].toFloat()
+                isDragging = false
 
                 // Check for double tap reset to 0 dB
                 val now = SystemClock.uptimeMillis()
@@ -173,7 +182,8 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 lastTapTime = now
                 lastTapBand = touchedBand
 
-                updateBandFromY(touchedBand, y, trackBottom, usableTrackHeight)
+                // Neutral click: do NOT snap to touched position on press!
+                // Only select/focus the band and show the active badge at the current value.
                 invalidate()
                 return true
             }
@@ -183,8 +193,47 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 // Touch position is strictly locked onto the initial band touched!
                 val targetBand = if (lockedBandIndex in 0 until 10) lockedBandIndex else touchedBand
                 activeBandIndex = targetBand
-                updateBandFromY(targetBand, y, trackBottom, usableTrackHeight)
-                invalidate()
+
+                val deltaY = touchDownY - y // Moving UP (smaller y) increases gain
+                if (!isDragging && abs(deltaY) > touchSlop) {
+                    isDragging = true
+                    lastTapTime = 0L
+                    lastTapBand = -1
+                    // Subtract slop so movement starts smoothly from current gain without sudden jump
+                    touchDownY = if (deltaY > 0) y + touchSlop else y - touchSlop
+                }
+
+                if (isDragging) {
+                    val currentDeltaY = touchDownY - y
+                    val deltaGain = (currentDeltaY / usableTrackHeight) * 24f
+                    var calculatedGain = initialBandGain + deltaGain
+
+                    // Anti-windup / seamless boundary reversal:
+                    // If user moves past +12 or -12 dB, keep touchDownY aligned so reversing direction moves immediately
+                    if (calculatedGain > 12f) {
+                        initialBandGain = 12f
+                        touchDownY = y
+                        calculatedGain = 12f
+                    } else if (calculatedGain < -12f) {
+                        initialBandGain = -12f
+                        touchDownY = y
+                        calculatedGain = -12f
+                    }
+
+                    var newDb = calculatedGain.roundToInt().coerceIn(-12, 12)
+
+                    // Center snap: if close to 0 dB, snap cleanly to 0
+                    if (abs(calculatedGain) < 0.45f) {
+                        newDb = 0
+                    }
+
+                    if (bandGains[targetBand] != newDb) {
+                        bandGains[targetBand] = newDb
+                        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        listener?.onBandGainChanged(targetBand, newDb, fromUser = true)
+                    }
+                    invalidate()
+                }
                 return true
             }
 
@@ -192,27 +241,12 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 parent?.requestDisallowInterceptTouchEvent(false)
                 lockedBandIndex = -1
                 activeBandIndex = -1
+                isDragging = false
                 invalidate()
                 return true
             }
         }
         return super.onTouchEvent(event)
-    }
-
-    private fun updateBandFromY(band: Int, y: Float, trackBottom: Float, usableTrackHeight: Float) {
-        val fraction = ((trackBottom - y) / usableTrackHeight).coerceIn(0f, 1f)
-        var newDb = ((fraction * 24f) - 12f).roundToInt().coerceIn(-12, 12)
-
-        // Center snap: if very close to 0 dB, snap to 0
-        if (abs((fraction * 24f) - 12f) < 0.45f) {
-            newDb = 0
-        }
-
-        if (bandGains[band] != newDb) {
-            bandGains[band] = newDb
-            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            listener?.onBandGainChanged(band, newDb, fromUser = true)
-        }
     }
 
     override fun onDraw(canvas: Canvas) {

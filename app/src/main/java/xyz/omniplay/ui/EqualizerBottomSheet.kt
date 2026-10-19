@@ -138,12 +138,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
             eqManager.resetEqToFlat()
             refreshUI()
         }
-
-        binding.btnOpenFullSuite.setOnClickListener {
-            dismiss()
-            val intent = Intent(requireContext(), SoundEnhancementActivity::class.java)
-            startActivity(intent)
-        }
     }
 
     private fun updateIeqChipSelection(ieqPreset: Int) {

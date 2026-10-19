@@ -1138,7 +1138,7 @@ class DrawerFilterController(
             queueToSet = if (folderSongs.isNotEmpty()) folderSongs else listOf(song)
             filterModeToSet = LibraryFilterMode.FOLDER
             filterValueToSet = if (currentFolderNavigationPath.isNotEmpty()) {
-                currentFolderNavigationPath.joinToString("/")
+                currentFolderNavigationPath.last()
             } else {
                 item.title
             }
@@ -1229,6 +1229,7 @@ class DrawerFilterController(
             }
         }
         updateFilterSubList()
+        onApplyFilterRequested()
     }
 
     fun clearFilter() {
