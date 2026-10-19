@@ -66,6 +66,9 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupMasterSwitch() {
+        if (!eqManager.isEnabled()) {
+            eqManager.setEnabled(true)
+        }
         binding.switchMaster.isChecked = eqManager.isEnabled()
 
         binding.rowMasterToggle.setOnClickListener {
@@ -125,7 +128,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupClearBass() {
-        binding.sliderClearBass.isTickVisible = true
+        binding.sliderClearBass.isTickVisible = false
         binding.sliderClearBass.valueFrom = -10f
         binding.sliderClearBass.valueTo = 10f
         binding.sliderClearBass.stepSize = 1f
@@ -161,14 +164,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupSonySuite() {
-        // Dynamic Normaliser
-        binding.switchDynamicNormalizer.isChecked = eqManager.isDynamicNormalizerEnabled()
-        binding.rowDynamicNormalizer.setOnClickListener {
-            val newState = !binding.switchDynamicNormalizer.isChecked
-            binding.switchDynamicNormalizer.isChecked = newState
-            eqManager.setDynamicNormalizerEnabled(newState)
-        }
-
         // Automatic Optimisation
         binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
         binding.rowAutomaticOptimization.setOnClickListener {
@@ -258,7 +253,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         updateVptChipSelection(eqManager.getVptMode())
 
         // Sony Suite
-        binding.switchDynamicNormalizer.isChecked = eqManager.isDynamicNormalizerEnabled()
         binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
         binding.switchClearPhase.isChecked = eqManager.isClearPhaseEnabled()
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
@@ -288,9 +282,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         for (i in 0 until binding.chipGroupVpt.childCount) {
             binding.chipGroupVpt.getChildAt(i).isEnabled = enabled
         }
-
-        binding.rowDynamicNormalizer.isEnabled = enabled
-        binding.switchDynamicNormalizer.isEnabled = enabled
 
         binding.rowAutomaticOptimization.isEnabled = enabled
         binding.switchAutomaticOptimization.isEnabled = enabled

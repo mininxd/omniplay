@@ -81,9 +81,11 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     @Synchronized
-    fun initAudioSession(audioSessionId: Int) {
+    fun rebindAudioSession(audioSessionId: Int, forceRecreate: Boolean = false) {
         if (audioSessionId <= 0) return
-        if (audioSessionId == activeAudioSessionId && equalizer != null) {
+
+        val isAlive = try { equalizer?.hasControl() == true } catch (_: Throwable) { false }
+        if (!forceRecreate && audioSessionId == activeAudioSessionId && equalizer != null && isAlive) {
             applyCurrentStateToEffects()
             return
         }
@@ -127,6 +129,11 @@ class EqualizerManager private constructor(private val context: Context) {
 
         applyCurrentStateToEffects()
         notifyListeners()
+    }
+
+    @Synchronized
+    fun initAudioSession(audioSessionId: Int) {
+        rebindAudioSession(audioSessionId, forceRecreate = true)
     }
 
     @Synchronized
@@ -237,21 +244,9 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia Dynamic Normaliser ---
-    fun isDynamicNormalizerEnabled(): Boolean {
-        return prefs.getBoolean(KEY_DYNAMIC_NORMALIZER, false)
-    }
-
-    fun setDynamicNormalizerEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_DYNAMIC_NORMALIZER, enabled).apply()
-        // Keep global volume normalization preference aligned
-        context.getSharedPreferences("omniplay_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("key_volume_normalization", enabled)
-            .apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
+    // Dynamic Normaliser removed in favor of standard ReplayGain
+    fun isDynamicNormalizerEnabled(): Boolean = false
+    fun setDynamicNormalizerEnabled(enabled: Boolean) {}
 
     // --- Sony Xperia Automatic Optimisation ---
     fun isAutomaticOptimizationEnabled(): Boolean {
@@ -467,21 +462,14 @@ class EqualizerManager private constructor(private val context: Context) {
             }
         }
 
-        // 4. Loudness Booster (xLOUD & Dynamic Normaliser)
+        // 4. Loudness Booster (xLOUD)
         val xloud = xloudEnhancer
         if (xloud != null) {
             try {
                 val isXLoudOn = isMasterOn && isXLoudEnabled()
-                val isDynNormOn = isMasterOn && isDynamicNormalizerEnabled()
-                val shouldEnable = isXLoudOn || isDynNormOn
-                xloud.enabled = shouldEnable
-                if (shouldEnable) {
-                    val gain = when {
-                        isXLoudOn && isDynNormOn -> 450
-                        isXLoudOn -> 350
-                        else -> 200
-                    }
-                    xloud.setTargetGain(gain)
+                xloud.enabled = isXLoudOn
+                if (isXLoudOn) {
+                    xloud.setTargetGain(350)
                 }
             } catch (e: Throwable) {
                 Log.w(TAG, "Error applying LoudnessEnhancer", e)
@@ -493,7 +481,7 @@ class EqualizerManager private constructor(private val context: Context) {
         val cbLevel = getClearBassLevel()
         nativeHardwareBinding.applySonyState(
             isMasterOn = isMasterOn,
-            dynamicNormalizer = isDynamicNormalizerEnabled(),
+            dynamicNormalizer = false,
             sforceSurround = isSForceEnabled(),
             clearPhaseHp = isAutomaticOptimizationEnabled(),
             clearPhase = isClearPhaseEnabled(),
@@ -505,7 +493,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
         nativeHardwareBinding.applyDolbyState(
             isMasterOn = isMasterOn,
-            dynamicNormalizer = isDynamicNormalizerEnabled(),
+            dynamicNormalizer = false,
             dialogEnhancerAmount = getDialogEnhancerAmount(),
             ieqPreset = getIeqPreset(),
             clearBassLevel = cbLevel,

@@ -98,7 +98,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     }
 
     private fun setupClearBass() {
-        binding.sliderBassBoost.isTickVisible = true
+        binding.sliderBassBoost.isTickVisible = false
         binding.sliderBassBoost.valueFrom = -10f
         binding.sliderBassBoost.valueTo = 10f
         binding.sliderBassBoost.stepSize = 1f

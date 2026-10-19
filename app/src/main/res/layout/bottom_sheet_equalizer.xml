@@ -79,151 +79,143 @@
                 app:thumbIcon="@drawable/asl_switch_thumb" />
         </LinearLayout>
 
-
-        <!-- Frequency Bands Card -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Frequency Bands (Cardless) -->
+        <LinearLayout
             android:id="@+id/card_equalizer_bands"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
 
             <xyz.omniplay.ui.DaxEqualizerBarsView
                 android:id="@+id/sheet_eq_bars_view"
                 android:layout_width="match_parent"
                 android:layout_height="210dp"
                 android:paddingStart="4dp"
-                android:paddingTop="12dp"
+                android:paddingTop="8dp"
                 android:paddingEnd="4dp"
-                android:paddingBottom="12dp" />
-        </com.google.android.material.card.MaterialCardView>
+                android:paddingBottom="8dp" />
+        </LinearLayout>
 
-        <!-- Sound Enhancements Card (Bass Boost & Virtualizer) -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:alpha="0.2"
+            android:background="?attr/colorOutlineVariant" />
+
+        <!-- Sound Enhancements (Bass Boost & IEQ - Cardless) -->
+        <LinearLayout
             android:id="@+id/card_enhancements"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            android:orientation="vertical">
 
+            <!-- Bass Boost (ClearBass) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <!-- Bass Boost (ClearBass) -->
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/bass_boost"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="14sp" />
 
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="@string/bass_boost"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/tv_bass_boost_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="0%"
-                        android:textColor="?attr/colorPrimary"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/slider_bass_boost"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/tv_bass_boost_value"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:valueFrom="-10"
-                    android:valueTo="10"
-                    android:value="0"
-                    android:stepSize="1"
-                    app:tickVisible="true" />
-
-                <!-- Intelligent Equalizer -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="@string/ieq_title"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/tv_ieq_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="@string/ieq_off"
-                        android:textColor="?attr/colorPrimary"
-                        android:textSize="13sp" />
-                </LinearLayout>
-
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/chip_group_ieq_sheet"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    app:singleSelection="true">
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_ieq_off"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/ieq_off" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_ieq_balanced"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/ieq_balanced" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_ieq_warm"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/ieq_warm" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_ieq_detailed"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/ieq_detailed" />
-                </com.google.android.material.chip.ChipGroup>
+                    android:fontFamily="sans-serif-medium"
+                    android:text="0 dB"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="13sp" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/slider_bass_boost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:valueFrom="-10"
+                android:valueTo="10"
+                android:value="0"
+                android:stepSize="1"
+                app:tickVisible="false" />
+
+            <!-- Intelligent Equalizer -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/ieq_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_ieq_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/ieq_off"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chip_group_ieq_sheet"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/sheet_ieq_off"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/ieq_off" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/sheet_ieq_balanced"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/ieq_balanced" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/sheet_ieq_warm"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/ieq_warm" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/sheet_ieq_detailed"
+                    style="@style/Widget.Material3.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checkable="true"
+                    android:text="@string/ieq_detailed" />
+            </com.google.android.material.chip.ChipGroup>
+        </LinearLayout>
 
         <!-- Action Button -->
         <com.google.android.material.button.MaterialButton

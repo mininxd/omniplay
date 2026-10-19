@@ -19,15 +19,15 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Interactive Graphic Equalizer Bars View strictly following Material 3 Expressive
- * design guidelines and dynamic theming.
+ * Interactive Graphic Equalizer Slider Rack designed strictly in accordance with
+ * Material 3 Expressive Vertical Slider Specifications (https://m3.material.io/components/sliders/specs):
  *
- * Displays 10 vertical rounded capsule columns (32 Hz to 16 kHz) side-by-side:
- * - 0 dB center reference dashed guideline.
- * - Pill-shaped tracks and filled capsules rising or falling relative to 0 dB.
- * - Locked drag: when sliding begins on a band, horizontal drift stays locked to that band.
- * - Reduced horizontal margins for maximum touch target width and immersive layout.
- * - Consistent dynamic Material You palette (no arbitrary hardcoded colors).
+ * - Vertical rectangular track with subtle M3 rounded corners (6.dp corner radius, not round capsules).
+ * - Filled from bottom up to current value (-12 dB at bottom, 0 dB at 50% midpoint, +12 dB at top).
+ * - Distinct M3 handle indicator bar at the active fill level.
+ * - 0 dB center reference dashed guideline across all bands.
+ * - Touch position strictly locked to initial touched band during drag gestures.
+ * - Clean frequency labels and dynamic M3 floating value badges.
  */
 class DaxEqualizerBarsView @JvmOverloads constructor(
     context: Context,
@@ -69,6 +69,10 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
+    private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+
     private val guidelinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 1.5f.dp
@@ -81,7 +85,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
 
     private val gainTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create("sans-serif-bold", Typeface.BOLD)
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
 
     private val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -141,11 +145,11 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         val x = event.x - paddingLeft - horizontalMargin
         val y = event.y
 
-        val topMargin = 32.dp
+        val topMargin = 28.dp
         val bottomMargin = 26.dp
         val usableTrackHeight = height - paddingTop - paddingBottom - topMargin - bottomMargin
-        val centerY = paddingTop + topMargin + usableTrackHeight / 2f
-        val halfTrackHeight = usableTrackHeight / 2f
+        val trackTop = paddingTop + topMargin
+        val trackBottom = trackTop + usableTrackHeight
 
         val touchedBand = (x / slotWidth).toInt().coerceIn(0, 9)
 
@@ -169,7 +173,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 lastTapTime = now
                 lastTapBand = touchedBand
 
-                updateBandFromY(touchedBand, y, centerY, halfTrackHeight)
+                updateBandFromY(touchedBand, y, trackBottom, usableTrackHeight)
                 invalidate()
                 return true
             }
@@ -179,7 +183,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 // Touch position is strictly locked onto the initial band touched!
                 val targetBand = if (lockedBandIndex in 0 until 10) lockedBandIndex else touchedBand
                 activeBandIndex = targetBand
-                updateBandFromY(targetBand, y, centerY, halfTrackHeight)
+                updateBandFromY(targetBand, y, trackBottom, usableTrackHeight)
                 invalidate()
                 return true
             }
@@ -195,12 +199,12 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    private fun updateBandFromY(band: Int, y: Float, centerY: Float, halfTrackHeight: Float) {
-        val normalizedY = ((centerY - y) / halfTrackHeight).coerceIn(-1f, 1f)
-        var newDb = (normalizedY * 12f).roundToInt().coerceIn(-12, 12)
+    private fun updateBandFromY(band: Int, y: Float, trackBottom: Float, usableTrackHeight: Float) {
+        val fraction = ((trackBottom - y) / usableTrackHeight).coerceIn(0f, 1f)
+        var newDb = ((fraction * 24f) - 12f).roundToInt().coerceIn(-12, 12)
 
         // Center snap: if very close to 0 dB, snap to 0
-        if (abs(normalizedY * 12f) < 0.45f) {
+        if (abs((fraction * 24f) - 12f) < 0.45f) {
             newDb = 0
         }
 
@@ -244,31 +248,37 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             restingBarColor,
             (Color.alpha(restingBarColor) * alphaMultiplier).toInt()
         )
+        handlePaint.color = ColorUtils.setAlphaComponent(
+            primaryColor,
+            (Color.alpha(primaryColor) * alphaMultiplier).toInt()
+        )
         guidelinePaint.color = ColorUtils.setAlphaComponent(
             outlineVariant,
             (Color.alpha(outlineVariant) * 0.7f * alphaMultiplier).toInt()
         )
 
         frequencyTextPaint.textSize = 10.5f.sp
-        gainTextPaint.textSize = 11f.sp
+        gainTextPaint.textSize = 10f.sp
         badgeTextPaint.textSize = 11f.sp
 
         val horizontalMargin = 2.dp
         val contentWidth = (w - paddingLeft - paddingRight - horizontalMargin * 2).toFloat()
-        val topMargin = 32.dp
+        val topMargin = 28.dp
         val bottomMargin = 26.dp
         val usableTrackHeight = h - paddingTop - paddingBottom - topMargin - bottomMargin
-        val centerY = paddingTop + topMargin + usableTrackHeight / 2f
-        val halfTrackHeight = usableTrackHeight / 2f
+        val trackTop = paddingTop + topMargin
+        val trackBottom = trackTop + usableTrackHeight
+        val centerY = trackTop + usableTrackHeight / 2f
 
         val slotWidth = contentWidth / 10f
-        // Wider pillars: 74% of slot width for generous touch surface and M3 Expressive pill weight
-        val barWidth = (slotWidth * 0.74f).coerceIn(16.dp, 32.dp)
-        val barRadius = barWidth / 2f
+        // M3 Expressive vertical slider pillar width
+        val barWidth = (slotWidth * 0.76f).coerceIn(16.dp, 32.dp)
+        // Material 3 specs: rectangular with subtle corner radius (6.dp), not full semicircular pill
+        val cornerRadius = 6.dp
 
         // 1. Draw 0 dB Reference Guideline across all pillars
-        val lineLeft = paddingLeft + horizontalMargin + slotWidth * 0.15f
-        val lineRight = w - paddingRight - horizontalMargin - slotWidth * 0.15f
+        val lineLeft = paddingLeft + horizontalMargin + slotWidth * 0.1f
+        val lineRight = w - paddingRight - horizontalMargin - slotWidth * 0.1f
         canvas.drawLine(lineLeft, centerY, lineRight, centerY, guidelinePaint)
 
         // 2. Draw each of the 10 bands
@@ -277,51 +287,40 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             val gain = bandGains[i]
             val isActive = (i == activeBandIndex)
 
-            // Background Track Pill (Full height column)
-            val trackTop = centerY - halfTrackHeight
-            val trackBottom = centerY + halfTrackHeight
+            // Background Track: rectangular vertical slot with M3 subtle corner radius
             tempRect.set(
-                centerX - barRadius,
+                centerX - barWidth / 2f,
                 trackTop,
-                centerX + barRadius,
+                centerX + barWidth / 2f,
                 trackBottom
             )
-            canvas.drawRoundRect(tempRect, barRadius, barRadius, trackPaint)
+            canvas.drawRoundRect(tempRect, cornerRadius, cornerRadius, trackPaint)
 
-            // Active Filled Bar: solid primary if actively dragged, harmonious expressive tone if resting
+            // Active Filled Track: filled from bottom up to the current gain level (-12 dB at bottom, +12 dB at top)
+            val fraction = (gain + 12f) / 24f
+            val fillTop = trackBottom - (usableTrackHeight * fraction)
             val chosenBarPaint = if (isActive) activeBarPaint else inactiveBarPaint
 
-            if (gain == 0) {
-                // At 0 dB: draw a subtle centered circle / pill disc
-                val discRadius = barRadius * 0.75f
+            if (fraction > 0f) {
                 tempRect.set(
-                    centerX - discRadius,
-                    centerY - discRadius,
-                    centerX + discRadius,
-                    centerY + discRadius
+                    centerX - barWidth / 2f,
+                    fillTop,
+                    centerX + barWidth / 2f,
+                    trackBottom
                 )
-                canvas.drawRoundRect(tempRect, discRadius, discRadius, chosenBarPaint)
-            } else if (gain > 0) {
-                // Positive boost: extends upwards from centerY
-                val barTop = centerY - (gain / 12f) * halfTrackHeight
-                tempRect.set(
-                    centerX - barRadius,
-                    barTop,
-                    centerX + barRadius,
-                    centerY + barRadius
-                )
-                canvas.drawRoundRect(tempRect, barRadius, barRadius, chosenBarPaint)
-            } else {
-                // Negative cut: extends downwards from centerY
-                val barBottom = centerY + (abs(gain) / 12f) * halfTrackHeight
-                tempRect.set(
-                    centerX - barRadius,
-                    centerY - barRadius,
-                    centerX + barRadius,
-                    barBottom
-                )
-                canvas.drawRoundRect(tempRect, barRadius, barRadius, chosenBarPaint)
+                canvas.drawRoundRect(tempRect, cornerRadius, cornerRadius, chosenBarPaint)
             }
+
+            // Material 3 Slider Handle Indicator: horizontal thumb at fill level
+            val handleHeight = 4.dp
+            val handleWidth = barWidth + 2.dp
+            tempRect.set(
+                centerX - handleWidth / 2f,
+                fillTop - handleHeight / 2f,
+                centerX + handleWidth / 2f,
+                fillTop + handleHeight / 2f
+            )
+            canvas.drawRoundRect(tempRect, 2.dp, 2.dp, handlePaint)
 
             // 3. Top Gain Label / Active Floating Badge
             if (isActive) {
@@ -346,13 +345,14 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 val fontMetrics = badgeTextPaint.fontMetrics
                 val textBaseline = badgeY + (badgeH - fontMetrics.bottom + fontMetrics.top) / 2f - fontMetrics.top
                 canvas.drawText(badgeText, centerX, textBaseline, badgeTextPaint)
-            } else if (gain != 0) {
-                // Static subtle gain indicator when non-zero
-                val gainText = if (gain > 0) "+$gain" else "$gain"
-                gainTextPaint.color = ColorUtils.setAlphaComponent(
-                    onSurface,
-                    (200 * alphaMultiplier).toInt()
-                )
+            } else {
+                // Static gain indicator when resting
+                val gainText = if (gain > 0) "+$gain" else if (gain < 0) "$gain" else "0"
+                gainTextPaint.color = if (gain != 0) {
+                    ColorUtils.setAlphaComponent(primaryColor, (230 * alphaMultiplier).toInt())
+                } else {
+                    ColorUtils.setAlphaComponent(onSurfaceVariant, (160 * alphaMultiplier).toInt())
+                }
                 val textY = paddingTop + topMargin - 6.dp
                 canvas.drawText(gainText, centerX, textY, gainTextPaint)
             }
@@ -361,15 +361,12 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             frequencyTextPaint.color = if (isActive) {
                 primaryColor
             } else {
-                ColorUtils.setAlphaComponent(onSurfaceVariant, (220 * alphaMultiplier).toInt())
+                ColorUtils.setAlphaComponent(
+                    onSurfaceVariant,
+                    (210 * alphaMultiplier).toInt()
+                )
             }
-            if (isActive) {
-                frequencyTextPaint.typeface = Typeface.create("sans-serif-bold", Typeface.BOLD)
-            } else {
-                frequencyTextPaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            }
-
-            val freqY = h - paddingBottom - 6.dp
+            val freqY = trackBottom + 18.dp
             canvas.drawText(bandLabels[i], centerX, freqY, frequencyTextPaint)
         }
     }

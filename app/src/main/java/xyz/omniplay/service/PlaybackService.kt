@@ -195,9 +195,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
     private fun applyVolumeNormalization(song: Song?) {
         if (crossfadeJob?.isActive == true) return
-        val p = player ?: return
-
-        val isNormalizationEnabled = xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).isDynamicNormalizerEnabled()
+        val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val isNormalizationEnabled = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_VOLUME_NORMALIZATION, false)
 
         if (!isNormalizationEnabled) {
             try {
@@ -460,6 +459,13 @@ class PlaybackService : MediaBrowserServiceCompat() {
                         val isPlaying = exoInstance.isPlaying
                         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
                         updatePlaybackState(state, exoInstance.currentPosition.coerceAtLeast(0L))
+
+                        if (exoInstance == player) {
+                            val sid = exoInstance.audioSessionId
+                            if (sid > 0 && sid != C.AUDIO_SESSION_ID_UNSET) {
+                                xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(sid)
+                            }
+                        }
                     }
                     Player.STATE_ENDED -> {
                         if (crossfadeJob?.isActive != true) {
@@ -467,6 +473,15 @@ class PlaybackService : MediaBrowserServiceCompat() {
                         }
                     }
                     Player.STATE_IDLE, Player.STATE_BUFFERING -> {}
+                }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (exoInstance == player) {
+                    val sid = exoInstance.audioSessionId
+                    if (sid > 0 && sid != C.AUDIO_SESSION_ID_UNSET) {
+                        xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(sid)
+                    }
                 }
             }
 
@@ -518,9 +533,9 @@ class PlaybackService : MediaBrowserServiceCompat() {
             }
 
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                if (exoInstance == player) {
+                if (exoInstance == player && audioSessionId > 0 && audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
                     setupLoudnessEnhancer(audioSessionId)
-                    xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).initAudioSession(audioSessionId)
+                    xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(audioSessionId, forceRecreate = true)
                 }
             }
         }
@@ -1034,6 +1049,11 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 newPlayer.setMediaItem(mediaItem)
                 newPlayer.prepare()
                 newPlayer.volume = 0f
+                val newSid = newPlayer.audioSessionId
+                if (newSid > 0 && newSid != C.AUDIO_SESSION_ID_UNSET) {
+                    setupLoudnessEnhancer(newSid)
+                    xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(newSid, forceRecreate = true)
+                }
                 newPlayer.play()
                 xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(getResolvedSongForSync(song), 0L, isPlaying = true)
 
@@ -1081,6 +1101,11 @@ class PlaybackService : MediaBrowserServiceCompat() {
                     val mediaItem = MediaItem.fromUri(song.contentUri)
                     p.setMediaItem(mediaItem)
                     p.prepare()
+                    val sid = p.audioSessionId
+                    if (sid > 0 && sid != C.AUDIO_SESSION_ID_UNSET) {
+                        setupLoudnessEnhancer(sid)
+                        xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(sid)
+                    }
                     if (startPlaying) {
                         if (requestAudioFocus()) {
                             p.play()
@@ -1201,6 +1226,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
         if (requestAudioFocus()) {
             player?.let {
+                val sid = it.audioSessionId
+                if (sid > 0 && sid != C.AUDIO_SESSION_ID_UNSET) {
+                    xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext).rebindAudioSession(sid)
+                }
                 if (crossfadeJob?.isActive != true) {
                     it.volume = 1f
                 }

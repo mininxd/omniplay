@@ -204,13 +204,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
-        // Dynamic Normaliser Switch & Row Click
-        val eqManager = xyz.omniplay.audio.EqualizerManager.getInstance(this)
+        // Volume Normalization (ReplayGain) Switch & Row Click
         binding.titleVolumeNormalization.isSelected = true
-        binding.switchVolumeNormalization.isChecked = eqManager.isDynamicNormalizerEnabled()
+        val isVolumeNormalization = prefs.getBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, false)
+        binding.switchVolumeNormalization.isChecked = isVolumeNormalization
 
         binding.switchVolumeNormalization.setOnCheckedChangeListener { _, isChecked ->
-            eqManager.setDynamicNormalizerEnabled(isChecked)
+            prefs.edit().putBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, isChecked).apply()
         }
 
         binding.settingVolumeNormalization.setOnClickListener {
@@ -287,7 +287,6 @@ class SettingsActivity : AppCompatActivity() {
         } else {
             binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
         }
-        binding.switchVolumeNormalization.isChecked = eq.isDynamicNormalizerEnabled()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
