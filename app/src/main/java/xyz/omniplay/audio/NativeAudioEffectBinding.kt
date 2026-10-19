@@ -2,18 +2,24 @@ package xyz.omniplay.audio
 
 import android.media.audiofx.AudioEffect
 import android.util.Log
+import java.lang.reflect.Constructor
+import java.lang.reflect.Method
 import java.util.UUID
 
 /**
  * Low-level Android Audio HAL hardware effect binding for Sony and Dolby Atmos audio effects.
  *
- * Interacts directly with the system AudioFlinger / soundfx libraries (libsonysweffect.so, libswdap.so)
- * when installed via system firmware or Magisk/KernelSU root modules.
+ * Uses reflection to access AudioEffect's hidden constructor and setParameter methods at runtime,
+ * allowing OmniPlay to directly talk to AudioFlinger / soundfx libraries (libsonysweffect.so, libswdap.so)
+ * when installed on device firmware or via Magisk/KernelSU root modules.
  */
 class NativeAudioEffectBinding {
 
     companion object {
         private const val TAG = "NativeAudioEffect"
+
+        // AudioEffect.EFFECT_TYPE_NULL UUID: "ec7178ec-e5e1-4432-a3f4-4657e6795210"
+        val EFFECT_TYPE_NULL: UUID = UUID.fromString("ec7178ec-e5e1-4432-a3f4-4657e6795210")
 
         // Sony Audio Effect UUIDs
         val UUID_SONY_AE: UUID = UUID.fromString("50786e95-da76-4557-976b-7981bdf6feb9")
@@ -48,6 +54,73 @@ class NativeAudioEffectBinding {
         const val DOLBY_PARAM_BASS_ENABLE = 111
 
         const val DOLBY_EFFECT_PARAM_PROFILE_PARAMETER = 16777216
+
+        // Cached Reflection Handles
+        private val audioEffectConstructor: Constructor<*>? by lazy {
+            try {
+                AudioEffect::class.java.getDeclaredConstructor(
+                    UUID::class.java,
+                    UUID::class.java,
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+            } catch (e: Throwable) {
+                Log.w(TAG, "AudioEffect reflective constructor not found", e)
+                null
+            }
+        }
+
+        private val setParamIntMethod: Method? by lazy {
+            try {
+                AudioEffect::class.java.getDeclaredMethod(
+                    "setParameter",
+                    Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+            } catch (e: Throwable) {
+                null
+            }
+        }
+
+        private val setParamShortMethod: Method? by lazy {
+            try {
+                AudioEffect::class.java.getDeclaredMethod(
+                    "setParameter",
+                    Int::class.javaPrimitiveType,
+                    Short::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+            } catch (e: Throwable) {
+                null
+            }
+        }
+
+        private val setParamBytesMethod: Method? by lazy {
+            try {
+                AudioEffect::class.java.getDeclaredMethod(
+                    "setParameter",
+                    Int::class.javaPrimitiveType,
+                    ByteArray::class.java
+                ).apply { isAccessible = true }
+            } catch (e: Throwable) {
+                null
+            }
+        }
+
+        private val setEnabledMethod: Method? by lazy {
+            try {
+                AudioEffect::class.java.getMethod("setEnabled", Boolean::class.javaPrimitiveType)
+            } catch (e: Throwable) {
+                null
+            }
+        }
+
+        private val releaseMethod: Method? by lazy {
+            try {
+                AudioEffect::class.java.getMethod("release")
+            } catch (e: Throwable) {
+                null
+            }
+        }
 
         /**
          * Checks if the device has Sony or Dolby hardware audio effects registered in AudioFlinger.
@@ -99,36 +172,23 @@ class NativeAudioEffectBinding {
         val isHardwareAccelerated: Boolean get() = hasSony || hasDolby
     }
 
-    /**
-     * Subclass of AudioEffect to expose protected setParameter methods directly without reflection.
-     */
-    open class GenericHardwareEffect(
-        type: UUID,
-        uuid: UUID,
-        priority: Int,
-        audioSession: Int
-    ) : AudioEffect(type, uuid, priority, audioSession) {
+    private var sonyEffectInstance: Any? = null
+    private var dolbyEffectInstance: Any? = null
 
-        fun setInt(param: Int, value: Int): Int = setParameter(param, value)
-        fun setShort(param: Int, value: Short): Int = setParameter(param, value)
-        fun setBytes(param: Int, value: ByteArray): Int = setParameter(param, value)
-    }
-
-    private var sonyEffect: GenericHardwareEffect? = null
-    private var dolbyEffect: GenericHardwareEffect? = null
-
-    val isSonyActive: Boolean get() = sonyEffect != null
-    val isDolbyActive: Boolean get() = dolbyEffect != null
+    val isSonyActive: Boolean get() = sonyEffectInstance != null
+    val isDolbyActive: Boolean get() = dolbyEffectInstance != null
 
     fun initSession(audioSessionId: Int) {
         release()
         if (audioSessionId <= 0) return
 
+        val ctor = audioEffectConstructor ?: return
+
         // 1. Try initializing Sony Audio Effect
         for (uuid in arrayOf(UUID_SONY_AE, UUID_SONY_AE_PROXY)) {
             try {
-                val effect = GenericHardwareEffect(AudioEffect.EFFECT_TYPE_NULL, uuid, 0, audioSessionId)
-                sonyEffect = effect
+                val instance = ctor.newInstance(EFFECT_TYPE_NULL, uuid, 0, audioSessionId)
+                sonyEffectInstance = instance
                 Log.i(TAG, "Initialized Sony Hardware AudioEffect (UUID: $uuid) on session $audioSessionId")
                 break
             } catch (e: Throwable) {
@@ -139,8 +199,8 @@ class NativeAudioEffectBinding {
         // 2. Try initializing Dolby DAX / DAP
         for (uuid in arrayOf(UUID_DOLBY_DAX, UUID_DOLBY_DAX_MOD, UUID_DOLBY_DAP)) {
             try {
-                val effect = GenericHardwareEffect(AudioEffect.EFFECT_TYPE_NULL, uuid, 0, audioSessionId)
-                dolbyEffect = effect
+                val instance = ctor.newInstance(EFFECT_TYPE_NULL, uuid, 0, audioSessionId)
+                dolbyEffectInstance = instance
                 Log.i(TAG, "Initialized Dolby Hardware AudioEffect (UUID: $uuid) on session $audioSessionId")
                 break
             } catch (e: Throwable) {
@@ -160,16 +220,16 @@ class NativeAudioEffectBinding {
         bandGainsDb: IntArray,
         clearBassLevel: Int
     ) {
-        val effect = sonyEffect ?: return
+        val effect = sonyEffectInstance ?: return
         try {
-            effect.enabled = isMasterOn
+            setEffectEnabled(effect, isMasterOn)
             if (isMasterOn) {
-                effect.setInt(SONY_PARAM_DN_ON, if (dynamicNormalizer) 1 else 0)
-                effect.setInt(SONY_PARAM_SFORCE_ON, if (sforceSurround) 1 else 0)
-                effect.setInt(SONY_PARAM_CP_HP_ON, if (clearPhaseHp) 1 else 0)
-                effect.setInt(SONY_PARAM_CLEARPHASE_ON, if (clearPhase) 1 else 0)
-                effect.setInt(SONY_PARAM_XLOUD_ON, if (xloud) 1 else 0)
-                effect.setShort(SONY_PARAM_VPT_CUR_MODE, vptMode.toShort())
+                setEffectInt(effect, SONY_PARAM_DN_ON, if (dynamicNormalizer) 1 else 0)
+                setEffectInt(effect, SONY_PARAM_SFORCE_ON, if (sforceSurround) 1 else 0)
+                setEffectInt(effect, SONY_PARAM_CP_HP_ON, if (clearPhaseHp) 1 else 0)
+                setEffectInt(effect, SONY_PARAM_CLEARPHASE_ON, if (clearPhase) 1 else 0)
+                setEffectInt(effect, SONY_PARAM_XLOUD_ON, if (xloud) 1 else 0)
+                setEffectShort(effect, SONY_PARAM_VPT_CUR_MODE, vptMode.toShort())
 
                 // Set 5-band / ClearBass levels for ClearAudio+ engine if applicable
                 val caLevels = ByteArray(6)
@@ -179,7 +239,7 @@ class NativeAudioEffectBinding {
                 caLevels[3] = bandGainsDb.getOrElse(7) { 0 }.toByte()
                 caLevels[4] = bandGainsDb.getOrElse(9) { 0 }.toByte()
                 caLevels[5] = clearBassLevel.toByte()
-                effect.setBytes(SONY_PARAM_CA_BAND_LEVEL, caLevels)
+                setEffectBytes(effect, SONY_PARAM_CA_BAND_LEVEL, caLevels)
             }
         } catch (e: Throwable) {
             Log.w(TAG, "Error applying Sony hardware effect state", e)
@@ -194,9 +254,9 @@ class NativeAudioEffectBinding {
         clearBassLevel: Int,
         bandGainsDb: IntArray
     ) {
-        val effect = dolbyEffect ?: return
+        val effect = dolbyEffectInstance ?: return
         try {
-            effect.enabled = isMasterOn
+            setEffectEnabled(effect, isMasterOn)
             if (isMasterOn) {
                 // Send Volume Leveler
                 setDolbyDapParam(effect, DOLBY_PARAM_VOLUME_LEVELER, intArrayOf(if (dynamicNormalizer) 1 else 0))
@@ -225,7 +285,31 @@ class NativeAudioEffectBinding {
         }
     }
 
-    private fun setDolbyDapParam(effect: GenericHardwareEffect, paramId: Int, values: IntArray) {
+    private fun setEffectEnabled(instance: Any, enabled: Boolean) {
+        try {
+            setEnabledMethod?.invoke(instance, enabled)
+        } catch (ignored: Throwable) {}
+    }
+
+    private fun setEffectInt(instance: Any, param: Int, value: Int) {
+        try {
+            setParamIntMethod?.invoke(instance, param, value)
+        } catch (ignored: Throwable) {}
+    }
+
+    private fun setEffectShort(instance: Any, param: Int, value: Short) {
+        try {
+            setParamShortMethod?.invoke(instance, param, value)
+        } catch (ignored: Throwable) {}
+    }
+
+    private fun setEffectBytes(instance: Any, param: Int, value: ByteArray) {
+        try {
+            setParamBytesMethod?.invoke(instance, param, value)
+        } catch (ignored: Throwable) {}
+    }
+
+    private fun setDolbyDapParam(instance: Any, paramId: Int, values: IntArray) {
         try {
             val length = values.size
             val baValue = ByteArray((length + 4) * 4)
@@ -237,7 +321,7 @@ class NativeAudioEffectBinding {
             for (v in values) {
                 idx += int32ToByteArray(v, baValue, idx)
             }
-            effect.setBytes(5, baValue)
+            setEffectBytes(instance, 5, baValue)
         } catch (e: Throwable) {
             Log.d(TAG, "setDolbyDapParam $paramId failed: ${e.message}")
         }
@@ -252,16 +336,22 @@ class NativeAudioEffectBinding {
     }
 
     fun release() {
-        try {
-            sonyEffect?.enabled = false
-            sonyEffect?.release()
-        } catch (ignored: Throwable) {}
-        sonyEffect = null
+        val s = sonyEffectInstance
+        if (s != null) {
+            try {
+                setEnabledMethod?.invoke(s, false)
+                releaseMethod?.invoke(s)
+            } catch (ignored: Throwable) {}
+            sonyEffectInstance = null
+        }
 
-        try {
-            dolbyEffect?.enabled = false
-            dolbyEffect?.release()
-        } catch (ignored: Throwable) {}
-        dolbyEffect = null
+        val d = dolbyEffectInstance
+        if (d != null) {
+            try {
+                setEnabledMethod?.invoke(d, false)
+                releaseMethod?.invoke(d)
+            } catch (ignored: Throwable) {}
+            dolbyEffectInstance = null
+        }
     }
 }
