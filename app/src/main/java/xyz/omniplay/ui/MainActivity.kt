@@ -189,12 +189,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 return
             }
 
-            val currentQueueList = displayedSongs.ifEmpty { scannedSongs }
-            if (currentQueueList.isNotEmpty()) {
-                if (playbackService?.currentSong != null) {
-                    playbackService?.refreshQueue(currentQueueList)
-                } else if (playbackService?.queue.isNullOrEmpty()) {
-                    playbackService?.setSongQueue(currentQueueList, startIndex = 0, startPlaying = false)
+            if (playbackService?.queue?.isNotEmpty() == true) {
+                val serviceQueue = playbackService!!.queue.toList()
+                displayedSongs = serviceQueue
+                drawerFilterController.activeOngoingQueue = serviceQueue
+                songAdapter?.setSongs(serviceQueue)
+                binding.songCountText.text = "${serviceQueue.size} songs"
+            } else {
+                val currentQueueList = displayedSongs.ifEmpty { scannedSongs }
+                if (currentQueueList.isNotEmpty()) {
+                    if (playbackService?.currentSong != null) {
+                        playbackService?.refreshQueue(currentQueueList)
+                    } else if (playbackService?.queue.isNullOrEmpty()) {
+                        playbackService?.setSongQueue(currentQueueList, startIndex = 0, startPlaying = false)
+                    }
                 }
             }
 
@@ -1162,43 +1170,52 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun applyCurrentFilter() {
-        val baseList = when (drawerFilterController.currentFilterMode) {
-            LibraryFilterMode.TRACK -> allScannedSongs
-            LibraryFilterMode.ARTIST -> {
-                val filterVal = drawerFilterController.selectedFilterValue
-                if (filterVal.isNullOrEmpty()) {
-                    allScannedSongs
-                } else {
-                    allScannedSongs.filter {
-                        val artistName = it.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
-                        artistName.equals(filterVal, ignoreCase = true)
+        val ongoingQueue = playbackService?.queue?.takeIf { it.isNotEmpty() }
+            ?: drawerFilterController.activeOngoingQueue.takeIf { it.isNotEmpty() }
+
+        val isQueueActive = ongoingQueue != null && !drawerFilterController.isFilterPreviewActive
+
+        val baseList = if (isQueueActive) {
+            ongoingQueue!!
+        } else {
+            when (drawerFilterController.currentFilterMode) {
+                LibraryFilterMode.TRACK -> allScannedSongs
+                LibraryFilterMode.ARTIST -> {
+                    val filterVal = drawerFilterController.selectedFilterValue
+                    if (filterVal.isNullOrEmpty()) {
+                        allScannedSongs
+                    } else {
+                        allScannedSongs.filter {
+                            val artistName = it.artist.trim().ifEmpty { getString(R.string.unknown_artist) }
+                            artistName.equals(filterVal, ignoreCase = true)
+                        }
                     }
                 }
-            }
-            LibraryFilterMode.ALBUM -> {
-                val filterVal = drawerFilterController.selectedFilterValue
-                if (filterVal.isNullOrEmpty()) {
-                    allScannedSongs
-                } else {
-                    allScannedSongs.filter {
-                        val albumName = it.album.trim().ifEmpty { getString(R.string.unknown_album) }
-                        albumName.equals(filterVal, ignoreCase = true)
+                LibraryFilterMode.ALBUM -> {
+                    val filterVal = drawerFilterController.selectedFilterValue
+                    if (filterVal.isNullOrEmpty()) {
+                        allScannedSongs
+                    } else {
+                        allScannedSongs.filter {
+                            val albumName = it.album.trim().ifEmpty { getString(R.string.unknown_album) }
+                            albumName.equals(filterVal, ignoreCase = true)
+                        }
                     }
                 }
-            }
-            LibraryFilterMode.FOLDER -> {
-                val filterVal = drawerFilterController.selectedFilterValue
-                if (filterVal.isNullOrEmpty()) {
-                    allScannedSongs
-                } else {
-                    val hasDuplicates = MusicFolderManager.hasDuplicateFolderNames(this)
-                    allScannedSongs.filter { song ->
-                        val segs = drawerFilterController.getSongFolderSegments(song)
-                        val folderPath = segs.joinToString("/")
-                        folderPath.equals(filterVal, ignoreCase = true) ||
-                                folderPath.startsWith("$filterVal/", ignoreCase = true) ||
-                                (segs.isNotEmpty() && segs[0].equals(filterVal, ignoreCase = true)) ||
-                                (!hasDuplicates && (segs.any { it.equals(filterVal, ignoreCase = true) } || song.getResolvedFolderName().equals(filterVal, ignoreCase = true)))
+                LibraryFilterMode.FOLDER -> {
+                    val filterVal = drawerFilterController.selectedFilterValue
+                    if (filterVal.isNullOrEmpty()) {
+                        allScannedSongs
+                    } else {
+                        val hasDuplicates = MusicFolderManager.hasDuplicateFolderNames(this)
+                        allScannedSongs.filter { song ->
+                            val segs = drawerFilterController.getSongFolderSegments(song)
+                            val folderPath = segs.joinToString("/")
+                            folderPath.equals(filterVal, ignoreCase = true) ||
+                                    folderPath.startsWith("$filterVal/", ignoreCase = true) ||
+                                    (segs.isNotEmpty() && segs[0].equals(filterVal, ignoreCase = true)) ||
+                                    (!hasDuplicates && (segs.any { it.equals(filterVal, ignoreCase = true) } || song.getResolvedFolderName().equals(filterVal, ignoreCase = true)))
+                        }
                     }
                 }
             }
@@ -1207,7 +1224,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         val filteredBySearch = if (currentSearchQuery.isNotBlank()) {
             val q = currentSearchQuery.lowercase(Locale.getDefault())
             val locale = Locale.getDefault()
-            baseList.filter { song ->
+            val searchPool = if (isUniversalSearch) allScannedSongs else baseList
+            searchPool.filter { song ->
                 if (isUniversalSearch) {
                     song.title.lowercase(locale).contains(q)
                 } else {
@@ -1218,7 +1236,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             baseList
         }
 
-        val filtered = SongSortHelper.sortSongs(this, filteredBySearch, currentSortField, isSortAscending, customSongOrder)
+        val filtered = if (isQueueActive && currentSearchQuery.isBlank()) {
+            baseList
+        } else {
+            SongSortHelper.sortSongs(this, filteredBySearch, currentSortField, isSortAscending, customSongOrder)
+        }
         displayedSongs = filtered
         songAdapter?.setSongs(filtered)
         playbackService?.currentSong?.let { songAdapter?.setCurrentPlayingSongId(it.id) }
@@ -1480,7 +1502,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             } else {
                 service.addToQueue(song)
             }
-            drawerFilterController.activeOngoingQueue = service.queue.toList()
+            val updatedQueue = service.queue.toList()
+            drawerFilterController.activeOngoingQueue = updatedQueue
+            if (!drawerFilterController.isFilterPreviewActive && currentSearchQuery.isBlank()) {
+                displayedSongs = updatedQueue
+                songAdapter?.setSongs(updatedQueue)
+                binding.songCountText.text = "${updatedQueue.size} songs"
+                if (updatedQueue.isNotEmpty()) {
+                    binding.emptyStateLayout.visibility = View.GONE
+                    binding.songsRecyclerView.visibility = View.VISIBLE
+                } else {
+                    binding.emptyStateLayout.visibility = View.VISIBLE
+                    binding.songsRecyclerView.visibility = View.GONE
+                }
+            }
         } else {
             val mutable = displayedSongs.toMutableList()
             if (playNext) {
@@ -1491,6 +1526,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             displayedSongs = mutable
             drawerFilterController.activeOngoingQueue = mutable
             songAdapter?.setSongs(mutable)
+            binding.songCountText.text = "${mutable.size} songs"
+            if (mutable.isNotEmpty()) {
+                binding.emptyStateLayout.visibility = View.GONE
+                binding.songsRecyclerView.visibility = View.VISIBLE
+            } else {
+                binding.emptyStateLayout.visibility = View.VISIBLE
+                binding.songsRecyclerView.visibility = View.GONE
+            }
         }
         val actionText = if (playNext) "Play next: ${song.title}" else "Added to queue: ${song.title}"
         Toast.makeText(this, actionText, Toast.LENGTH_SHORT).show()
