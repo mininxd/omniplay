@@ -195,6 +195,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
     private fun applyVolumeNormalization(song: Song?) {
         if (crossfadeJob?.isActive == true) return
+        val p = player ?: return
         val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         val isNormalizationEnabled = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_VOLUME_NORMALIZATION, false)
 
