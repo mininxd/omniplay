@@ -68,8 +68,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     override fun onDestroyView() {
         super.onDestroyView()
         eqManager.removeListener(this)
-        bandSliders.clear()
-        bandGainTexts.clear()
         _binding = null
     }
 
