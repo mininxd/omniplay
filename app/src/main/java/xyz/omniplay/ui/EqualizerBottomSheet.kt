@@ -1,6 +1,7 @@
 package xyz.omniplay.ui
 
 import android.app.Dialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -17,10 +18,11 @@ import xyz.omniplay.databinding.ItemEqualizerBandBinding
 import xyz.omniplay.util.ThemeHelper
 
 /**
- * Material You (Material 3) Equalizer Bottom Sheet.
+ * Material You (Material 3 Expressive) Equalizer Bottom Sheet.
  *
- * Provides real-time frequency band controls, audio presets,
- * ClearBass bass boost, and surround sound spatialization.
+ * Provides real-time 10-band DaxUI graphic equalizer controls,
+ * Sony SoundEnhancement ClearBass™ slider, and VPT Surround Sound chip selector.
+ * All sliders are strictly non-dotted (tickVisible = false).
  */
 class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.EqualizerListener {
 
@@ -63,10 +65,11 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         setupHeader()
         setupPresetsChips()
         setupBandSliders()
-        setupEnhancementSliders()
-        setupResetButton()
+        setupClearBass()
+        setupVptSurround()
+        setupButtons()
 
-        updateEnabledState(eqManager.isEnabled())
+        refreshUI()
     }
 
     override fun onDestroyView() {
@@ -95,12 +98,12 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     private fun setupPresetsChips() {
         binding.chipGroupPresets.removeAllViews()
 
-        for (preset in eqManager.presets) {
+        for (preset in eqManager.daxPresets) {
             val chip = Chip(requireContext()).apply {
                 id = preset.id
                 text = getString(preset.nameRes)
                 isCheckable = true
-                isChecked = (preset.id == eqManager.getCurrentPresetId())
+                isChecked = (preset.id == eqManager.getCurrentDaxPresetId())
             }
             binding.chipGroupPresets.addView(chip)
         }
@@ -109,8 +112,8 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
             if (isUpdatingUi) return@setOnCheckedStateChangeListener
             if (checkedIds.isNotEmpty()) {
                 val selectedId = checkedIds.first()
-                if (selectedId != eqManager.getCurrentPresetId()) {
-                    eqManager.applyPreset(selectedId)
+                if (selectedId != eqManager.getCurrentDaxPresetId()) {
+                    eqManager.applyDaxPreset(selectedId)
                 }
             }
         }
@@ -121,24 +124,23 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         bandSliders.clear()
         bandGainTexts.clear()
 
-        val bandCount = eqManager.getBandCount()
-        val range = eqManager.getBandLevelRange()
-        val minDb = (range.first / 100).toFloat()
-        val maxDb = (range.second / 100).toFloat()
-
-        for (i in 0 until bandCount) {
+        for (i in 0 until 10) {
             val bandBinding = ItemEqualizerBandBinding.inflate(
                 layoutInflater,
                 binding.layoutBandsContainer,
                 false
             )
 
-            val freqHz = eqManager.getBandCenterFreqHz(i)
+            val freqHz = eqManager.daxFrequenciesHz[i]
             bandBinding.tvBandFrequency.text = eqManager.formatFrequency(freqHz)
 
-            val currentDb = (eqManager.getBandLevel(i) / 100).toFloat().coerceIn(minDb, maxDb)
-            bandBinding.sliderBandGain.valueFrom = minDb
-            bandBinding.sliderBandGain.valueTo = maxDb
+            // Strictly non-dotted slider
+            bandBinding.sliderBandGain.isTickVisible = false
+            bandBinding.sliderBandGain.valueFrom = -12f
+            bandBinding.sliderBandGain.valueTo = 12f
+            bandBinding.sliderBandGain.stepSize = 1f
+
+            val currentDb = eqManager.getDaxBandLevel(i).toFloat()
             bandBinding.sliderBandGain.value = currentDb
             bandBinding.tvBandGain.text = formatDb(currentDb.toInt())
 
@@ -147,7 +149,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
                 if (fromUser) {
                     val db = value.toInt()
                     bandBinding.tvBandGain.text = formatDb(db)
-                    eqManager.setBandLevel(bandIndex, (db * 100).toShort(), fromUser = true)
+                    eqManager.setDaxBandLevel(bandIndex, db, fromUser = true)
                     selectPresetChipSilently(EqualizerManager.PRESET_CUSTOM)
                 }
             }
@@ -158,35 +160,52 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         }
     }
 
-    private fun setupEnhancementSliders() {
-        // Bass Boost
-        val bassBoostPct = (eqManager.getBassBoostStrength() / 10).toFloat().coerceIn(0f, 100f)
-        binding.sliderBassBoost.value = bassBoostPct
-        binding.tvBassBoostValue.text = "${bassBoostPct.toInt()}%"
+    private fun setupClearBass() {
+        binding.sliderBassBoost.isTickVisible = false
+        binding.sliderBassBoost.valueFrom = -10f
+        binding.sliderBassBoost.valueTo = 10f
+        binding.sliderBassBoost.stepSize = 1f
+
+        val currentCb = eqManager.getClearBassLevel().toFloat()
+        binding.sliderBassBoost.value = currentCb
+        binding.tvBassBoostValue.text = formatDb(currentCb.toInt())
+
         binding.sliderBassBoost.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
-                val pct = value.toInt()
-                binding.tvBassBoostValue.text = "$pct%"
-                eqManager.setBassBoostStrength((pct * 10).toShort())
-            }
-        }
-
-        // Virtualizer
-        val virtualizerPct = (eqManager.getVirtualizerStrength() / 10).toFloat().coerceIn(0f, 100f)
-        binding.sliderVirtualizer.value = virtualizerPct
-        binding.tvVirtualizerValue.text = "${virtualizerPct.toInt()}%"
-        binding.sliderVirtualizer.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                val pct = value.toInt()
-                binding.tvVirtualizerValue.text = "$pct%"
-                eqManager.setVirtualizerStrength((pct * 10).toShort())
+                val db = value.toInt()
+                binding.tvBassBoostValue.text = formatDb(db)
+                eqManager.setClearBassLevel(db)
             }
         }
     }
 
-    private fun setupResetButton() {
+    private fun setupVptSurround() {
+        updateVptChipSelection(eqManager.getVptMode())
+
+        binding.chipGroupVptSheet.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (isUpdatingUi) return@setOnCheckedStateChangeListener
+            val mode = when (checkedIds.firstOrNull()) {
+                R.id.sheet_vpt_studio -> EqualizerManager.VPT_STUDIO
+                R.id.sheet_vpt_club -> EqualizerManager.VPT_CLUB
+                R.id.sheet_vpt_concert -> EqualizerManager.VPT_CONCERT_HALL
+                else -> EqualizerManager.VPT_OFF
+            }
+            if (mode != eqManager.getVptMode()) {
+                eqManager.setVptMode(mode)
+            }
+        }
+    }
+
+    private fun setupButtons() {
         binding.btnResetEqualizer.setOnClickListener {
-            eqManager.resetToFlat()
+            eqManager.resetAllToFlat()
+            refreshUI()
+        }
+
+        binding.btnOpenFullSuite.setOnClickListener {
+            dismiss()
+            val intent = Intent(requireContext(), SoundEnhancementActivity::class.java)
+            startActivity(intent)
         }
     }
 
@@ -196,32 +215,45 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         isUpdatingUi = false
     }
 
+    private fun updateVptChipSelection(vptMode: Int) {
+        val targetId = when (vptMode) {
+            EqualizerManager.VPT_STUDIO -> R.id.sheet_vpt_studio
+            EqualizerManager.VPT_CLUB -> R.id.sheet_vpt_club
+            EqualizerManager.VPT_CONCERT_HALL -> R.id.sheet_vpt_concert
+            else -> R.id.sheet_vpt_off
+        }
+        binding.chipGroupVptSheet.check(targetId)
+
+        val labelRes = when (vptMode) {
+            EqualizerManager.VPT_STUDIO -> R.string.vpt_studio
+            EqualizerManager.VPT_CLUB -> R.string.vpt_club
+            EqualizerManager.VPT_CONCERT_HALL -> R.string.vpt_concert_hall
+            else -> R.string.vpt_off
+        }
+        binding.tvVirtualizerValue.setText(labelRes)
+    }
+
     private fun refreshUI() {
         if (_binding == null) return
         isUpdatingUi = true
 
-        binding.switchEqualizer.isChecked = eqManager.isEnabled()
-        updateEnabledState(eqManager.isEnabled())
+        val enabled = eqManager.isEnabled()
+        binding.switchEqualizer.isChecked = enabled
+        updateEnabledState(enabled)
 
-        binding.chipGroupPresets.check(eqManager.getCurrentPresetId())
-
-        val range = eqManager.getBandLevelRange()
-        val minDb = (range.first / 100).toFloat()
-        val maxDb = (range.second / 100).toFloat()
+        binding.chipGroupPresets.check(eqManager.getCurrentDaxPresetId())
 
         for (i in 0 until bandSliders.size) {
-            val levelDb = (eqManager.getBandLevel(i) / 100).toFloat().coerceIn(minDb, maxDb)
-            bandSliders[i].value = levelDb
-            bandGainTexts[i].text = formatDb(levelDb.toInt())
+            val db = eqManager.getDaxBandLevel(i).toFloat()
+            bandSliders[i].value = db
+            bandGainTexts[i].text = formatDb(db.toInt())
         }
 
-        val bassBoostPct = (eqManager.getBassBoostStrength() / 10).toFloat().coerceIn(0f, 100f)
-        binding.sliderBassBoost.value = bassBoostPct
-        binding.tvBassBoostValue.text = "${bassBoostPct.toInt()}%"
+        val cb = eqManager.getClearBassLevel().toFloat()
+        binding.sliderBassBoost.value = cb
+        binding.tvBassBoostValue.text = formatDb(cb.toInt())
 
-        val virtualizerPct = (eqManager.getVirtualizerStrength() / 10).toFloat().coerceIn(0f, 100f)
-        binding.sliderVirtualizer.value = virtualizerPct
-        binding.tvVirtualizerValue.text = "${virtualizerPct.toInt()}%"
+        updateVptChipSelection(eqManager.getVptMode())
 
         isUpdatingUi = false
     }
@@ -237,10 +269,12 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
             slider.isEnabled = enabled
         }
         binding.sliderBassBoost.isEnabled = enabled
-        binding.sliderVirtualizer.isEnabled = enabled
 
         for (i in 0 until binding.chipGroupPresets.childCount) {
             binding.chipGroupPresets.getChildAt(i).isEnabled = enabled
+        }
+        for (i in 0 until binding.chipGroupVptSheet.childCount) {
+            binding.chipGroupVptSheet.getChildAt(i).isEnabled = enabled
         }
     }
 

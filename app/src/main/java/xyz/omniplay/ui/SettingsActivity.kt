@@ -217,10 +217,11 @@ class SettingsActivity : AppCompatActivity() {
             binding.switchVolumeNormalization.toggle()
         }
 
-        // Equalizer
+        // Equalizer and Sound Enhancement
         updateEqualizerSubtitle()
         binding.settingEqualizer.setOnClickListener {
-            EqualizerBottomSheet.show(supportFragmentManager)
+            val intent = Intent(this, SoundEnhancementActivity::class.java)
+            startActivity(intent)
         }
 
         // 4. Rescan Music
@@ -282,11 +283,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateEqualizerSubtitle() {
         val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
         if (eq.isEnabled()) {
-            val preset = eq.presets.find { it.id == eq.getCurrentPresetId() }
+            val preset = eq.daxPresets.find { it.id == eq.getCurrentDaxPresetId() }
             val presetName = if (preset != null) getString(preset.nameRes) else getString(R.string.preset_custom)
             binding.subtitleEqualizer.text = getString(R.string.equalizer_preset) + ": " + presetName
         } else {
-            binding.subtitleEqualizer.setText(R.string.equalizer_desc)
+            binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
         }
     }
 

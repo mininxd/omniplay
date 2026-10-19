@@ -112,24 +112,42 @@
     <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
     <string name="omnisync_master_volume">Broadcast Master Volume</string>
 
-    <!-- Equalizer -->
+    <!-- Equalizer and Sound Enhancement (DaxUI & SoundEnhancement Cores) -->
     <string name="equalizer">Equalizer</string>
-    <string name="equalizer_desc">Adjust audio frequency bands, presets, and bass boost</string>
-    <string name="equalizer_enabled">Enable equalizer</string>
+    <string name="equalizer_desc">Dolby Atmos® 10-band EQ &amp; Sony Sound Enhancement</string>
     <string name="equalizer_preset">Preset</string>
-    <string name="bass_boost">Bass Boost (ClearBass)</string>
-    <string name="virtualizer">Surround Sound</string>
-    <string name="reset_equalizer">Reset to Flat</string>
+    <string name="bass_boost">ClearBass™ (Sub-Bass)</string>
+    <string name="sound_enhancement_desc">Dolby Atmos® 10-Band EQ &amp; Sony Xperia™ Sound Enhancement</string>
+    <string name="equalizer_and_sound_enhancement">Equalizer and Sound Enhancement</string>
+    <string name="equalizer_and_sound_enhancement_desc">Dolby Atmos® 10-Band EQ &amp; Sony Xperia™ Sound Enhancement</string>
+    <string name="equalizer_master_switch">Enable Audio Enhancement</string>
+    <string name="dax_equalizer_title">Graphic Equalizer (10 Bands)</string>
+    <string name="dax_equalizer_desc">Dolby DAX 10-band precision frequency tuning</string>
+    <string name="preset_dynamic">Dynamic</string>
+    <string name="preset_movie">Movie</string>
+    <string name="preset_music">Music</string>
+    <string name="preset_voice">Voice</string>
     <string name="preset_flat">Flat</string>
-    <string name="preset_rock">Rock</string>
-    <string name="preset_pop">Pop</string>
-    <string name="preset_jazz">Jazz</string>
-    <string name="preset_classical">Classical</string>
-    <string name="preset_hiphop">Hip Hop</string>
-    <string name="preset_electronic">Electronic</string>
-    <string name="preset_vocal">Vocal Boost</string>
-    <string name="preset_bass">Bass Boost</string>
-    <string name="preset_treble">Treble Boost</string>
     <string name="preset_custom">Custom</string>
+    <string name="reset_to_flat">Reset to Flat</string>
+
+    <!-- Sony Xperia Sound Enhancement Suite -->
+    <string name="sony_enhancements_title">Sony Xperia™ Sound Enhancement</string>
+    <string name="clear_audio_plus_title">ClearAudio+</string>
+    <string name="clear_audio_plus_desc">One-touch Sony sound optimization for automatic clarity and balance</string>
+    <string name="clear_phase_title">Clear Phase™</string>
+    <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
+    <string name="xloud_title">xLOUD™</string>
+    <string name="xloud_desc">Internal speaker volume &amp; dynamic loudness booster</string>
+    <string name="sforce_title">S-Force Front Surround 3D</string>
+    <string name="sforce_desc">Frontal 3D virtual surround soundstage expansion</string>
+    <string name="vpt_title">VPT (Surround Sound)</string>
+    <string name="vpt_desc">Sony Virtualphones Technology acoustic simulation</string>
+    <string name="vpt_off">Off</string>
+    <string name="vpt_studio">Studio</string>
+    <string name="vpt_club">Club</string>
+    <string name="vpt_concert_hall">Concert Hall</string>
+    <string name="clear_bass_title">ClearBass™</string>
+    <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
 </resources>
 

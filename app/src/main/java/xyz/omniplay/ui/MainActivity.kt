@@ -822,6 +822,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnEqualizer.setOnClickListener {
             EqualizerBottomSheet.show(supportFragmentManager)
         }
+        binding.btnEqualizer.setOnLongClickListener {
+            startActivity(Intent(this, SoundEnhancementActivity::class.java))
+            true
+        }
         binding.btnOmnisync.setOnClickListener {
             xyz.omniplay.sync.OmniSyncBottomSheet.newInstance()
                 .show(supportFragmentManager, xyz.omniplay.sync.OmniSyncBottomSheet.TAG)

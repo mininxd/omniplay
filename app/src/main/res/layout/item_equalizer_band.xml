@@ -35,5 +35,9 @@
         android:id="@+id/slider_band_gain"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:stepSize="1" />
+        android:valueFrom="-12"
+        android:valueTo="12"
+        android:value="0"
+        android:stepSize="1"
+        app:tickVisible="false" />
 </LinearLayout>

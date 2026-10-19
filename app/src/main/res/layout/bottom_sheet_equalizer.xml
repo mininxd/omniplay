@@ -160,9 +160,11 @@
                     android:id="@+id/slider_bass_boost"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:valueFrom="0"
-                    android:valueTo="100"
-                    android:stepSize="1" />
+                    android:valueFrom="-10"
+                    android:valueTo="10"
+                    android:value="0"
+                    android:stepSize="1"
+                    app:tickVisible="false" />
 
                 <!-- Surround Sound (Virtualizer) -->
                 <LinearLayout
@@ -177,7 +179,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/virtualizer"
+                        android:text="@string/vpt_title"
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="14sp" />
 
@@ -186,30 +188,72 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
-                        android:text="0%"
+                        android:text="@string/vpt_off"
                         android:textColor="?attr/colorPrimary"
                         android:textSize="13sp" />
                 </LinearLayout>
 
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/slider_virtualizer"
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chip_group_vpt_sheet"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:valueFrom="0"
-                    android:valueTo="100"
-                    android:stepSize="1" />
+                    android:layout_marginTop="8dp"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/sheet_vpt_off"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checkable="true"
+                        android:text="@string/vpt_off" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/sheet_vpt_studio"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checkable="true"
+                        android:text="@string/vpt_studio" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/sheet_vpt_club"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checkable="true"
+                        android:text="@string/vpt_club" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/sheet_vpt_concert"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checkable="true"
+                        android:text="@string/vpt_concert_hall" />
+                </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Reset Button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_reset_equalizer"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="wrap_content"
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="16dp"
-            android:text="@string/reset_equalizer" />
+            android:layout_marginTop="20dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset_equalizer"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/reset_to_flat" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_open_full_suite"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/equalizer_and_sound_enhancement" />
+        </LinearLayout>
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

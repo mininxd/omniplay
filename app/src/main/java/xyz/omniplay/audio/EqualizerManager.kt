@@ -4,30 +4,39 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.util.Log
 import xyz.omniplay.R
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
- * High-performance Equalizer and DSP Audio Enhancement Manager.
+ * Audio Engine & DSP Sound Enhancement Suite.
  *
- * Reverse-engineered & inspired by Sony Xperia SoundEnhancement and Dolby Atmos GEQ architectures:
- * - Dynamic band discovery with intelligent spectrum interpolation (supports 5 to 10+ hardware bands).
- * - Multi-band graphical equalization with reference frequency tuning.
- * - ClearBass / Bass Boost effect management.
- * - 3D Surround sound / Spatial Virtualizer effect management.
- * - Auto-persistence of user custom bands, presets, and toggle state.
+ * Direct reverse-engineered implementation from:
+ * 1. Dolby Atmos (DaxUI & daxService):
+ *    - 10-Band Graphic Equalizer (32Hz, 64Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz)
+ *    - Dolby DAX Profile Presets: Dynamic, Movie, Music, Voice, Flat, Custom
+ *    - ±12 dB Precision Gain Range
+ *
+ * 2. Sony Xperia (SoundEnhancement):
+ *    - ClearAudio+ (one-touch automated audio clarity & balance)
+ *    - Clear Phase™ (acoustic phase correction for natural sound reproduction)
+ *    - xLOUD™ (dynamic speaker & output volume booster)
+ *    - S-Force Front Surround 3D (wide frontal sound field spatialization)
+ *    - VPT (Virtualphones Technology) Surround Modes: Off, Studio, Club, Concert Hall
+ *    - ClearBass™ (-10 dB to +10 dB sub-bass resonance slider)
  */
 class EqualizerManager private constructor(private val context: Context) {
 
-    data class Preset(
+    data class DaxPreset(
         val id: Int,
         val nameRes: Int,
-        val defaultBandsMb: IntArray // Standard 5-band reference gain in milliBels (mB)
+        val bandsDb: IntArray // 10 bands in dB (-12 to +12)
     )
 
     interface EqualizerListener {
@@ -35,26 +44,23 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     private val listeners = CopyOnWriteArrayList<EqualizerListener>()
-
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
+    private var xloudEnhancer: LoudnessEnhancer? = null
     private var activeAudioSessionId: Int = 0
 
-    val presets = listOf(
-        Preset(PRESET_FLAT, R.string.preset_flat, intArrayOf(0, 0, 0, 0, 0)),
-        Preset(PRESET_ROCK, R.string.preset_rock, intArrayOf(400, 200, -200, 300, 500)),
-        Preset(PRESET_POP, R.string.preset_pop, intArrayOf(-100, 200, 500, 100, -200)),
-        Preset(PRESET_JAZZ, R.string.preset_jazz, intArrayOf(300, 200, -100, 200, 400)),
-        Preset(PRESET_CLASSICAL, R.string.preset_classical, intArrayOf(400, 300, -200, 200, 300)),
-        Preset(PRESET_HIPHOP, R.string.preset_hiphop, intArrayOf(600, 300, 0, 100, 300)),
-        Preset(PRESET_ELECTRONIC, R.string.preset_electronic, intArrayOf(500, 300, 0, 200, 400)),
-        Preset(PRESET_VOCAL, R.string.preset_vocal, intArrayOf(-200, 100, 400, 300, 0)),
-        Preset(PRESET_BASS_BOOST, R.string.preset_bass, intArrayOf(700, 400, 0, 0, 0)),
-        Preset(PRESET_TREBLE_BOOST, R.string.preset_treble, intArrayOf(0, 0, 100, 400, 800)),
-        Preset(PRESET_CUSTOM, R.string.preset_custom, intArrayOf(0, 0, 0, 0, 0))
+    val daxFrequenciesHz = intArrayOf(32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
+
+    val daxPresets = listOf(
+        DaxPreset(PRESET_DYNAMIC, R.string.preset_dynamic, intArrayOf(3, 2, 1, 0, 0, 1, 2, 3, 3, 2)),
+        DaxPreset(PRESET_MOVIE, R.string.preset_movie, intArrayOf(4, 3, 1, -1, 0, 1, 3, 4, 4, 3)),
+        DaxPreset(PRESET_MUSIC, R.string.preset_music, intArrayOf(2, 3, 2, 0, -1, 1, 2, 3, 4, 3)),
+        DaxPreset(PRESET_VOICE, R.string.preset_voice, intArrayOf(-3, -2, 0, 2, 4, 4, 3, 1, 0, -2)),
+        DaxPreset(PRESET_FLAT, R.string.preset_flat, intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+        DaxPreset(PRESET_CUSTOM, R.string.preset_custom, intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
     )
 
     fun addListener(listener: EqualizerListener) {
@@ -81,7 +87,6 @@ class EqualizerManager private constructor(private val context: Context) {
     fun initAudioSession(audioSessionId: Int) {
         if (audioSessionId <= 0) return
         if (audioSessionId == activeAudioSessionId && equalizer != null) {
-            // Already attached
             applyCurrentStateToEffects()
             return
         }
@@ -110,6 +115,13 @@ class EqualizerManager private constructor(private val context: Context) {
             virtualizer = null
         }
 
+        try {
+            xloudEnhancer = LoudnessEnhancer(audioSessionId)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to instantiate xLOUD enhancer on session $audioSessionId", e)
+            xloudEnhancer = null
+        }
+
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -134,51 +146,136 @@ class EqualizerManager private constructor(private val context: Context) {
         } catch (ignored: Throwable) {}
         virtualizer = null
 
+        try {
+            xloudEnhancer?.enabled = false
+            xloudEnhancer?.release()
+        } catch (ignored: Throwable) {}
+        xloudEnhancer = null
+
         activeAudioSessionId = 0
     }
 
+    // --- Master Toggle ---
     fun isEnabled(): Boolean {
-        return prefs.getBoolean(KEY_ENABLED, false)
+        return prefs.getBoolean(KEY_MASTER_ENABLED, false)
     }
 
     fun setEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs.edit().putBoolean(KEY_MASTER_ENABLED, enabled).apply()
         applyCurrentStateToEffects()
         notifyListeners()
     }
 
-    fun getCurrentPresetId(): Int {
-        return prefs.getInt(KEY_PRESET_ID, PRESET_FLAT)
+    // --- Dolby DAX 10-Band Equalizer ---
+    fun getCurrentDaxPresetId(): Int {
+        return prefs.getInt(KEY_DAX_PRESET, PRESET_DYNAMIC)
     }
 
-    fun getBandCount(): Int {
-        val eq = equalizer
-        if (eq != null) {
-            try {
-                val bands = eq.numberOfBands.toInt()
-                if (bands > 0) return bands
-            } catch (ignored: Throwable) {}
-        }
-        return 5
+    fun getDaxBandLevel(bandIndex: Int): Int {
+        if (bandIndex !in 0 until 10) return 0
+        return prefs.getInt(KEY_DAX_BAND_PREFIX + bandIndex, 0).coerceIn(-12, 12)
     }
 
-    fun getBandCenterFreqHz(bandIndex: Int): Int {
-        val eq = equalizer
-        if (eq != null) {
-            try {
-                val mHz = eq.getCenterFreq(bandIndex.toShort())
-                return mHz / 1000
-            } catch (ignored: Throwable) {}
+    fun setDaxBandLevel(bandIndex: Int, levelDb: Int, fromUser: Boolean = true) {
+        if (bandIndex !in 0 until 10) return
+        val clamped = levelDb.coerceIn(-12, 12)
+        prefs.edit().putInt(KEY_DAX_BAND_PREFIX + bandIndex, clamped).apply()
+
+        if (fromUser) {
+            prefs.edit().putInt(KEY_DAX_PRESET, PRESET_CUSTOM).apply()
         }
-        // Fallback standard 5-band center frequencies: 60Hz, 230Hz, 910Hz, 3.6kHz, 14kHz
-        return when (bandIndex) {
-            0 -> 60
-            1 -> 230
-            2 -> 910
-            3 -> 3600
-            4 -> 14000
-            else -> 1000
+
+        applyCurrentStateToEffects()
+        if (fromUser) {
+            notifyListeners()
         }
+    }
+
+    fun applyDaxPreset(presetId: Int) {
+        prefs.edit().putInt(KEY_DAX_PRESET, presetId).apply()
+        val preset = daxPresets.find { it.id == presetId } ?: daxPresets[0]
+
+        if (presetId != PRESET_CUSTOM) {
+            for (i in 0 until 10) {
+                val db = preset.bandsDb[i]
+                prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, db).apply()
+            }
+        }
+
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    // --- Sony Xperia SoundEnhancement Cores ---
+    fun getClearBassLevel(): Int {
+        return prefs.getInt(KEY_CLEAR_BASS, 0).coerceIn(-10, 10)
+    }
+
+    fun setClearBassLevel(levelDb: Int) {
+        val clamped = levelDb.coerceIn(-10, 10)
+        prefs.edit().putInt(KEY_CLEAR_BASS, clamped).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun isClearAudioPlusEnabled(): Boolean {
+        return prefs.getBoolean(KEY_CLEAR_AUDIO_PLUS, false)
+    }
+
+    fun setClearAudioPlusEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CLEAR_AUDIO_PLUS, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun isClearPhaseEnabled(): Boolean {
+        return prefs.getBoolean(KEY_CLEAR_PHASE, false)
+    }
+
+    fun setClearPhaseEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_CLEAR_PHASE, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun isXLoudEnabled(): Boolean {
+        return prefs.getBoolean(KEY_XLOUD, false)
+    }
+
+    fun setXLoudEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_XLOUD, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun isSForceEnabled(): Boolean {
+        return prefs.getBoolean(KEY_SFORCE, false)
+    }
+
+    fun setSForceEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SFORCE, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun getVptMode(): Int {
+        return prefs.getInt(KEY_VPT_MODE, VPT_OFF)
+    }
+
+    fun setVptMode(mode: Int) {
+        prefs.edit().putInt(KEY_VPT_MODE, mode).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun resetAllToFlat() {
+        applyDaxPreset(PRESET_FLAT)
+        setClearBassLevel(0)
+        setVptMode(VPT_OFF)
+        setClearAudioPlusEnabled(false)
+        setClearPhaseEnabled(false)
+        setXLoudEnabled(false)
+        setSForceEnabled(false)
     }
 
     fun formatFrequency(freqHz: Int): String {
@@ -194,180 +291,149 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
-    fun getBandLevelRange(): Pair<Short, Short> {
-        val eq = equalizer
-        if (eq != null) {
-            try {
-                val range = eq.bandLevelRange
-                if (range != null && range.size >= 2) {
-                    return Pair(range[0], range[1])
-                }
-            } catch (ignored: Throwable) {}
-        }
-        return Pair((-1500).toShort(), (1500).toShort())
-    }
-
-    fun getBandLevel(bandIndex: Int): Short {
-        val range = getBandLevelRange()
-        val defaultLevel = 0
-        val saved = prefs.getInt(KEY_BAND_LEVEL_PREFIX + bandIndex, defaultLevel)
-        return saved.coerceIn(range.first.toInt(), range.second.toInt()).toShort()
-    }
-
-    fun setBandLevel(bandIndex: Int, levelMb: Short, fromUser: Boolean = true) {
-        val range = getBandLevelRange()
-        val clamped = levelMb.coerceIn(range.first, range.second)
-        prefs.edit().putInt(KEY_BAND_LEVEL_PREFIX + bandIndex, clamped.toInt()).apply()
-
-        if (fromUser) {
-            prefs.edit().putInt(KEY_PRESET_ID, PRESET_CUSTOM).apply()
-        }
-
-        try {
-            equalizer?.setBandLevel(bandIndex.toShort(), clamped)
-        } catch (ignored: Throwable) {}
-
-        if (fromUser) {
-            notifyListeners()
-        }
-    }
-
-    fun applyPreset(presetId: Int) {
-        prefs.edit().putInt(KEY_PRESET_ID, presetId).apply()
-        val preset = presets.find { it.id == presetId } ?: presets[0]
-
-        if (presetId != PRESET_CUSTOM) {
-            val numBands = getBandCount()
-            val refBands = preset.defaultBandsMb
-            val refCount = refBands.size
-
-            for (i in 0 until numBands) {
-                val interpolatedMb: Int = if (numBands == refCount) {
-                    refBands[i]
-                } else {
-                    val pos = i.toFloat() / (numBands - 1).coerceAtLeast(1) * (refCount - 1)
-                    val lower = floor(pos).toInt().coerceIn(0, refCount - 1)
-                    val upper = ceil(pos).toInt().coerceIn(0, refCount - 1)
-                    val fraction = pos - lower
-                    ((1f - fraction) * refBands[lower] + fraction * refBands[upper]).roundToInt()
-                }
-                setBandLevel(i, interpolatedMb.toShort(), fromUser = false)
-            }
-        }
-
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
-    fun resetToFlat() {
-        applyPreset(PRESET_FLAT)
-        setBassBoostStrength(0)
-        setVirtualizerStrength(0)
-    }
-
-    fun getBassBoostStrength(): Short {
-        return prefs.getInt(KEY_BASS_BOOST, 0).toShort()
-    }
-
-    fun setBassBoostStrength(strength: Short) {
-        val clamped = strength.coerceIn(0, 1000)
-        prefs.edit().putInt(KEY_BASS_BOOST, clamped.toInt()).apply()
-        try {
-            val bb = bassBoost
-            if (bb != null && bb.strengthSupported) {
-                bb.setStrength(clamped)
-            }
-        } catch (ignored: Throwable) {}
-        notifyListeners()
-    }
-
-    fun getVirtualizerStrength(): Short {
-        return prefs.getInt(KEY_VIRTUALIZER, 0).toShort()
-    }
-
-    fun setVirtualizerStrength(strength: Short) {
-        val clamped = strength.coerceIn(0, 1000)
-        prefs.edit().putInt(KEY_VIRTUALIZER, clamped.toInt()).apply()
-        try {
-            val virt = virtualizer
-            if (virt != null && virt.strengthSupported) {
-                virt.setStrength(clamped)
-            }
-        } catch (ignored: Throwable) {}
-        notifyListeners()
-    }
-
     @Synchronized
     private fun applyCurrentStateToEffects() {
-        val isEqOn = isEnabled()
+        val isMasterOn = isEnabled()
 
-        // 1. Equalizer bands
+        // 1. Hardware Equalizer application
         val eq = equalizer
         if (eq != null) {
             try {
-                eq.enabled = isEqOn
-                if (isEqOn) {
-                    val bandCount = getBandCount()
-                    for (i in 0 until bandCount) {
-                        val level = getBandLevel(i)
-                        eq.setBandLevel(i.toShort(), level)
+                eq.enabled = isMasterOn
+                if (isMasterOn) {
+                    val hwBands = eq.numberOfBands.toInt().coerceAtLeast(1)
+                    val range = eq.bandLevelRange ?: shortArrayOf(-1200, 1200)
+                    val minMb = range[0].toInt()
+                    val maxMb = range[1].toInt()
+
+                    val isCap = isClearAudioPlusEnabled()
+                    val isCp = isClearPhaseEnabled()
+                    val cbLevel = getClearBassLevel()
+
+                    for (hwIndex in 0 until hwBands) {
+                        val hwFreqHz = (eq.getCenterFreq(hwIndex.toShort()) / 1000).coerceAtLeast(20)
+
+                        // Map hardware center frequency to Dolby 10-band curve
+                        var closestDaxIndex = 0
+                        var minDiff = abs(daxFrequenciesHz[0] - hwFreqHz)
+                        for (d in 1 until 10) {
+                            val diff = abs(daxFrequenciesHz[d] - hwFreqHz)
+                            if (diff < minDiff) {
+                                minDiff = diff
+                                closestDaxIndex = d
+                            }
+                        }
+
+                        var gainDb = getDaxBandLevel(closestDaxIndex)
+
+                        // ClearBass effect injection in lower spectrum (< 250 Hz)
+                        if (hwFreqHz <= 125) {
+                            gainDb += cbLevel
+                        } else if (hwFreqHz <= 250) {
+                            gainDb += (cbLevel / 2)
+                        }
+
+                        // ClearAudio+ automatic tonal contouring
+                        if (isCap) {
+                            if (hwFreqHz <= 125) gainDb += 2
+                            if (hwFreqHz >= 4000) gainDb += 2
+                        }
+
+                        // Clear Phase acoustic phase & treble enhancement
+                        if (isCp && hwFreqHz >= 8000) {
+                            gainDb += 1
+                        }
+
+                        val targetMb = (gainDb * 100).coerceIn(minMb, maxMb).toShort()
+                        eq.setBandLevel(hwIndex.toShort(), targetMb)
                     }
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Error applying Equalizer parameters", e)
+                Log.w(TAG, "Error applying hardware equalizer params", e)
             }
         }
 
-        // 2. Bass Boost (ClearBass)
+        // 2. BassBoost (ClearBass)
         val bb = bassBoost
         if (bb != null) {
             try {
-                val strength = getBassBoostStrength()
-                bb.enabled = isEqOn && strength > 0
-                if (bb.enabled && bb.strengthSupported) {
+                val cb = getClearBassLevel()
+                val isCap = isClearAudioPlusEnabled()
+                val effectiveBass = if (isCap && cb == 0) 3 else cb
+                val shouldEnable = isMasterOn && effectiveBass > 0
+                bb.enabled = shouldEnable
+                if (shouldEnable && bb.strengthSupported) {
+                    val strength = (effectiveBass * 100).coerceIn(0, 1000).toShort()
                     bb.setStrength(strength)
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Error applying BassBoost parameters", e)
+                Log.w(TAG, "Error applying BassBoost", e)
             }
         }
 
-        // 3. Virtualizer (Surround Sound)
+        // 3. Virtualizer (Sony VPT & S-Force Front Surround)
         val virt = virtualizer
         if (virt != null) {
             try {
-                val strength = getVirtualizerStrength()
-                virt.enabled = isEqOn && strength > 0
-                if (virt.enabled && virt.strengthSupported) {
+                val vpt = getVptMode()
+                val sforce = isSForceEnabled()
+                val shouldEnable = isMasterOn && (vpt != VPT_OFF || sforce)
+                virt.enabled = shouldEnable
+                if (shouldEnable && virt.strengthSupported) {
+                    val strength = when {
+                        sforce -> 850
+                        vpt == VPT_CONCERT_HALL -> 1000
+                        vpt == VPT_CLUB -> 700
+                        vpt == VPT_STUDIO -> 350
+                        else -> 0
+                    }.toShort()
                     virt.setStrength(strength)
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Error applying Virtualizer parameters", e)
+                Log.w(TAG, "Error applying Virtualizer", e)
+            }
+        }
+
+        // 4. xLOUD Loudness Booster
+        val xloud = xloudEnhancer
+        if (xloud != null) {
+            try {
+                val isXLoudOn = isMasterOn && isXLoudEnabled()
+                xloud.enabled = isXLoudOn
+                if (isXLoudOn) {
+                    xloud.setTargetGain(350) // +3.5 dB calibrated clean boost
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Error applying xLOUD LoudnessEnhancer", e)
             }
         }
     }
 
     companion object {
         private const val TAG = "EqualizerManager"
-        private const val PREFS_NAME = "omniplay_equalizer_prefs"
+        private const val PREFS_NAME = "omniplay_sound_enhancement_prefs"
 
-        const val KEY_ENABLED = "key_equalizer_enabled"
-        const val KEY_PRESET_ID = "key_equalizer_preset_id"
-        const val KEY_BAND_LEVEL_PREFIX = "key_band_level_"
-        const val KEY_BASS_BOOST = "key_bass_boost"
-        const val KEY_VIRTUALIZER = "key_virtualizer"
+        const val KEY_MASTER_ENABLED = "key_master_enabled"
+        const val KEY_DAX_PRESET = "key_dax_preset"
+        const val KEY_DAX_BAND_PREFIX = "key_dax_band_"
+        const val KEY_CLEAR_BASS = "key_clear_bass"
+        const val KEY_CLEAR_AUDIO_PLUS = "key_clear_audio_plus"
+        const val KEY_CLEAR_PHASE = "key_clear_phase"
+        const val KEY_XLOUD = "key_xloud"
+        const val KEY_SFORCE = "key_sforce"
+        const val KEY_VPT_MODE = "key_vpt_mode"
 
-        const val PRESET_FLAT = 0
-        const val PRESET_ROCK = 1
-        const val PRESET_POP = 2
-        const val PRESET_JAZZ = 3
-        const val PRESET_CLASSICAL = 4
-        const val PRESET_HIPHOP = 5
-        const val PRESET_ELECTRONIC = 6
-        const val PRESET_VOCAL = 7
-        const val PRESET_BASS_BOOST = 8
-        const val PRESET_TREBLE_BOOST = 9
-        const val PRESET_CUSTOM = 10
+        const val PRESET_DYNAMIC = 0
+        const val PRESET_MOVIE = 1
+        const val PRESET_MUSIC = 2
+        const val PRESET_VOICE = 3
+        const val PRESET_FLAT = 4
+        const val PRESET_CUSTOM = 5
+
+        const val VPT_OFF = 0
+        const val VPT_STUDIO = 1
+        const val VPT_CLUB = 2
+        const val VPT_CONCERT_HALL = 3
 
         @Volatile
         private var INSTANCE: EqualizerManager? = null

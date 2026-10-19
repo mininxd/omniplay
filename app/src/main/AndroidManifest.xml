@@ -317,6 +317,15 @@
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
 
+        <!-- Equalizer & Sound Enhancement Screen -->
+        <activity
+            android:name=".ui.SoundEnhancementActivity"
+            android:exported="false"
+            android:label="@string/equalizer_and_sound_enhancement"
+            android:theme="@style/Theme.Omniplay"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity" />
+
         <!-- Media Playback Service & Android Auto MediaBrowser -->
         <service
             android:name=".service.PlaybackService"
