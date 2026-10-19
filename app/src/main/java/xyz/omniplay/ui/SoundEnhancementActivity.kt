@@ -62,6 +62,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.toolbar.setNavigationOnClickListener {
             finish()
         }
+        binding.toolbar.subtitle = eqManager.getHardwareDspStatus()
     }
 
     private fun setupMasterSwitch() {
@@ -230,6 +231,8 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
     private fun refreshUI() {
         isUpdatingUi = true
+
+        binding.toolbar.subtitle = eqManager.getHardwareDspStatus()
 
         val enabled = eqManager.isEnabled()
         binding.switchMaster.isChecked = enabled

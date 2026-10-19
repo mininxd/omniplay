@@ -39,11 +39,24 @@ class EqualizerManager private constructor(private val context: Context) {
     private val listeners = CopyOnWriteArrayList<EqualizerListener>()
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    private val nativeHardwareBinding = NativeAudioEffectBinding()
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var xloudEnhancer: LoudnessEnhancer? = null
     private var activeAudioSessionId: Int = 0
+
+    val isHardwareAccelerated: Boolean
+        get() = nativeHardwareBinding.isSonyActive || nativeHardwareBinding.isDolbyActive
+
+    fun getHardwareDspStatus(): String {
+        return when {
+            nativeHardwareBinding.isSonyActive && nativeHardwareBinding.isDolbyActive -> "Hardware DSP (Sony + Dolby Active)"
+            nativeHardwareBinding.isSonyActive -> "Hardware DSP (Sony Soundfx Active)"
+            nativeHardwareBinding.isDolbyActive -> "Hardware DSP (Dolby DAP Active)"
+            else -> "Software High-Precision DSP Engine"
+        }
+    }
 
     val daxFrequenciesHz = intArrayOf(32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 
@@ -106,12 +119,22 @@ class EqualizerManager private constructor(private val context: Context) {
             xloudEnhancer = null
         }
 
+        try {
+            nativeHardwareBinding.initSession(audioSessionId)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to initialize native hardware bindings on session $audioSessionId", e)
+        }
+
         applyCurrentStateToEffects()
         notifyListeners()
     }
 
     @Synchronized
     fun releaseEffects() {
+        try {
+            nativeHardwareBinding.release()
+        } catch (ignored: Throwable) {}
+
         try {
             equalizer?.enabled = false
             equalizer?.release()
@@ -464,6 +487,30 @@ class EqualizerManager private constructor(private val context: Context) {
                 Log.w(TAG, "Error applying LoudnessEnhancer", e)
             }
         }
+
+        // 5. Native Hardware Audio HAL Effects (Sony & Dolby Atmos)
+        val allBands = getAllDaxBandLevels()
+        val cbLevel = getClearBassLevel()
+        nativeHardwareBinding.applySonyState(
+            isMasterOn = isMasterOn,
+            dynamicNormalizer = isDynamicNormalizerEnabled(),
+            sforceSurround = isSForceEnabled(),
+            clearPhaseHp = isAutomaticOptimizationEnabled(),
+            clearPhase = isClearPhaseEnabled(),
+            xloud = isXLoudEnabled(),
+            vptMode = getVptMode(),
+            bandGainsDb = allBands,
+            clearBassLevel = cbLevel
+        )
+
+        nativeHardwareBinding.applyDolbyState(
+            isMasterOn = isMasterOn,
+            dynamicNormalizer = isDynamicNormalizerEnabled(),
+            dialogEnhancerAmount = getDialogEnhancerAmount(),
+            ieqPreset = getIeqPreset(),
+            clearBassLevel = cbLevel,
+            bandGainsDb = allBands
+        )
     }
 
     companion object {

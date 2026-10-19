@@ -138,7 +138,7 @@
     <!-- Sound Enhancement Suite -->
     <string name="sony_enhancements_title">Sound Enhancement</string>
     <string name="dynamic_normalizer_title">Dynamic normaliser</string>
-    <string name="dynamic_normalizer_desc">Minimise volume differences between songs or videos</string>
+    <string name="dynamic_normalizer_desc">Minimise volume differences between songs</string>
     <string name="automatic_optimization_title">Automatic optimisation</string>
     <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
     <string name="equalizer_active">Custom 10-Band Tuning</string>

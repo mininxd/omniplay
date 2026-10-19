@@ -19,14 +19,15 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Interactive Graphic Equalizer Bars View styled after Material 3 Expressive
- * and reference vertical pill-rack bar aesthetics.
+ * Interactive Graphic Equalizer Bars View strictly following Material 3 Expressive
+ * design guidelines and dynamic theming.
  *
  * Displays 10 vertical rounded capsule columns (32 Hz to 16 kHz) side-by-side:
  * - 0 dB center reference dashed guideline.
  * - Pill-shaped tracks and filled capsules rising or falling relative to 0 dB.
- * - Real-time touch dragging, swipe-curve drawing, and double-tap reset.
- * - Active pill badge highlight matching the featured pillar aesthetic.
+ * - Locked drag: when sliding begins on a band, horizontal drift stays locked to that band.
+ * - Reduced horizontal margins for maximum touch target width and immersive layout.
+ * - Consistent dynamic Material You palette (no arbitrary hardcoded colors).
  */
 class DaxEqualizerBarsView @JvmOverloads constructor(
     context: Context,
@@ -45,6 +46,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
     var listener: OnBandGainChangeListener? = null
 
     private var activeBandIndex: Int = -1
+    private var lockedBandIndex: Int = -1
     private var lastTapTime: Long = 0L
     private var lastTapBand: Int = -1
 
@@ -63,7 +65,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         style = Paint.Style.FILL
     }
 
-    private val highlightedBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val inactiveBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
@@ -131,11 +133,12 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled) return false
 
-        val contentWidth = (width - paddingLeft - paddingRight).toFloat()
+        val horizontalMargin = 2.dp
+        val contentWidth = (width - paddingLeft - paddingRight - horizontalMargin * 2).toFloat()
         if (contentWidth <= 0) return false
 
         val slotWidth = contentWidth / 10f
-        val x = event.x - paddingLeft
+        val x = event.x - paddingLeft - horizontalMargin
         val y = event.y
 
         val topMargin = 32.dp
@@ -149,6 +152,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
+                lockedBandIndex = touchedBand
                 activeBandIndex = touchedBand
 
                 // Check for double tap reset to 0 dB
@@ -172,14 +176,17 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
 
             MotionEvent.ACTION_MOVE -> {
                 parent?.requestDisallowInterceptTouchEvent(true)
-                activeBandIndex = touchedBand
-                updateBandFromY(touchedBand, y, centerY, halfTrackHeight)
+                // Touch position is strictly locked onto the initial band touched!
+                val targetBand = if (lockedBandIndex in 0 until 10) lockedBandIndex else touchedBand
+                activeBandIndex = targetBand
+                updateBandFromY(targetBand, y, centerY, halfTrackHeight)
                 invalidate()
                 return true
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
+                lockedBandIndex = -1
                 activeBandIndex = -1
                 invalidate()
                 return true
@@ -211,18 +218,17 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         val h = height
         if (w <= 0 || h <= 0) return
 
+        // Pure Material 3 Expressive Dynamic Color Palette
         val primaryColor = ThemeColors.getPrimary(context)
         val onPrimaryColor = ThemeColors.getOnPrimary(context)
+        val primaryContainer = ThemeColors.getPrimaryContainer(context)
         val surfaceHighest = ThemeColors.getSurfaceContainerHighest(context)
         val outlineVariant = ThemeColors.getOutlineVariant(context)
         val onSurfaceVariant = ThemeColors.getOnSurfaceVariant(context)
         val onSurface = ThemeColors.getOnSurface(context)
 
-        // Featured highlight color (Vibrant Emerald / Material Green)
-        val highlightColor = Color.parseColor("#34A853")
-
         val isViewEnabled = isEnabled
-        val alphaMultiplier = if (isViewEnabled) 1.0f else 0.4f
+        val alphaMultiplier = if (isViewEnabled) 1.0f else 0.38f
 
         trackPaint.color = ColorUtils.setAlphaComponent(
             surfaceHighest,
@@ -232,9 +238,11 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             primaryColor,
             (Color.alpha(primaryColor) * alphaMultiplier).toInt()
         )
-        highlightedBarPaint.color = ColorUtils.setAlphaComponent(
-            highlightColor,
-            (Color.alpha(highlightColor) * alphaMultiplier).toInt()
+        // Resting adjusted bars use an expressive tone of the primary theme
+        val restingBarColor = ColorUtils.blendARGB(primaryContainer, primaryColor, 0.40f)
+        inactiveBarPaint.color = ColorUtils.setAlphaComponent(
+            restingBarColor,
+            (Color.alpha(restingBarColor) * alphaMultiplier).toInt()
         )
         guidelinePaint.color = ColorUtils.setAlphaComponent(
             outlineVariant,
@@ -245,7 +253,8 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         gainTextPaint.textSize = 11f.sp
         badgeTextPaint.textSize = 11f.sp
 
-        val contentWidth = (w - paddingLeft - paddingRight).toFloat()
+        val horizontalMargin = 2.dp
+        val contentWidth = (w - paddingLeft - paddingRight - horizontalMargin * 2).toFloat()
         val topMargin = 32.dp
         val bottomMargin = 26.dp
         val usableTrackHeight = h - paddingTop - paddingBottom - topMargin - bottomMargin
@@ -253,18 +262,18 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
         val halfTrackHeight = usableTrackHeight / 2f
 
         val slotWidth = contentWidth / 10f
-        // Pillar width: 62% of slot, capped between 14dp and 26dp
-        val barWidth = (slotWidth * 0.62f).coerceIn(14.dp, 26.dp)
+        // Wider pillars: 74% of slot width for generous touch surface and M3 Expressive pill weight
+        val barWidth = (slotWidth * 0.74f).coerceIn(16.dp, 32.dp)
         val barRadius = barWidth / 2f
 
         // 1. Draw 0 dB Reference Guideline across all pillars
-        val lineLeft = paddingLeft + slotWidth * 0.2f
-        val lineRight = w - paddingRight - slotWidth * 0.2f
+        val lineLeft = paddingLeft + horizontalMargin + slotWidth * 0.15f
+        val lineRight = w - paddingRight - horizontalMargin - slotWidth * 0.15f
         canvas.drawLine(lineLeft, centerY, lineRight, centerY, guidelinePaint)
 
         // 2. Draw each of the 10 bands
         for (i in 0 until 10) {
-            val centerX = paddingLeft + (i + 0.5f) * slotWidth
+            val centerX = paddingLeft + horizontalMargin + (i + 0.5f) * slotWidth
             val gain = bandGains[i]
             val isActive = (i == activeBandIndex)
 
@@ -279,8 +288,8 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             )
             canvas.drawRoundRect(tempRect, barRadius, barRadius, trackPaint)
 
-            // Active Filled Bar
-            val chosenBarPaint = if (isActive) highlightedBarPaint else activeBarPaint
+            // Active Filled Bar: solid primary if actively dragged, harmonious expressive tone if resting
+            val chosenBarPaint = if (isActive) activeBarPaint else inactiveBarPaint
 
             if (gain == 0) {
                 // At 0 dB: draw a subtle centered circle / pill disc
@@ -316,15 +325,15 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
 
             // 3. Top Gain Label / Active Floating Badge
             if (isActive) {
-                // Draw floating badge above the bar (like the checkmark badge in screenshot)
+                // Draw floating badge above the bar using Material 3 Primary & OnPrimary
                 val badgeText = if (gain > 0) "+$gain dB" else if (gain == 0) "0 dB" else "$gain dB"
                 val textWidth = badgeTextPaint.measureText(badgeText)
-                val badgePaddingH = 7.dp
-                val badgeH = 20.dp
+                val badgePaddingH = 8.dp
+                val badgeH = 22.dp
                 val badgeW = textWidth + badgePaddingH * 2
                 val badgeY = paddingTop + (topMargin - badgeH) / 2f
 
-                badgeBgPaint.color = highlightColor
+                badgeBgPaint.color = primaryColor
                 tempRect.set(
                     centerX - badgeW / 2f,
                     badgeY,
@@ -333,7 +342,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 )
                 canvas.drawRoundRect(tempRect, badgeH / 2f, badgeH / 2f, badgeBgPaint)
 
-                badgeTextPaint.color = Color.WHITE
+                badgeTextPaint.color = onPrimaryColor
                 val fontMetrics = badgeTextPaint.fontMetrics
                 val textBaseline = badgeY + (badgeH - fontMetrics.bottom + fontMetrics.top) / 2f - fontMetrics.top
                 canvas.drawText(badgeText, centerX, textBaseline, badgeTextPaint)

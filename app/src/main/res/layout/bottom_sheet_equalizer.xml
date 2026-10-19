@@ -96,9 +96,9 @@
                 android:id="@+id/sheet_eq_bars_view"
                 android:layout_width="match_parent"
                 android:layout_height="210dp"
-                android:paddingStart="8dp"
+                android:paddingStart="4dp"
                 android:paddingTop="12dp"
-                android:paddingEnd="8dp"
+                android:paddingEnd="4dp"
                 android:paddingBottom="12dp" />
         </com.google.android.material.card.MaterialCardView>
 
@@ -156,11 +156,11 @@
                     android:stepSize="1"
                     app:tickVisible="true" />
 
-                <!-- Surround Sound (Virtualizer) -->
+                <!-- Intelligent Equalizer -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="12dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -169,54 +169,58 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/vpt_title"
+                        android:text="@string/ieq_title"
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="14sp" />
 
                     <TextView
-                        android:id="@+id/tv_virtualizer_value"
+                        android:id="@+id/tv_ieq_value"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/vpt_off"
+                        android:text="@string/ieq_off"
                         android:textColor="?attr/colorPrimary"
                         android:textSize="13sp" />
                 </LinearLayout>
 
                 <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/chip_group_vpt_sheet"
+                    android:id="@+id/chip_group_ieq_sheet"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     app:singleSelection="true">
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_vpt_off"
+                        android:id="@+id/sheet_ieq_off"
+                        style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/vpt_off" />
+                        android:text="@string/ieq_off" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_vpt_studio"
+                        android:id="@+id/sheet_ieq_balanced"
+                        style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/vpt_studio" />
+                        android:text="@string/ieq_balanced" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_vpt_club"
+                        android:id="@+id/sheet_ieq_warm"
+                        style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/vpt_club" />
+                        android:text="@string/ieq_warm" />
 
                     <com.google.android.material.chip.Chip
-                        android:id="@+id/sheet_vpt_concert"
+                        android:id="@+id/sheet_ieq_detailed"
+                        style="@style/Widget.Material3.Chip.Filter"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/vpt_concert_hall" />
+                        android:text="@string/ieq_detailed" />
                 </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

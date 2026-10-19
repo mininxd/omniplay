@@ -59,7 +59,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         setupHeader()
         setupBandSliders()
         setupClearBass()
-        setupVptSurround()
+        setupIeq()
         setupButtons()
 
         refreshUI()
@@ -116,19 +116,19 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         }
     }
 
-    private fun setupVptSurround() {
-        updateVptChipSelection(eqManager.getVptMode())
+    private fun setupIeq() {
+        updateIeqChipSelection(eqManager.getIeqPreset())
 
-        binding.chipGroupVptSheet.setOnCheckedStateChangeListener { _, checkedIds ->
+        binding.chipGroupIeqSheet.setOnCheckedStateChangeListener { _, checkedIds ->
             if (isUpdatingUi) return@setOnCheckedStateChangeListener
-            val mode = when (checkedIds.firstOrNull()) {
-                R.id.sheet_vpt_studio -> EqualizerManager.VPT_STUDIO
-                R.id.sheet_vpt_club -> EqualizerManager.VPT_CLUB
-                R.id.sheet_vpt_concert -> EqualizerManager.VPT_CONCERT_HALL
-                else -> EqualizerManager.VPT_OFF
+            val preset = when (checkedIds.firstOrNull()) {
+                R.id.sheet_ieq_balanced -> EqualizerManager.IEQ_BALANCED
+                R.id.sheet_ieq_warm -> EqualizerManager.IEQ_WARM
+                R.id.sheet_ieq_detailed -> EqualizerManager.IEQ_DETAILED
+                else -> EqualizerManager.IEQ_OFF
             }
-            if (mode != eqManager.getVptMode()) {
-                eqManager.setVptMode(mode)
+            if (preset != eqManager.getIeqPreset()) {
+                eqManager.setIeqPreset(preset)
             }
         }
     }
@@ -146,22 +146,22 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         }
     }
 
-    private fun updateVptChipSelection(vptMode: Int) {
-        val targetId = when (vptMode) {
-            EqualizerManager.VPT_STUDIO -> R.id.sheet_vpt_studio
-            EqualizerManager.VPT_CLUB -> R.id.sheet_vpt_club
-            EqualizerManager.VPT_CONCERT_HALL -> R.id.sheet_vpt_concert
-            else -> R.id.sheet_vpt_off
+    private fun updateIeqChipSelection(ieqPreset: Int) {
+        val targetId = when (ieqPreset) {
+            EqualizerManager.IEQ_BALANCED -> R.id.sheet_ieq_balanced
+            EqualizerManager.IEQ_WARM -> R.id.sheet_ieq_warm
+            EqualizerManager.IEQ_DETAILED -> R.id.sheet_ieq_detailed
+            else -> R.id.sheet_ieq_off
         }
-        binding.chipGroupVptSheet.check(targetId)
+        binding.chipGroupIeqSheet.check(targetId)
 
-        val labelRes = when (vptMode) {
-            EqualizerManager.VPT_STUDIO -> R.string.vpt_studio
-            EqualizerManager.VPT_CLUB -> R.string.vpt_club
-            EqualizerManager.VPT_CONCERT_HALL -> R.string.vpt_concert_hall
-            else -> R.string.vpt_off
+        val labelRes = when (ieqPreset) {
+            EqualizerManager.IEQ_BALANCED -> R.string.ieq_balanced
+            EqualizerManager.IEQ_WARM -> R.string.ieq_warm
+            EqualizerManager.IEQ_DETAILED -> R.string.ieq_detailed
+            else -> R.string.ieq_off
         }
-        binding.tvVirtualizerValue.setText(labelRes)
+        binding.tvIeqValue.setText(labelRes)
     }
 
     private fun refreshUI() {
@@ -178,7 +178,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.sliderBassBoost.value = cb
         binding.tvBassBoostValue.text = formatDb(cb.toInt())
 
-        updateVptChipSelection(eqManager.getVptMode())
+        updateIeqChipSelection(eqManager.getIeqPreset())
 
         isUpdatingUi = false
     }
@@ -193,8 +193,8 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.sheetEqBarsView.isEnabled = enabled
         binding.sliderBassBoost.isEnabled = enabled
 
-        for (i in 0 until binding.chipGroupVptSheet.childCount) {
-            binding.chipGroupVptSheet.getChildAt(i).isEnabled = enabled
+        for (i in 0 until binding.chipGroupIeqSheet.childCount) {
+            binding.chipGroupIeqSheet.getChildAt(i).isEnabled = enabled
         }
     }
 
