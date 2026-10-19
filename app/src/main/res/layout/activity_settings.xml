@@ -409,7 +409,7 @@
                             android:valueTo="10.0"
                             android:stepSize="1.0"
                             android:value="0.0"
-                            app:tickVisible="false" />
+                            app:tickVisible="true" />
 
                         <TextView
                             android:id="@+id/text_crossfade_duration"
@@ -534,7 +534,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/volume_normalization"
+                        android:text="@string/dynamic_normalizer_title"
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="16sp" />
 
@@ -543,7 +543,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="@string/volume_normalization_desc"
+                        android:text="@string/dynamic_normalizer_desc"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="14sp" />
                 </LinearLayout>

@@ -123,18 +123,25 @@
     <string name="equalizer_master_switch">Enable Audio Enhancement</string>
     <string name="dax_equalizer_title">Graphic Equalizer (10 Bands)</string>
     <string name="dax_equalizer_desc">Dolby DAX 10-band precision frequency tuning</string>
-    <string name="preset_dynamic">Dynamic</string>
-    <string name="preset_movie">Movie</string>
-    <string name="preset_music">Music</string>
-    <string name="preset_voice">Voice</string>
-    <string name="preset_flat">Flat</string>
-    <string name="preset_custom">Custom</string>
     <string name="reset_to_flat">Reset to Flat</string>
+
+    <!-- Dolby Intelligent Equalizer & Dialogue Enhancer -->
+    <string name="ieq_title">Intelligent Equalizer</string>
+    <string name="ieq_desc">Dolby dynamic audio character tuning</string>
+    <string name="ieq_off">Off</string>
+    <string name="ieq_balanced">Balanced</string>
+    <string name="ieq_warm">Warm</string>
+    <string name="ieq_detailed">Detailed</string>
+    <string name="dialogue_enhancer_title">Dialogue Enhancer</string>
+    <string name="dialogue_enhancer_desc">Improves clarity of vocals and spoken dialogue</string>
 
     <!-- Sony Xperia Sound Enhancement Suite -->
     <string name="sony_enhancements_title">Sony Xperia™ Sound Enhancement</string>
-    <string name="clear_audio_plus_title">ClearAudio+</string>
-    <string name="clear_audio_plus_desc">One-touch Sony sound optimization for automatic clarity and balance</string>
+    <string name="dynamic_normalizer_title">Dynamic normaliser</string>
+    <string name="dynamic_normalizer_desc">Minimise volume differences between songs or videos</string>
+    <string name="automatic_optimization_title">Automatic optimisation</string>
+    <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
+    <string name="equalizer_active">Custom 10-Band Tuning</string>
     <string name="clear_phase_title">Clear Phase™</string>
     <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
     <string name="xloud_title">xLOUD™</string>

@@ -8,7 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.chip.Chip
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.slider.Slider
 import xyz.omniplay.R
@@ -22,7 +21,7 @@ import xyz.omniplay.util.ThemeHelper
  *
  * Provides real-time 10-band DaxUI graphic equalizer controls,
  * Sony SoundEnhancement ClearBass™ slider, and VPT Surround Sound chip selector.
- * All sliders are strictly non-dotted (tickVisible = false).
+ * Non-dotted sliders for bands & ClearBass.
  */
 class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.EqualizerListener {
 
@@ -63,7 +62,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         eqManager.addListener(this)
 
         setupHeader()
-        setupPresetsChips()
         setupBandSliders()
         setupClearBass()
         setupVptSurround()
@@ -92,30 +90,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.switchEqualizer.setOnCheckedChangeListener { _, isChecked ->
             eqManager.setEnabled(isChecked)
             updateEnabledState(isChecked)
-        }
-    }
-
-    private fun setupPresetsChips() {
-        binding.chipGroupPresets.removeAllViews()
-
-        for (preset in eqManager.daxPresets) {
-            val chip = Chip(requireContext()).apply {
-                id = preset.id
-                text = getString(preset.nameRes)
-                isCheckable = true
-                isChecked = (preset.id == eqManager.getCurrentDaxPresetId())
-            }
-            binding.chipGroupPresets.addView(chip)
-        }
-
-        binding.chipGroupPresets.setOnCheckedStateChangeListener { _, checkedIds ->
-            if (isUpdatingUi) return@setOnCheckedStateChangeListener
-            if (checkedIds.isNotEmpty()) {
-                val selectedId = checkedIds.first()
-                if (selectedId != eqManager.getCurrentDaxPresetId()) {
-                    eqManager.applyDaxPreset(selectedId)
-                }
-            }
         }
     }
 
@@ -150,7 +124,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
                     val db = value.toInt()
                     bandBinding.tvBandGain.text = formatDb(db)
                     eqManager.setDaxBandLevel(bandIndex, db, fromUser = true)
-                    selectPresetChipSilently(EqualizerManager.PRESET_CUSTOM)
                 }
             }
 
@@ -209,12 +182,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         }
     }
 
-    private fun selectPresetChipSilently(presetId: Int) {
-        isUpdatingUi = true
-        binding.chipGroupPresets.check(presetId)
-        isUpdatingUi = false
-    }
-
     private fun updateVptChipSelection(vptMode: Int) {
         val targetId = when (vptMode) {
             EqualizerManager.VPT_STUDIO -> R.id.sheet_vpt_studio
@@ -240,8 +207,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         val enabled = eqManager.isEnabled()
         binding.switchEqualizer.isChecked = enabled
         updateEnabledState(enabled)
-
-        binding.chipGroupPresets.check(eqManager.getCurrentDaxPresetId())
 
         for (i in 0 until bandSliders.size) {
             val db = eqManager.getDaxBandLevel(i).toFloat()
@@ -270,9 +235,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         }
         binding.sliderBassBoost.isEnabled = enabled
 
-        for (i in 0 until binding.chipGroupPresets.childCount) {
-            binding.chipGroupPresets.getChildAt(i).isEnabled = enabled
-        }
         for (i in 0 until binding.chipGroupVptSheet.childCount) {
             binding.chipGroupVptSheet.getChildAt(i).isEnabled = enabled
         }

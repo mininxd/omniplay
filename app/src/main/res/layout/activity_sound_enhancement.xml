@@ -3,12 +3,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground">
+    android:background="?attr/colorSurface"
+    android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?android:attr/colorBackground"
+        android:background="?attr/colorSurface"
         app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
@@ -18,8 +20,9 @@
             app:navigationIcon="@drawable/ic_arrow_back"
             app:navigationIconTint="?attr/colorOnSurface"
             app:title="@string/equalizer_and_sound_enhancement"
-            app:titleTextAppearance="@style/TextAppearance.Material3.TitleMedium"
+            app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
             app:titleTextColor="?attr/colorOnSurface" />
+
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -32,20 +35,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingStart="20dp"
-            android:paddingTop="12dp"
-            android:paddingEnd="20dp"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
             android:paddingBottom="48dp">
 
-            <!-- Master Toggle Hero Card (Material 3 Expressive) -->
+            <!-- Master Switch Card -->
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_master_toggle"
+                android:id="@+id/card_master_switch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
-                app:cardCornerRadius="28dp"
+                app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
-                app:strokeWidth="0dp">
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="1dp">
 
                 <LinearLayout
                     android:id="@+id/row_master_toggle"
@@ -56,7 +60,10 @@
                     android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="20dp">
+                    android:paddingStart="20dp"
+                    android:paddingTop="18dp"
+                    android:paddingEnd="20dp"
+                    android:paddingBottom="18dp">
 
                     <ImageView
                         android:layout_width="32dp"
@@ -68,17 +75,16 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginEnd="12dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
+                            android:fontFamily="sans-serif-medium"
                             android:text="@string/equalizer_master_switch"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="17sp" />
+                            android:textSize="18sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -99,83 +105,14 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Card 1: Dolby Atmos Graphic Equalizer (DaxUI) -->
+            <!-- SECTION 1: Dolby Graphic Equalizer (10 Bands) - No presets -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_dax_equalizer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="28dp"
-                app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutlineVariant"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-bold"
-                        android:text="@string/dax_equalizer_title"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="18sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="@string/dax_equalizer_desc"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
-
-                    <!-- Presets Horizontal Chip Group -->
-                    <HorizontalScrollView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:scrollbars="none">
-
-                        <com.google.android.material.chip.ChipGroup
-                            android:id="@+id/chip_group_dax_presets"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:singleLine="true"
-                            app:singleSelection="true" />
-                    </HorizontalScrollView>
-
-                    <!-- 10 Bands Dynamic Sliders Container -->
-                    <LinearLayout
-                        android:id="@+id/layout_dax_bands_container"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="vertical" />
-
-                    <!-- Reset Button -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_reset_dax"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center_horizontal"
-                        android:layout_marginTop="16dp"
-                        android:text="@string/reset_to_flat" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Card 2: Sony Xperia ClearBass -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_clear_bass"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="28dp"
+                app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
                 app:strokeColor="?attr/colorOutlineVariant"
                 app:strokeWidth="1dp">
@@ -201,52 +138,47 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:fontFamily="sans-serif-bold"
-                                android:text="@string/clear_bass_title"
+                                android:fontFamily="sans-serif-medium"
+                                android:text="@string/dax_equalizer_title"
                                 android:textColor="?attr/colorOnSurface"
-                                android:textSize="18sp" />
+                                android:textSize="16sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="@string/clear_bass_desc"
+                                android:text="@string/dax_equalizer_desc"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
                         </LinearLayout>
 
-                        <TextView
-                            android:id="@+id/tv_clear_bass_value"
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_reset_dax"
+                            style="@style/Widget.Material3.Button.TextButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
-                            android:text="0 dB"
-                            android:textColor="?attr/colorPrimary"
-                            android:textSize="16sp" />
+                            android:text="@string/reset_to_flat" />
                     </LinearLayout>
 
-                    <!-- ClearBass Slider (NON-DOTTED: tickVisible=false) -->
-                    <com.google.android.material.slider.Slider
-                        android:id="@+id/slider_clear_bass"
+                    <!-- 10 Bands Container (smooth, non-dotted sliders) -->
+                    <LinearLayout
+                        android:id="@+id/layout_dax_bands_container"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:stepSize="1"
-                        android:valueFrom="-10"
-                        android:valueTo="10"
-                        android:value="0"
-                        app:tickVisible="false" />
+                        android:layout_marginTop="12dp"
+                        android:orientation="vertical" />
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Card 3: Sony Xperia VPT Surround Sound -->
+            <!-- SECTION 2: Dolby Intelligent Equalizer (IEQ) -->
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_vpt"
+                android:id="@+id/card_ieq"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="28dp"
+                app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
                 app:strokeColor="?attr/colorOutlineVariant"
                 app:strokeWidth="1dp">
@@ -260,65 +192,69 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-bold"
-                        android:text="@string/vpt_title"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/ieq_title"
                         android:textColor="?attr/colorOnSurface"
-                        android:textSize="18sp" />
+                        android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="@string/vpt_desc"
+                        android:text="@string/ieq_desc"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
+                        android:textSize="12sp" />
 
                     <com.google.android.material.chip.ChipGroup
-                        android:id="@+id/chip_group_vpt"
+                        android:id="@+id/chip_group_ieq"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="12dp"
                         app:singleSelection="true">
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chip_vpt_off"
+                            android:id="@+id/chip_ieq_off"
+                            style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checkable="true"
-                            android:text="@string/vpt_off" />
+                            android:text="@string/ieq_off" />
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chip_vpt_studio"
+                            android:id="@+id/chip_ieq_balanced"
+                            style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checkable="true"
-                            android:text="@string/vpt_studio" />
+                            android:text="@string/ieq_balanced" />
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chip_vpt_club"
+                            android:id="@+id/chip_ieq_warm"
+                            style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checkable="true"
-                            android:text="@string/vpt_club" />
+                            android:text="@string/ieq_warm" />
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chip_vpt_concert_hall"
+                            android:id="@+id/chip_ieq_detailed"
+                            style="@style/Widget.Material3.Chip.Filter"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checkable="true"
-                            android:text="@string/vpt_concert_hall" />
+                            android:text="@string/ieq_detailed" />
                     </com.google.android.material.chip.ChipGroup>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Card 4: Sony Xperia Audio Enhancement Suite -->
+            <!-- SECTION 3: Dolby Dialogue Enhancer (Lower steps with dots slider) -->
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/card_sony_suite"
+                android:id="@+id/card_dialogue_enhancer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
-                app:cardCornerRadius="28dp"
+                app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
                 app:strokeColor="?attr/colorOutlineVariant"
                 app:strokeWidth="1dp">
@@ -327,39 +263,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingTop="16dp"
-                    android:paddingBottom="16dp">
+                    android:padding="20dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="20dp"
-                        android:layout_marginEnd="20dp"
-                        android:fontFamily="sans-serif-bold"
-                        android:text="@string/sony_enhancements_title"
-                        android:textColor="?attr/colorOnSurface"
-                        android:textSize="18sp" />
-
-                    <!-- ClearAudio+ Switch Row -->
                     <LinearLayout
-                        android:id="@+id/row_clear_audio_plus"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:background="?attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
                         android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingStart="20dp"
-                        android:paddingTop="12dp"
-                        android:paddingEnd="20dp"
-                        android:paddingBottom="12dp">
+                        android:orientation="horizontal">
 
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -367,7 +281,7 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:fontFamily="sans-serif-medium"
-                                android:text="@string/clear_audio_plus_title"
+                                android:text="@string/dialogue_enhancer_title"
                                 android:textColor="?attr/colorOnSurface"
                                 android:textSize="16sp" />
 
@@ -375,13 +289,253 @@
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
-                                android:text="@string/clear_audio_plus_desc"
+                                android:text="@string/dialogue_enhancer_desc"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tv_dialogue_enhancer_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="Off"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- Dotted slider (10 steps) per user rule: dots on lower steps -->
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/slider_dialogue_enhancer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:stepSize="1"
+                        android:value="0"
+                        android:valueFrom="0"
+                        android:valueTo="10"
+                        app:tickVisible="true" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- SECTION 4: Sony Xperia ClearBass™ (Non-dotted: high step count) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_clear_bass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:text="@string/clear_bass_title"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="16sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/clear_bass_desc"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tv_clear_bass_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="0 dB"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <!-- ClearBass Slider (NON-DOTTED: tickVisible=false) -->
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/slider_clear_bass"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:stepSize="1"
+                        android:value="0"
+                        android:valueFrom="-10"
+                        android:valueTo="10"
+                        app:tickVisible="false" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- SECTION 5: Sony Xperia VPT (Virtualphones Technology) Surround Sound -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_vpt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/vpt_title"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/vpt_desc"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chip_group_vpt"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        app:singleSelection="true">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_vpt_off"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/vpt_off" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_vpt_studio"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/vpt_studio" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_vpt_club"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/vpt_club" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_vpt_concert_hall"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/vpt_concert_hall" />
+                    </com.google.android.material.chip.ChipGroup>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- SECTION 6: Sony Xperia Sound Enhancement Suite -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_sony_suite"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutlineVariant"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/sony_enhancements_title"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="16sp" />
+
+                    <!-- 1. Dynamic normaliser -->
+                    <LinearLayout
+                        android:id="@+id/row_dynamic_normalizer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="64dp"
+                        android:orientation="horizontal"
+                        android:paddingStart="20dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="20dp"
+                        android:paddingBottom="10dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:text="@string/dynamic_normalizer_title"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/dynamic_normalizer_desc"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:textSize="12sp" />
                         </LinearLayout>
 
                         <com.google.android.material.materialswitch.MaterialSwitch
-                            android:id="@+id/switch_clear_audio_plus"
+                            android:id="@+id/switch_dynamic_normalizer"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:clickable="false"
@@ -394,10 +548,66 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="20dp"
                         android:layout_marginEnd="20dp"
-                        android:alpha="0.2"
+                        android:alpha="0.3"
                         android:background="?attr/colorOutlineVariant" />
 
-                    <!-- Clear Phase Switch Row -->
+                    <!-- 2. Automatic optimisation -->
+                    <LinearLayout
+                        android:id="@+id/row_automatic_optimization"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:minHeight="64dp"
+                        android:orientation="horizontal"
+                        android:paddingStart="20dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="20dp"
+                        android:paddingBottom="10dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:text="@string/automatic_optimization_title"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15sp" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="2dp"
+                                android:text="@string/automatic_optimization_desc"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switch_automatic_optimization"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:clickable="false"
+                            android:focusable="false"
+                            app:thumbIcon="@drawable/asl_switch_thumb" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="20dp"
+                        android:layout_marginEnd="20dp"
+                        android:alpha="0.3"
+                        android:background="?attr/colorOutlineVariant" />
+
+                    <!-- 3. Clear Phase™ -->
                     <LinearLayout
                         android:id="@+id/row_clear_phase"
                         android:layout_width="match_parent"
@@ -406,16 +616,16 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:gravity="center_vertical"
+                        android:minHeight="64dp"
                         android:orientation="horizontal"
                         android:paddingStart="20dp"
-                        android:paddingTop="12dp"
+                        android:paddingTop="10dp"
                         android:paddingEnd="20dp"
-                        android:paddingBottom="12dp">
+                        android:paddingBottom="10dp">
 
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -425,7 +635,7 @@
                                 android:fontFamily="sans-serif-medium"
                                 android:text="@string/clear_phase_title"
                                 android:textColor="?attr/colorOnSurface"
-                                android:textSize="16sp" />
+                                android:textSize="15sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -433,7 +643,7 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/clear_phase_desc"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
                         </LinearLayout>
 
                         <com.google.android.material.materialswitch.MaterialSwitch
@@ -450,10 +660,10 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="20dp"
                         android:layout_marginEnd="20dp"
-                        android:alpha="0.2"
+                        android:alpha="0.3"
                         android:background="?attr/colorOutlineVariant" />
 
-                    <!-- xLOUD Switch Row -->
+                    <!-- 4. xLOUD™ -->
                     <LinearLayout
                         android:id="@+id/row_xloud"
                         android:layout_width="match_parent"
@@ -462,16 +672,16 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:gravity="center_vertical"
+                        android:minHeight="64dp"
                         android:orientation="horizontal"
                         android:paddingStart="20dp"
-                        android:paddingTop="12dp"
+                        android:paddingTop="10dp"
                         android:paddingEnd="20dp"
-                        android:paddingBottom="12dp">
+                        android:paddingBottom="10dp">
 
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -481,7 +691,7 @@
                                 android:fontFamily="sans-serif-medium"
                                 android:text="@string/xloud_title"
                                 android:textColor="?attr/colorOnSurface"
-                                android:textSize="16sp" />
+                                android:textSize="15sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -489,7 +699,7 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/xloud_desc"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
                         </LinearLayout>
 
                         <com.google.android.material.materialswitch.MaterialSwitch
@@ -506,10 +716,10 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="20dp"
                         android:layout_marginEnd="20dp"
-                        android:alpha="0.2"
+                        android:alpha="0.3"
                         android:background="?attr/colorOutlineVariant" />
 
-                    <!-- S-Force Front Surround 3D Switch Row -->
+                    <!-- 5. S-Force Front Surround 3D -->
                     <LinearLayout
                         android:id="@+id/row_sforce"
                         android:layout_width="match_parent"
@@ -518,16 +728,16 @@
                         android:clickable="true"
                         android:focusable="true"
                         android:gravity="center_vertical"
+                        android:minHeight="64dp"
                         android:orientation="horizontal"
                         android:paddingStart="20dp"
-                        android:paddingTop="12dp"
+                        android:paddingTop="10dp"
                         android:paddingEnd="20dp"
-                        android:paddingBottom="12dp">
+                        android:paddingBottom="10dp">
 
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginEnd="12dp"
                             android:layout_weight="1"
                             android:orientation="vertical">
 
@@ -537,7 +747,7 @@
                                 android:fontFamily="sans-serif-medium"
                                 android:text="@string/sforce_title"
                                 android:textColor="?attr/colorOnSurface"
-                                android:textSize="16sp" />
+                                android:textSize="15sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
@@ -545,7 +755,7 @@
                                 android:layout_marginTop="2dp"
                                 android:text="@string/sforce_desc"
                                 android:textColor="?attr/colorOnSurfaceVariant"
-                                android:textSize="13sp" />
+                                android:textSize="12sp" />
                         </LinearLayout>
 
                         <com.google.android.material.materialswitch.MaterialSwitch
@@ -556,9 +766,11 @@
                             android:focusable="false"
                             app:thumbIcon="@drawable/asl_switch_thumb" />
                     </LinearLayout>
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

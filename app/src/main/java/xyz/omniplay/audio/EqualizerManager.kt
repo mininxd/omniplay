@@ -7,11 +7,8 @@ import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.util.Log
-import xyz.omniplay.R
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -20,11 +17,13 @@ import kotlin.math.roundToInt
  * Direct reverse-engineered implementation from:
  * 1. Dolby Atmos (DaxUI & daxService):
  *    - 10-Band Graphic Equalizer (32Hz, 64Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz)
- *    - Dolby DAX Profile Presets: Dynamic, Movie, Music, Voice, Flat, Custom
+ *    - Intelligent Equalizer (IEQ): Off, Balanced, Warm, Detailed
+ *    - Dialogue Enhancer: Vocal presence & clarity enhancement (0 to 10 scale)
  *    - ±12 dB Precision Gain Range
  *
  * 2. Sony Xperia (SoundEnhancement):
- *    - ClearAudio+ (one-touch automated audio clarity & balance)
+ *    - Dynamic Normaliser (minimises volume differences between songs)
+ *    - Automatic Optimisation (AHC - headphone acoustic response & impedance compensation)
  *    - Clear Phase™ (acoustic phase correction for natural sound reproduction)
  *    - xLOUD™ (dynamic speaker & output volume booster)
  *    - S-Force Front Surround 3D (wide frontal sound field spatialization)
@@ -32,12 +31,6 @@ import kotlin.math.roundToInt
  *    - ClearBass™ (-10 dB to +10 dB sub-bass resonance slider)
  */
 class EqualizerManager private constructor(private val context: Context) {
-
-    data class DaxPreset(
-        val id: Int,
-        val nameRes: Int,
-        val bandsDb: IntArray // 10 bands in dB (-12 to +12)
-    )
 
     interface EqualizerListener {
         fun onEqualizerConfigChanged()
@@ -53,15 +46,6 @@ class EqualizerManager private constructor(private val context: Context) {
     private var activeAudioSessionId: Int = 0
 
     val daxFrequenciesHz = intArrayOf(32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
-
-    val daxPresets = listOf(
-        DaxPreset(PRESET_DYNAMIC, R.string.preset_dynamic, intArrayOf(3, 2, 1, 0, 0, 1, 2, 3, 3, 2)),
-        DaxPreset(PRESET_MOVIE, R.string.preset_movie, intArrayOf(4, 3, 1, -1, 0, 1, 3, 4, 4, 3)),
-        DaxPreset(PRESET_MUSIC, R.string.preset_music, intArrayOf(2, 3, 2, 0, -1, 1, 2, 3, 4, 3)),
-        DaxPreset(PRESET_VOICE, R.string.preset_voice, intArrayOf(-3, -2, 0, 2, 4, 4, 3, 1, 0, -2)),
-        DaxPreset(PRESET_FLAT, R.string.preset_flat, intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
-        DaxPreset(PRESET_CUSTOM, R.string.preset_custom, intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
-    )
 
     fun addListener(listener: EqualizerListener) {
         if (!listeners.contains(listener)) {
@@ -118,7 +102,7 @@ class EqualizerManager private constructor(private val context: Context) {
         try {
             xloudEnhancer = LoudnessEnhancer(audioSessionId)
         } catch (e: Throwable) {
-            Log.w(TAG, "Failed to instantiate xLOUD enhancer on session $audioSessionId", e)
+            Log.w(TAG, "Failed to instantiate LoudnessEnhancer on session $audioSessionId", e)
             xloudEnhancer = null
         }
 
@@ -166,11 +150,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Dolby DAX 10-Band Equalizer ---
-    fun getCurrentDaxPresetId(): Int {
-        return prefs.getInt(KEY_DAX_PRESET, PRESET_DYNAMIC)
-    }
-
+    // --- Dolby DAX 10-Band Graphic Equalizer ---
     fun getDaxBandLevel(bandIndex: Int): Int {
         if (bandIndex !in 0 until 10) return 0
         return prefs.getInt(KEY_DAX_BAND_PREFIX + bandIndex, 0).coerceIn(-12, 12)
@@ -180,33 +160,45 @@ class EqualizerManager private constructor(private val context: Context) {
         if (bandIndex !in 0 until 10) return
         val clamped = levelDb.coerceIn(-12, 12)
         prefs.edit().putInt(KEY_DAX_BAND_PREFIX + bandIndex, clamped).apply()
-
-        if (fromUser) {
-            prefs.edit().putInt(KEY_DAX_PRESET, PRESET_CUSTOM).apply()
-        }
-
         applyCurrentStateToEffects()
         if (fromUser) {
             notifyListeners()
         }
     }
 
-    fun applyDaxPreset(presetId: Int) {
-        prefs.edit().putInt(KEY_DAX_PRESET, presetId).apply()
-        val preset = daxPresets.find { it.id == presetId } ?: daxPresets[0]
-
-        if (presetId != PRESET_CUSTOM) {
-            for (i in 0 until 10) {
-                val db = preset.bandsDb[i]
-                prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, db).apply()
-            }
+    fun resetGeqBands() {
+        for (i in 0 until 10) {
+            prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, 0).apply()
         }
-
         applyCurrentStateToEffects()
         notifyListeners()
     }
 
-    // --- Sony Xperia SoundEnhancement Cores ---
+    // --- Dolby Intelligent Equalizer (IEQ) ---
+    fun getIeqPreset(): Int {
+        return prefs.getInt(KEY_IEQ_PRESET, IEQ_OFF)
+    }
+
+    fun setIeqPreset(preset: Int) {
+        val clamped = preset.coerceIn(IEQ_OFF, IEQ_DETAILED)
+        prefs.edit().putInt(KEY_IEQ_PRESET, clamped).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    // --- Dolby Dialogue Enhancer ---
+    fun getDialogEnhancerAmount(): Int {
+        return prefs.getInt(KEY_DIALOG_ENHANCER, 0).coerceIn(0, 10)
+    }
+
+    fun setDialogEnhancerAmount(amount: Int) {
+        val clamped = amount.coerceIn(0, 10)
+        prefs.edit().putInt(KEY_DIALOG_ENHANCER, clamped).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    // --- Sony Xperia ClearBass™ ---
     fun getClearBassLevel(): Int {
         return prefs.getInt(KEY_CLEAR_BASS, 0).coerceIn(-10, 10)
     }
@@ -218,16 +210,34 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    fun isClearAudioPlusEnabled(): Boolean {
-        return prefs.getBoolean(KEY_CLEAR_AUDIO_PLUS, false)
+    // --- Sony Xperia Dynamic Normaliser ---
+    fun isDynamicNormalizerEnabled(): Boolean {
+        return prefs.getBoolean(KEY_DYNAMIC_NORMALIZER, false)
     }
 
-    fun setClearAudioPlusEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_CLEAR_AUDIO_PLUS, enabled).apply()
+    fun setDynamicNormalizerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC_NORMALIZER, enabled).apply()
+        // Keep global volume normalization preference aligned
+        context.getSharedPreferences("omniplay_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("key_volume_normalization", enabled)
+            .apply()
         applyCurrentStateToEffects()
         notifyListeners()
     }
 
+    // --- Sony Xperia Automatic Optimisation ---
+    fun isAutomaticOptimizationEnabled(): Boolean {
+        return prefs.getBoolean(KEY_AUTOMATIC_OPTIMIZATION, false)
+    }
+
+    fun setAutomaticOptimizationEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTOMATIC_OPTIMIZATION, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    // --- Sony Xperia Clear Phase™ ---
     fun isClearPhaseEnabled(): Boolean {
         return prefs.getBoolean(KEY_CLEAR_PHASE, false)
     }
@@ -238,6 +248,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Sony Xperia xLOUD™ ---
     fun isXLoudEnabled(): Boolean {
         return prefs.getBoolean(KEY_XLOUD, false)
     }
@@ -248,6 +259,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Sony Xperia S-Force Front Surround 3D ---
     fun isSForceEnabled(): Boolean {
         return prefs.getBoolean(KEY_SFORCE, false)
     }
@@ -258,6 +270,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Sony Xperia VPT Surround ---
     fun getVptMode(): Int {
         return prefs.getInt(KEY_VPT_MODE, VPT_OFF)
     }
@@ -269,10 +282,13 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     fun resetAllToFlat() {
-        applyDaxPreset(PRESET_FLAT)
+        resetGeqBands()
         setClearBassLevel(0)
+        setIeqPreset(IEQ_OFF)
+        setDialogEnhancerAmount(0)
         setVptMode(VPT_OFF)
-        setClearAudioPlusEnabled(false)
+        setDynamicNormalizerEnabled(false)
+        setAutomaticOptimizationEnabled(false)
         setClearPhaseEnabled(false)
         setXLoudEnabled(false)
         setSForceEnabled(false)
@@ -306,14 +322,16 @@ class EqualizerManager private constructor(private val context: Context) {
                     val minMb = range[0].toInt()
                     val maxMb = range[1].toInt()
 
-                    val isCap = isClearAudioPlusEnabled()
-                    val isCp = isClearPhaseEnabled()
                     val cbLevel = getClearBassLevel()
+                    val ieq = getIeqPreset()
+                    val deAmount = getDialogEnhancerAmount()
+                    val isAhc = isAutomaticOptimizationEnabled()
+                    val isCp = isClearPhaseEnabled()
 
                     for (hwIndex in 0 until hwBands) {
                         val hwFreqHz = (eq.getCenterFreq(hwIndex.toShort()) / 1000).coerceAtLeast(20)
 
-                        // Map hardware center frequency to Dolby 10-band curve
+                        // Map hardware center frequency to closest Dolby 10-band slider
                         var closestDaxIndex = 0
                         var minDiff = abs(daxFrequenciesHz[0] - hwFreqHz)
                         for (d in 1 until 10) {
@@ -333,10 +351,34 @@ class EqualizerManager private constructor(private val context: Context) {
                             gainDb += (cbLevel / 2)
                         }
 
-                        // ClearAudio+ automatic tonal contouring
-                        if (isCap) {
-                            if (hwFreqHz <= 125) gainDb += 2
-                            if (hwFreqHz >= 4000) gainDb += 2
+                        // Intelligent Equalizer (IEQ) offsets
+                        when (ieq) {
+                            IEQ_BALANCED -> {
+                                if (hwFreqHz in 800..1500) gainDb += 1
+                                if (hwFreqHz in 3500..5000) gainDb += 2
+                                if (hwFreqHz >= 8000) gainDb += 1
+                            }
+                            IEQ_WARM -> {
+                                if (hwFreqHz in 200..600) gainDb += 2
+                                if (hwFreqHz >= 8000) gainDb -= 1
+                            }
+                            IEQ_DETAILED -> {
+                                if (hwFreqHz in 1500..3000) gainDb += 2
+                                if (hwFreqHz in 3500..9000) gainDb += 3
+                                if (hwFreqHz >= 14000) gainDb += 2
+                            }
+                        }
+
+                        // Dialogue Enhancer vocal formant lift (1 kHz - 3 kHz)
+                        if (deAmount > 0 && hwFreqHz in 800..3500) {
+                            val vocalBoost = (deAmount * 0.4).roundToInt()
+                            gainDb += vocalBoost
+                        }
+
+                        // Automatic Optimisation (headphone acoustic resonance compensation)
+                        if (isAhc) {
+                            if (hwFreqHz in 2000..4500) gainDb += 1
+                            if (hwFreqHz <= 64) gainDb -= 1
                         }
 
                         // Clear Phase acoustic phase & treble enhancement
@@ -358,12 +400,10 @@ class EqualizerManager private constructor(private val context: Context) {
         if (bb != null) {
             try {
                 val cb = getClearBassLevel()
-                val isCap = isClearAudioPlusEnabled()
-                val effectiveBass = if (isCap && cb == 0) 3 else cb
-                val shouldEnable = isMasterOn && effectiveBass > 0
+                val shouldEnable = isMasterOn && cb > 0
                 bb.enabled = shouldEnable
                 if (shouldEnable && bb.strengthSupported) {
-                    val strength = (effectiveBass * 100).coerceIn(0, 1000).toShort()
+                    val strength = (cb * 100).coerceIn(0, 1000).toShort()
                     bb.setStrength(strength)
                 }
             } catch (e: Throwable) {
@@ -394,17 +434,24 @@ class EqualizerManager private constructor(private val context: Context) {
             }
         }
 
-        // 4. xLOUD Loudness Booster
+        // 4. Loudness Booster (xLOUD & Dynamic Normaliser)
         val xloud = xloudEnhancer
         if (xloud != null) {
             try {
                 val isXLoudOn = isMasterOn && isXLoudEnabled()
-                xloud.enabled = isXLoudOn
-                if (isXLoudOn) {
-                    xloud.setTargetGain(350) // +3.5 dB calibrated clean boost
+                val isDynNormOn = isMasterOn && isDynamicNormalizerEnabled()
+                val shouldEnable = isXLoudOn || isDynNormOn
+                xloud.enabled = shouldEnable
+                if (shouldEnable) {
+                    val gain = when {
+                        isXLoudOn && isDynNormOn -> 450
+                        isXLoudOn -> 350
+                        else -> 200
+                    }
+                    xloud.setTargetGain(gain)
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Error applying xLOUD LoudnessEnhancer", e)
+                Log.w(TAG, "Error applying LoudnessEnhancer", e)
             }
         }
     }
@@ -414,22 +461,24 @@ class EqualizerManager private constructor(private val context: Context) {
         private const val PREFS_NAME = "omniplay_sound_enhancement_prefs"
 
         const val KEY_MASTER_ENABLED = "key_master_enabled"
-        const val KEY_DAX_PRESET = "key_dax_preset"
         const val KEY_DAX_BAND_PREFIX = "key_dax_band_"
+        const val KEY_IEQ_PRESET = "key_ieq_preset"
+        const val KEY_DIALOG_ENHANCER = "key_dialog_enhancer"
         const val KEY_CLEAR_BASS = "key_clear_bass"
-        const val KEY_CLEAR_AUDIO_PLUS = "key_clear_audio_plus"
+        const val KEY_DYNAMIC_NORMALIZER = "key_dynamic_normalizer"
+        const val KEY_AUTOMATIC_OPTIMIZATION = "key_automatic_optimization"
         const val KEY_CLEAR_PHASE = "key_clear_phase"
         const val KEY_XLOUD = "key_xloud"
         const val KEY_SFORCE = "key_sforce"
         const val KEY_VPT_MODE = "key_vpt_mode"
 
-        const val PRESET_DYNAMIC = 0
-        const val PRESET_MOVIE = 1
-        const val PRESET_MUSIC = 2
-        const val PRESET_VOICE = 3
-        const val PRESET_FLAT = 4
-        const val PRESET_CUSTOM = 5
+        // Intelligent Equalizer Presets
+        const val IEQ_OFF = 0
+        const val IEQ_BALANCED = 1
+        const val IEQ_WARM = 2
+        const val IEQ_DETAILED = 3
 
+        // Sony VPT Modes
         const val VPT_OFF = 0
         const val VPT_STUDIO = 1
         const val VPT_CLUB = 2

@@ -3,7 +3,6 @@ package xyz.omniplay.ui
 import android.os.Bundle
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.chip.Chip
 import com.google.android.material.slider.Slider
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
@@ -14,11 +13,11 @@ import xyz.omniplay.util.ThemeHelper
 /**
  * Material 3 Expressive "Equalizer and Sound Enhancement" nested settings screen.
  *
- * Fully implements the reverse-engineered DSP features:
- * - Dolby Atmos (DaxUI): 10-band Graphic Equalizer & Profile Presets (Dynamic, Movie, Music, Voice, Flat, Custom).
- * - Sony Xperia (SoundEnhancement): ClearBass™, VPT Surround Sound (Studio, Club, Concert Hall),
- *   ClearAudio+, Clear Phase™, xLOUD™, and S-Force Front Surround 3D.
- * - All sliders are smooth and non-dotted (tickVisible = false).
+ * Implements reverse-engineered DSP features:
+ * - Dolby Atmos (DaxUI): 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
+ * - Sony Xperia (SoundEnhancement): ClearBass™, VPT Surround Sound, Dynamic Normaliser,
+ *   Automatic Optimisation, Clear Phase™, xLOUD™, and S-Force Front Surround 3D.
+ * - Non-dotted sliders for high steps (bands & ClearBass), dotted sliders for lower steps (Dialogue Enhancer).
  */
 class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
@@ -41,8 +40,9 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
         setupToolbar()
         setupMasterSwitch()
-        setupDaxPresets()
         setupDaxBands()
+        setupIeq()
+        setupDialogueEnhancer()
         setupClearBass()
         setupVptSurround()
         setupSonySuite()
@@ -81,30 +81,6 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         }
     }
 
-    private fun setupDaxPresets() {
-        binding.chipGroupDaxPresets.removeAllViews()
-
-        for (preset in eqManager.daxPresets) {
-            val chip = Chip(this).apply {
-                id = preset.id
-                text = getString(preset.nameRes)
-                isCheckable = true
-                isChecked = (preset.id == eqManager.getCurrentDaxPresetId())
-            }
-            binding.chipGroupDaxPresets.addView(chip)
-        }
-
-        binding.chipGroupDaxPresets.setOnCheckedStateChangeListener { _, checkedIds ->
-            if (isUpdatingUi) return@setOnCheckedStateChangeListener
-            if (checkedIds.isNotEmpty()) {
-                val selectedId = checkedIds.first()
-                if (selectedId != eqManager.getCurrentDaxPresetId()) {
-                    eqManager.applyDaxPreset(selectedId)
-                }
-            }
-        }
-    }
-
     private fun setupDaxBands() {
         binding.layoutDaxBandsContainer.removeAllViews()
         bandSliders.clear()
@@ -120,7 +96,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
             val freqHz = eqManager.daxFrequenciesHz[i]
             bandBinding.tvBandFrequency.text = eqManager.formatFrequency(freqHz)
 
-            // Ensure no tick dots are visible
+            // Non-dotted slider (24 steps)
             bandBinding.sliderBandGain.isTickVisible = false
             bandBinding.sliderBandGain.valueFrom = -12f
             bandBinding.sliderBandGain.valueTo = 12f
@@ -136,13 +112,49 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                     val db = value.toInt()
                     bandBinding.tvBandGain.text = formatDb(db)
                     eqManager.setDaxBandLevel(bandIndex, db, fromUser = true)
-                    selectPresetChipSilently(EqualizerManager.PRESET_CUSTOM)
                 }
             }
 
             bandSliders.add(bandBinding.sliderBandGain)
             bandGainTexts.add(bandBinding.tvBandGain)
             binding.layoutDaxBandsContainer.addView(bandBinding.root)
+        }
+    }
+
+    private fun setupIeq() {
+        updateIeqChipSelection(eqManager.getIeqPreset())
+
+        binding.chipGroupIeq.setOnCheckedStateChangeListener { _, checkedIds ->
+            if (isUpdatingUi) return@setOnCheckedStateChangeListener
+            val preset = when (checkedIds.firstOrNull()) {
+                R.id.chip_ieq_balanced -> EqualizerManager.IEQ_BALANCED
+                R.id.chip_ieq_warm -> EqualizerManager.IEQ_WARM
+                R.id.chip_ieq_detailed -> EqualizerManager.IEQ_DETAILED
+                else -> EqualizerManager.IEQ_OFF
+            }
+            if (preset != eqManager.getIeqPreset()) {
+                eqManager.setIeqPreset(preset)
+            }
+        }
+    }
+
+    private fun setupDialogueEnhancer() {
+        // Dotted slider on lower steps (10 steps)
+        binding.sliderDialogueEnhancer.isTickVisible = true
+        binding.sliderDialogueEnhancer.valueFrom = 0f
+        binding.sliderDialogueEnhancer.valueTo = 10f
+        binding.sliderDialogueEnhancer.stepSize = 1f
+
+        val currentDe = eqManager.getDialogEnhancerAmount().toFloat()
+        binding.sliderDialogueEnhancer.value = currentDe
+        binding.tvDialogueEnhancerValue.text = if (currentDe.toInt() == 0) "Off" else "Level ${currentDe.toInt()}"
+
+        binding.sliderDialogueEnhancer.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                val amount = value.toInt()
+                binding.tvDialogueEnhancerValue.text = if (amount == 0) "Off" else "Level $amount"
+                eqManager.setDialogEnhancerAmount(amount)
+            }
         }
     }
 
@@ -183,12 +195,20 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
     }
 
     private fun setupSonySuite() {
-        // ClearAudio+
-        binding.switchClearAudioPlus.isChecked = eqManager.isClearAudioPlusEnabled()
-        binding.rowClearAudioPlus.setOnClickListener {
-            val newState = !binding.switchClearAudioPlus.isChecked
-            binding.switchClearAudioPlus.isChecked = newState
-            eqManager.setClearAudioPlusEnabled(newState)
+        // Dynamic Normaliser
+        binding.switchDynamicNormalizer.isChecked = eqManager.isDynamicNormalizerEnabled()
+        binding.rowDynamicNormalizer.setOnClickListener {
+            val newState = !binding.switchDynamicNormalizer.isChecked
+            binding.switchDynamicNormalizer.isChecked = newState
+            eqManager.setDynamicNormalizerEnabled(newState)
+        }
+
+        // Automatic Optimisation
+        binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
+        binding.rowAutomaticOptimization.setOnClickListener {
+            val newState = !binding.switchAutomaticOptimization.isChecked
+            binding.switchAutomaticOptimization.isChecked = newState
+            eqManager.setAutomaticOptimizationEnabled(newState)
         }
 
         // Clear Phase
@@ -223,10 +243,14 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         }
     }
 
-    private fun selectPresetChipSilently(presetId: Int) {
-        isUpdatingUi = true
-        binding.chipGroupDaxPresets.check(presetId)
-        isUpdatingUi = false
+    private fun updateIeqChipSelection(ieqPreset: Int) {
+        val targetId = when (ieqPreset) {
+            EqualizerManager.IEQ_BALANCED -> R.id.chip_ieq_balanced
+            EqualizerManager.IEQ_WARM -> R.id.chip_ieq_warm
+            EqualizerManager.IEQ_DETAILED -> R.id.chip_ieq_detailed
+            else -> R.id.chip_ieq_off
+        }
+        binding.chipGroupIeq.check(targetId)
     }
 
     private fun updateVptChipSelection(vptMode: Int) {
@@ -246,15 +270,20 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.switchMaster.isChecked = enabled
         updateEnabledState(enabled)
 
-        // Dax Presets
-        binding.chipGroupDaxPresets.check(eqManager.getCurrentDaxPresetId())
-
         // Dax 10-Band Sliders
         for (i in 0 until bandSliders.size) {
             val db = eqManager.getDaxBandLevel(i).toFloat()
             bandSliders[i].value = db
             bandGainTexts[i].text = formatDb(db.toInt())
         }
+
+        // IEQ
+        updateIeqChipSelection(eqManager.getIeqPreset())
+
+        // Dialogue Enhancer
+        val de = eqManager.getDialogEnhancerAmount().toFloat()
+        binding.sliderDialogueEnhancer.value = de
+        binding.tvDialogueEnhancerValue.text = if (de.toInt() == 0) "Off" else "Level ${de.toInt()}"
 
         // ClearBass
         val cb = eqManager.getClearBassLevel().toFloat()
@@ -265,7 +294,8 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         updateVptChipSelection(eqManager.getVptMode())
 
         // Sony Suite
-        binding.switchClearAudioPlus.isChecked = eqManager.isClearAudioPlusEnabled()
+        binding.switchDynamicNormalizer.isChecked = eqManager.isDynamicNormalizerEnabled()
+        binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
         binding.switchClearPhase.isChecked = eqManager.isClearPhaseEnabled()
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
         binding.switchSforce.isChecked = eqManager.isSForceEnabled()
@@ -277,6 +307,8 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         val alpha = if (enabled) 1.0f else 0.45f
 
         binding.cardDaxEqualizer.alpha = alpha
+        binding.cardIeq.alpha = alpha
+        binding.cardDialogueEnhancer.alpha = alpha
         binding.cardClearBass.alpha = alpha
         binding.cardVpt.alpha = alpha
         binding.cardSonySuite.alpha = alpha
@@ -284,18 +316,22 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         for (slider in bandSliders) {
             slider.isEnabled = enabled
         }
+        binding.sliderDialogueEnhancer.isEnabled = enabled
         binding.sliderClearBass.isEnabled = enabled
         binding.btnResetDax.isEnabled = enabled
 
-        for (i in 0 until binding.chipGroupDaxPresets.childCount) {
-            binding.chipGroupDaxPresets.getChildAt(i).isEnabled = enabled
+        for (i in 0 until binding.chipGroupIeq.childCount) {
+            binding.chipGroupIeq.getChildAt(i).isEnabled = enabled
         }
         for (i in 0 until binding.chipGroupVpt.childCount) {
             binding.chipGroupVpt.getChildAt(i).isEnabled = enabled
         }
 
-        binding.rowClearAudioPlus.isEnabled = enabled
-        binding.switchClearAudioPlus.isEnabled = enabled
+        binding.rowDynamicNormalizer.isEnabled = enabled
+        binding.switchDynamicNormalizer.isEnabled = enabled
+
+        binding.rowAutomaticOptimization.isEnabled = enabled
+        binding.switchAutomaticOptimization.isEnabled = enabled
 
         binding.rowClearPhase.isEnabled = enabled
         binding.switchClearPhase.isEnabled = enabled

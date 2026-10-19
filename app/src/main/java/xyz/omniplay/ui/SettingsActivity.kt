@@ -204,13 +204,13 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
-        // Volume Normalization Switch & Row Click
+        // Dynamic Normaliser Switch & Row Click
+        val eqManager = xyz.omniplay.audio.EqualizerManager.getInstance(this)
         binding.titleVolumeNormalization.isSelected = true
-        val isVolumeNormalization = prefs.getBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, false)
-        binding.switchVolumeNormalization.isChecked = isVolumeNormalization
+        binding.switchVolumeNormalization.isChecked = eqManager.isDynamicNormalizerEnabled()
 
         binding.switchVolumeNormalization.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, isChecked).apply()
+            eqManager.setDynamicNormalizerEnabled(isChecked)
         }
 
         binding.settingVolumeNormalization.setOnClickListener {
@@ -283,12 +283,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateEqualizerSubtitle() {
         val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
         if (eq.isEnabled()) {
-            val preset = eq.daxPresets.find { it.id == eq.getCurrentDaxPresetId() }
-            val presetName = if (preset != null) getString(preset.nameRes) else getString(R.string.preset_custom)
-            binding.subtitleEqualizer.text = getString(R.string.equalizer_preset) + ": " + presetName
+            binding.subtitleEqualizer.setText(R.string.equalizer_active)
         } else {
             binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
         }
+        binding.switchVolumeNormalization.isChecked = eq.isDynamicNormalizerEnabled()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
