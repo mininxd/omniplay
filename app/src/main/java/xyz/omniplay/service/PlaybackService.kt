@@ -820,9 +820,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         val mutable = queue.toMutableList()
         mutable.add(song)
         queue = mutable
-        if (!isShuffleEnabled) {
-            originalQueue = queue.toList()
-        } else if (!originalQueue.any { it.id == song.id }) {
+        if (!originalQueue.any { it.id == song.id }) {
             originalQueue = originalQueue + song
         }
         listeners.forEach { it.onQueueChanged(queue.toList()) }
@@ -844,9 +842,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         val insertIndex = (currentIndex + 1).coerceIn(0, mutable.size)
         mutable.add(insertIndex, song)
         queue = mutable
-        if (!isShuffleEnabled) {
-            originalQueue = queue.toList()
-        } else if (!originalQueue.any { it.id == song.id }) {
+        if (!originalQueue.any { it.id == song.id }) {
             originalQueue = originalQueue + song
         }
         listeners.forEach { it.onQueueChanged(queue.toList()) }
