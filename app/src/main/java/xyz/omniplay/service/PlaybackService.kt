@@ -783,12 +783,21 @@ class PlaybackService : MediaBrowserServiceCompat() {
         val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         val crossfadeOnNext = prefs.getBoolean(xyz.omniplay.ui.MainActivity.KEY_CROSSFADE_ON_NEXT, false)
         if (isShuffleEnabled) {
-            val matching = originalQueue.find { it.id == song.id } ?: queue.find { it.id == song.id } ?: song
-            val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
-            queue = (listOf(matching) + remaining).toMutableList()
-            currentIndex = 0
-            playSong(matching, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
-            listeners.forEach { it.onQueueChanged(queue.toList()) }
+            val idx = queue.indexOfFirst { it.id == song.id }
+            if (idx != -1) {
+                val selected = queue.removeAt(idx)
+                queue.add(0, selected)
+                currentIndex = 0
+                playSong(selected, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
+            } else {
+                val matching = originalQueue.find { it.id == song.id } ?: song
+                val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
+                queue = (listOf(matching) + remaining).toMutableList()
+                currentIndex = 0
+                playSong(matching, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
+                listeners.forEach { it.onQueueChanged(queue.toList()) }
+            }
         } else {
             val targetIndex = if (index in queue.indices && queue[index].id == song.id) {
                 index
@@ -891,6 +900,25 @@ class PlaybackService : MediaBrowserServiceCompat() {
     }
 
     /**
+     * Explicitly updates the active queue order without reshuffling,
+     * maintaining the user's manual reordering or sorting in both standard and shuffle modes.
+     */
+    fun reorderQueue(newOrder: List<Song>) {
+        if (newOrder.isEmpty()) return
+        queue = newOrder.toMutableList()
+        val currentId = currentSong?.id
+        currentIndex = if (currentId != null) {
+            queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+        } else {
+            0
+        }
+        if (!isShuffleEnabled) {
+            originalQueue = newOrder.toList()
+        }
+        listeners.forEach { it.onQueueChanged(queue.toList()) }
+    }
+
+    /**
      * Refreshes the active queue with newly scanned songs.
      * If the current song is still in the list, its metadata is updated and UI notified without interrupting playback.
      */
@@ -929,10 +957,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
             return
         }
 
-        originalQueue = newSongs.toList()
         val currentId = currentSong?.id
 
         if (isExternalSongActive) {
+            originalQueue = newSongs.toList()
             queue = newSongs.toMutableList()
             listeners.forEach { it.onQueueChanged(queue.toList()) }
             return
@@ -945,29 +973,35 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 listeners.forEach { it.onTrackChanged(updatedCurrent) }
 
                 if (isShuffleEnabled) {
-                    val remaining = newSongs.filter { it.id != currentId }.shuffled()
-                    queue = (listOf(updatedCurrent) + remaining).toMutableList()
-                    currentIndex = 0
+                    // Update metadata for existing queue songs while strictly preserving their active order
+                    val songMap = newSongs.associateBy { it.id }
+                    val preserved = queue.mapNotNull { songMap[it.id] }.toMutableList()
+                    val added = newSongs.filterNot { s -> preserved.any { it.id == s.id } }
+                    queue = (preserved + added).toMutableList()
+                    currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
+                    originalQueue = originalQueue.filter { s -> newSongs.any { it.id == s.id } } +
+                            newSongs.filter { s -> !originalQueue.any { it.id == s.id } }
                 } else {
+                    originalQueue = newSongs.toList()
                     queue = newSongs.toMutableList()
                     currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
                 }
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
             } else {
                 // Currently playing song was deleted/removed from folder
-                if (isShuffleEnabled) {
-                    queue = newSongs.shuffled().toMutableList()
-                } else {
-                    queue = newSongs.toMutableList()
-                }
+                originalQueue = newSongs.toList()
+                queue = newSongs.toMutableList()
                 currentIndex = 0
                 listeners.forEach { it.onQueueChanged(queue.toList()) }
-                val nextSong = queue[0]
-                prepareWithoutPlaying(nextSong)
+                val nextSong = queue.firstOrNull()
+                if (nextSong != null) {
+                    prepareWithoutPlaying(nextSong)
+                }
             }
         } else {
             // No song currently playing or selected
-            queue = if (isShuffleEnabled) newSongs.shuffled().toMutableList() else newSongs.toMutableList()
+            originalQueue = newSongs.toList()
+            queue = newSongs.toMutableList()
             currentIndex = -1
             listeners.forEach { it.onQueueChanged(queue.toList()) }
         }
@@ -1325,7 +1359,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
         if (isShuffleEnabled) {
             if (queue.size > 1) {
-                val finished = queue.removeAt(0)
+                val currentIdx = queue.indexOfFirst { it.id == currentSong?.id }.takeIf { it != -1 } ?: 0
+                val finished = queue.removeAt(currentIdx)
                 queue.add(finished)
                 currentIndex = 0
                 val nextSong = queue[0]

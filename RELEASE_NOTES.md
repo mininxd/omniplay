@@ -1,3 +1,12 @@
+## What's New in v0.14.1
+
+### 🐛 Bug Fixes & Queue Improvements
+- **Fixed Queue Drag-to-Sort in Shuffle Mode**: Resolved an issue where dragging songs to sort or reorder the queue while shuffle mode was enabled caused the queue to reshuffle.
+- **Queue Order Preservation**: Manual queue reordering and sorting are now strictly preserved during active shuffle playback.
+- **Seamless Track Selection**: Selecting a track directly from the active queue now smoothly plays that song and preserves upcoming queue order without re-randomizing.
+
+---
+
 ## What's New in v0.14
 
 ### 🎚️ High Precision DSP Equalizer

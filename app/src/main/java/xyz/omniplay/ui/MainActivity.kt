@@ -390,7 +390,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 saveCustomSongOrder(order)
                 applyCurrentFilter()
                 if (!drawerFilterController.isFilterPreviewActive && playbackService != null && displayedSongs.isNotEmpty()) {
-                    playbackService?.refreshQueue(displayedSongs)
+                    playbackService?.reorderQueue(displayedSongs)
                 }
             },
             onSongLongClicked = { song: Song, anchor: View ->
@@ -636,9 +636,12 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val newSongs = songAdapter?.getSongs() ?: emptyList()
                     if (newSongs.isNotEmpty()) {
                         displayedSongs = newSongs
-                        saveCustomSongOrder(newSongs.map { it.id })
-                        if (!drawerFilterController.isFilterPreviewActive && playbackService != null) {
-                            playbackService?.refreshQueue(displayedSongs)
+                        if (playbackService?.isShuffleEnabled != true) {
+                            saveCustomSongOrder(newSongs.map { it.id })
+                        }
+                        if (!drawerFilterController.isFilterPreviewActive) {
+                            drawerFilterController.activeOngoingQueue = displayedSongs
+                            playbackService?.reorderQueue(displayedSongs)
                         }
                         drawerFilterController.updateFilterSubList()
                     }
@@ -1382,8 +1385,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 displayedSongs = sortedQueue
                 songAdapter?.setSongs(sortedQueue)
                 binding.songCountText.text = "${sortedQueue.size} songs"
-                playbackService?.refreshQueue(sortedQueue)
                 drawerFilterController.activeOngoingQueue = sortedQueue
+                playbackService?.reorderQueue(sortedQueue)
             }
         }
     }
