@@ -112,14 +112,14 @@
     <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
     <string name="omnisync_master_volume">Broadcast Master Volume</string>
 
-    <!-- Equalizer and Sound Enhancement -->
+    <!-- Equalizer Settings -->
     <string name="equalizer">Equalizer</string>
-    <string name="equalizer_desc">10-Band Equalizer &amp; Sound Enhancement</string>
+    <string name="equalizer_desc">High Precision DSP Equalizer</string>
     <string name="equalizer_preset">Preset</string>
     <string name="bass_boost">Sub-Bass</string>
-    <string name="sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
-    <string name="equalizer_and_sound_enhancement">Equalizer and Sound Enhancement</string>
-    <string name="equalizer_and_sound_enhancement_desc">10-Band Equalizer &amp; Sound Enhancement</string>
+    <string name="sound_enhancement_desc">High Precision DSP Equalizer</string>
+    <string name="equalizer_and_sound_enhancement">Equalizer Settings</string>
+    <string name="equalizer_and_sound_enhancement_desc">High Precision DSP Equalizer</string>
     <string name="equalizer_master_switch">Enable Audio Enhancement</string>
     <string name="dax_equalizer_title">10-Band Equalizer</string>
     <string name="dax_equalizer_desc">10-band precision frequency tuning</string>
@@ -141,7 +141,7 @@
     <string name="dynamic_normalizer_desc">Minimise volume differences between songs</string>
     <string name="automatic_optimization_title">Automatic optimisation</string>
     <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
-    <string name="equalizer_active">Custom 10-Band Tuning</string>
+    <string name="equalizer_active">High Precision DSP Equalizer</string>
     <string name="clear_phase_title">Clear Phase™</string>
     <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
     <string name="xloud_title">xLOUD™</string>
