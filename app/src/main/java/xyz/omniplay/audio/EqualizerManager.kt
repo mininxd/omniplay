@@ -273,10 +273,9 @@ class EqualizerManager private constructor(private val context: Context) {
         val clamped = strength.coerceIn(0, 1000)
         prefs.edit().putInt(KEY_BASS_BOOST, clamped.toInt()).apply()
         try {
-            bassBoost?.let {
-                if (it.strengthSupported) {
-                    it.setStrength(clamped)
-                }
+            val bb = bassBoost
+            if (bb != null && bb.strengthSupported) {
+                bb.setStrength(clamped)
             }
         } catch (ignored: Throwable) {}
         notifyListeners()
@@ -290,10 +289,9 @@ class EqualizerManager private constructor(private val context: Context) {
         val clamped = strength.coerceIn(0, 1000)
         prefs.edit().putInt(KEY_VIRTUALIZER, clamped.toInt()).apply()
         try {
-            virtualizer?.let {
-                if (it.strengthSupported) {
-                    it.setStrength(clamped)
-                }
+            val virt = virtualizer
+            if (virt != null && virt.strengthSupported) {
+                virt.setStrength(clamped)
             }
         } catch (ignored: Throwable) {}
         notifyListeners()
@@ -304,7 +302,8 @@ class EqualizerManager private constructor(private val context: Context) {
         val isEqOn = isEnabled()
 
         // 1. Equalizer bands
-        equalizer?.let { eq ->
+        val eq = equalizer
+        if (eq != null) {
             try {
                 eq.enabled = isEqOn
                 if (isEqOn) {
@@ -320,7 +319,8 @@ class EqualizerManager private constructor(private val context: Context) {
         }
 
         // 2. Bass Boost (ClearBass)
-        bassBoost?.let { bb ->
+        val bb = bassBoost
+        if (bb != null) {
             try {
                 val strength = getBassBoostStrength()
                 bb.enabled = isEqOn && strength > 0
@@ -333,7 +333,8 @@ class EqualizerManager private constructor(private val context: Context) {
         }
 
         // 3. Virtualizer (Surround Sound)
-        virtualizer?.let { virt ->
+        val virt = virtualizer
+        if (virt != null) {
             try {
                 val strength = getVirtualizerStrength()
                 virt.enabled = isEqOn && strength > 0
