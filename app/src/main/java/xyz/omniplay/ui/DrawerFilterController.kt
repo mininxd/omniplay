@@ -45,6 +45,7 @@ class DrawerFilterController(
     private val onCloseSearchBar: () -> Unit,
     private val onCollapseBottomSheet: () -> Unit,
     private val onShowSortDialog: () -> Unit = {},
+    private val onShowSearchBar: () -> Unit = {},
     private val getCustomSongOrder: () -> List<Long> = { emptyList() },
     private val onCustomSongOrderChanged: (List<Long>) -> Unit = {},
     private val onSongLongClicked: (Song, View) -> Boolean = { _, _ -> false }
@@ -252,6 +253,10 @@ class DrawerFilterController(
             onShowSortDialog()
         }
 
+        binding.cardAllTracksSearchContainer.setOnClickListener {
+            onShowSearchBar()
+        }
+
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             isAllTracksDrillDown = false
@@ -365,6 +370,10 @@ class DrawerFilterController(
             binding.cardAllTracksSortContainer.setCardBackgroundColor(surfaceContainerHighest)
             binding.cardAllTracksSort.setColorFilter(primary)
 
+            binding.cardAllTracksSearchContainer.visibility = View.VISIBLE
+            binding.cardAllTracksSearchContainer.setCardBackgroundColor(surfaceContainerHighest)
+            binding.cardAllTracksSearch.setColorFilter(primary)
+
             binding.cardAllTracksArrowContainer.setCardBackgroundColor(surfaceContainerHighest)
             binding.cardAllTracksArrow.setImageResource(R.drawable.ic_chevron_down)
             binding.cardAllTracksArrow.setColorFilter(primary)
@@ -379,6 +388,7 @@ class DrawerFilterController(
             val outline = ThemeColors.getOutline(activity)
 
             binding.cardAllTracksSortContainer.visibility = View.GONE
+            binding.cardAllTracksSearchContainer.visibility = View.GONE
 
             binding.cardAllTracks.setCardBackgroundColor(surfaceContainer)
             binding.cardAllTracks.strokeColor = outlineVariant

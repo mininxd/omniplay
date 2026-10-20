@@ -393,6 +393,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             },
             onCollapseBottomSheet = { playlistPanelController.collapse() },
             onShowSortDialog = { showSortDialog() },
+            onShowSearchBar = { openSearchBar() },
             getCustomSongOrder = { customSongOrder },
             onCustomSongOrderChanged = { order ->
                 saveCustomSongOrder(order)
