@@ -5,12 +5,15 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.animation.DecelerateInterpolator
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -70,6 +73,9 @@ class DrawerFilterController(
         private set
     private var filterDrawerAnimator: ValueAnimator? = null
     private var drawerFilterAdapter: DrawerFilterAdapter? = null
+
+    private var drawerSearchQuery: String = ""
+    private var isDrawerSearchOpen: Boolean = false
 
     fun setup() {
         binding.leftDrawerMenu.post {
@@ -254,7 +260,28 @@ class DrawerFilterController(
         }
 
         binding.cardAllTracksSearchContainer.setOnClickListener {
-            onShowSearchBar()
+            toggleDrawerSearch()
+        }
+
+        binding.btnBrowseSearch.setOnClickListener {
+            toggleDrawerSearch()
+        }
+
+        binding.drawerSearchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                drawerSearchQuery = s?.toString() ?: ""
+                binding.drawerBtnClearSearch.visibility =
+                    if (drawerSearchQuery.isNotEmpty()) View.VISIBLE else View.GONE
+                updateFilterSubList()
+            }
+        })
+
+        binding.drawerBtnClearSearch.setOnClickListener {
+            binding.drawerSearchEditText.setText("")
+            drawerSearchQuery = ""
+            binding.drawerBtnClearSearch.visibility = View.GONE
         }
 
         binding.filterToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -420,6 +447,35 @@ class DrawerFilterController(
         }
     }
 
+    fun toggleDrawerSearch() {
+        if (isDrawerSearchOpen) {
+            closeDrawerSearch()
+        } else {
+            openDrawerSearch()
+        }
+    }
+
+    fun openDrawerSearch() {
+        isDrawerSearchOpen = true
+        binding.drawerSearchBarContainer.visibility = View.VISIBLE
+        binding.drawerSearchEditText.post {
+            binding.drawerSearchEditText.requestFocus()
+            val imm = activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(binding.drawerSearchEditText, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    fun closeDrawerSearch() {
+        isDrawerSearchOpen = false
+        binding.drawerSearchBarContainer.visibility = View.GONE
+        binding.drawerSearchEditText.setText("")
+        drawerSearchQuery = ""
+        binding.drawerBtnClearSearch.visibility = View.GONE
+        val imm = activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        imm?.hideSoftInputFromWindow(binding.drawerSearchEditText.windowToken, 0)
+        updateFilterSubList()
+    }
+
     fun getDrawerWidth(): Float {
         val width = binding.leftDrawerMenu.width.toFloat()
         return if (width > 0f) width else (320 * activity.resources.displayMetrics.density)
@@ -532,6 +588,7 @@ class DrawerFilterController(
                         binding.leftDrawerMenu.visibility = View.GONE
                         binding.filterDrawerScrim.visibility = View.GONE
                         binding.leftDrawerMenu.translationX = -drawerWidth
+                        closeDrawerSearch()
                         revertToOngoingQueue()
                     } else {
                         binding.leftDrawerMenu.visibility = View.VISIBLE
@@ -753,7 +810,7 @@ class DrawerFilterController(
                 }
             )
             binding.drawerFilterInfoText.visibility = View.GONE
-            drawerFilterAdapter?.setItems(items)
+            drawerFilterAdapter?.setItems(applyDrawerSearch(items))
             binding.drawerFilterRecyclerView.scrollToPosition(0)
             return
         }
@@ -793,7 +850,7 @@ class DrawerFilterController(
                 }
             )
             binding.drawerFilterInfoText.text = "Artist: $artistTarget (${artistSongs.size} songs)"
-            drawerFilterAdapter?.setItems(items)
+            drawerFilterAdapter?.setItems(applyDrawerSearch(items))
             binding.drawerFilterRecyclerView.scrollToPosition(0)
             return
         }
@@ -831,7 +888,7 @@ class DrawerFilterController(
                 }
             )
             binding.drawerFilterInfoText.text = "Album: $albumTarget (${albumSongs.size} songs)"
-            drawerFilterAdapter?.setItems(items)
+            drawerFilterAdapter?.setItems(applyDrawerSearch(items))
             binding.drawerFilterRecyclerView.scrollToPosition(0)
             return
         }
@@ -1055,7 +1112,17 @@ class DrawerFilterController(
             }
             LibraryFilterMode.TRACK -> emptyList()
         }
-        drawerFilterAdapter?.setItems(items)
+        drawerFilterAdapter?.setItems(applyDrawerSearch(items))
+    }
+
+    private fun applyDrawerSearch(items: List<FilterItem>): List<FilterItem> {
+        if (drawerSearchQuery.isBlank()) return items
+        val q = drawerSearchQuery.lowercase(Locale.getDefault())
+        return items.filter { item ->
+            item.isBack ||
+            item.title.lowercase(Locale.getDefault()).contains(q) ||
+            item.subtitle?.lowercase(Locale.getDefault())?.contains(q) == true
+        }
     }
 
     private fun onFilterItemSelected(item: FilterItem) {
@@ -1344,6 +1411,12 @@ class DrawerFilterController(
         binding.btnBrowseSort.strokeWidth = (1f * density).toInt()
         binding.browseSortIcon.setColorFilter(primary)
         binding.btnBrowseSort.rippleColor = ColorStateList.valueOf(highlight)
+
+        binding.btnBrowseSearch.setCardBackgroundColor(surfaceContainer)
+        binding.btnBrowseSearch.strokeColor = outlineVariant
+        binding.btnBrowseSearch.strokeWidth = (1f * density).toInt()
+        binding.browseSearchIcon.setColorFilter(primary)
+        binding.btnBrowseSearch.rippleColor = ColorStateList.valueOf(highlight)
     }
 
     /**
