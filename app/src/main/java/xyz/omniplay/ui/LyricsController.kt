@@ -42,6 +42,7 @@ import xyz.omniplay.model.Song
 import xyz.omniplay.service.PlaybackService
 import xyz.omniplay.sync.OmniSyncManager
 import xyz.omniplay.sync.OmniSyncRole
+import xyz.omniplay.util.ThemeColors
 import kotlin.math.abs
 
 class LyricsController(
