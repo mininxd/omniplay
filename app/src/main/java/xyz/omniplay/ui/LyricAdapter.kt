@@ -28,6 +28,7 @@ class LyricAdapter(
     var onLineDoubleTap: ((View?) -> Unit)? = null,
     var onLineLongPress: ((Int) -> Unit)? = null,
     var onSelectionLineClick: ((Int) -> Unit)? = null,
+    var onSelectionLineDragStart: ((Int) -> Unit)? = null,
     var onSelectionLineDrag: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
@@ -38,8 +39,7 @@ class LyricAdapter(
     var baseFontSizeSp: Float = 48f
 
     private var shareSelectionMode = false
-    private var shareSelectionStart = -1
-    private var shareSelectionEnd = -1
+    private val shareSelectionLines = mutableSetOf<Int>()
     private var shareSelectionFontScale = 1f
 
     companion object {
@@ -95,24 +95,22 @@ class LyricAdapter(
         return true
     }
 
-    fun setShareSelectionMode(enabled: Boolean, start: Int = -1, end: Int = start) {
+    fun setShareSelectionMode(enabled: Boolean, selectedLines: Set<Int> = emptySet()) {
         shareSelectionMode = enabled
-        shareSelectionStart = if (enabled) minOf(start, end).coerceIn(lines.indices) else -1
-        shareSelectionEnd = if (enabled) maxOf(start, end).coerceIn(lines.indices) else -1
+        shareSelectionLines.clear()
+        if (enabled) shareSelectionLines.addAll(selectedLines.filter { it in lines.indices })
         shareSelectionFontScale = 1f
         notifyDataSetChanged()
     }
 
-    fun setShareSelectionRange(start: Int, end: Int) {
-        if (!shareSelectionMode || lines.isEmpty()) return
-        val newStart = minOf(start, end).coerceIn(lines.indices)
-        val newEnd = maxOf(start, end).coerceIn(lines.indices)
-        if (shareSelectionStart == newStart && shareSelectionEnd == newEnd) return
-        val firstChanged = minOf(shareSelectionStart, newStart)
-        val lastChanged = maxOf(shareSelectionEnd, newEnd)
-        shareSelectionStart = newStart
-        shareSelectionEnd = newEnd
-        notifyItemRangeChanged(firstChanged, lastChanged - firstChanged + 1)
+    fun setShareSelectionLines(selectedLines: Set<Int>) {
+        if (!shareSelectionMode) return
+        val changedPositions = (shareSelectionLines union selectedLines)
+            .filter { (it in shareSelectionLines) != (it in selectedLines) && it in lines.indices }
+        if (changedPositions.isEmpty()) return
+        shareSelectionLines.clear()
+        shareSelectionLines.addAll(selectedLines.filter { it in lines.indices })
+        changedPositions.forEach(::notifyItemChanged)
     }
 
     fun setShareSelectionFontScale(scale: Float) {
@@ -132,8 +130,7 @@ class LyricAdapter(
     }
 
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
-        val selected = shareSelectionMode && position in
-            minOf(shareSelectionStart, shareSelectionEnd)..maxOf(shareSelectionStart, shareSelectionEnd)
+        val selected = shareSelectionMode && position in shareSelectionLines
         holder.bind(
             lines[position],
             position == activeIndex,
@@ -188,6 +185,10 @@ class LyricAdapter(
             
             itemView.setOnTouchListener { view, event ->
                 gestureDetector.onTouchEvent(event)
+                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val pos = bindingAdapterPosition
+                    if (pos in lines.indices) onSelectionLineDragStart?.invoke(pos)
+                }
                 if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_MOVE) {
                     val recyclerView = view.parent as? RecyclerView
                     if (recyclerView != null) {

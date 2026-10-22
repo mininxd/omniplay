@@ -1,6 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Default Material You Expressive dynamic DayNight theme -->
-    <style name="Theme.Omniplay" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+    <!-- Material 3 base; the user's selected color scheme supplies the theme personality. -->
+    <style name="Theme.Omniplay" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="bottomSheetDialogTheme">@style/BottomSheetDialogTheme</item>
         <item name="popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>
         <item name="android:popupMenuStyle">@style/Widget.Omniplay.PopupMenu</item>

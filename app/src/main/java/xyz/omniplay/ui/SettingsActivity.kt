@@ -14,7 +14,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.color.DynamicColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
@@ -85,17 +84,12 @@ class SettingsActivity : AppCompatActivity() {
             showThemeModeDialog()
         }
 
-        // 2. Theme Style Selector (only available on devices supporting dynamic colors)
-        if (DynamicColors.isDynamicColorAvailable()) {
-            binding.settingTheme.visibility = View.VISIBLE
-            binding.dividerThemeStyle.visibility = View.VISIBLE
-            updateThemeSubtitle()
-            binding.settingTheme.setOnClickListener {
-                showThemeStyleDialog()
-            }
-        } else {
-            binding.settingTheme.visibility = View.GONE
-            binding.dividerThemeStyle.visibility = View.GONE
+        // Keep fallback scheme choices available on older Android versions too.
+        binding.settingTheme.visibility = View.VISIBLE
+        binding.dividerThemeStyle.visibility = View.VISIBLE
+        updateThemeSubtitle()
+        binding.settingTheme.setOnClickListener {
+            showThemeStyleDialog()
         }
 
         // 2. Select Music Folder (Shows Manage Folders Modal)
