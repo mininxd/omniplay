@@ -226,7 +226,6 @@ class LyricsController(
                 }
             },
             onLineDoubleTap = { view ->
-                if (isLyricsShareSelectionMode) finishLyricsShareSelectionMode()
                 openFullScreenLyrics(view)
             },
             onLineSelectionStart = { index ->
@@ -357,15 +356,6 @@ class LyricsController(
     private fun setupPlainLyricsShareGesture(textView: TextView) {
         var selectionDragActive = false
         val detector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDoubleTap(event: MotionEvent): Boolean {
-                if (isLyricsShareSelectionMode && lyricsShareSelectionTextView === textView) {
-                    finishLyricsShareSelectionMode()
-                    openFullScreenLyrics(textView)
-                    return true
-                }
-                return super.onDoubleTap(event)
-            }
-
             override fun onLongPress(event: MotionEvent) {
                 val lineIndex = plainLyricsLineAt(textView, event) ?: return
                 beginLyricsShareSelection(
@@ -380,16 +370,11 @@ class LyricsController(
             }
 
             override fun onSingleTapUp(event: MotionEvent): Boolean {
-                val lineIndex = plainLyricsLineAt(textView, event) ?: return true
-                if (isLyricsShareSelectionMode && lyricsShareSelectionTextView === textView) {
-                    toggleLyricsShareSelection(lineIndex)
-                } else {
-                    beginLyricsShareSelection(
-                        lineIndex,
-                        isFullscreen = textView.id == R.id.fullscreen_lyrics_plain_text,
-                        plainTextView = textView
-                    )
+                if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) {
+                    return super.onSingleTapUp(event)
                 }
+                val lineIndex = plainLyricsLineAt(textView, event) ?: return true
+                toggleLyricsShareSelection(lineIndex)
                 return true
             }
 
@@ -422,7 +407,7 @@ class LyricsController(
             if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
                 selectionDragActive = false
             }
-            true
+            selectionTextActive || selectionDragActive
         }
     }
 

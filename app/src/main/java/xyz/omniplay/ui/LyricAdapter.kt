@@ -153,7 +153,7 @@ class LyricAdapter(
                     val pos = bindingAdapterPosition
                     if (pos !in lines.indices || lines[pos].text.isBlank()) return super.onSingleTapUp(e)
                     if (shareSelectionMode) onSelectionLineClick?.invoke(pos)
-                    else onLineSelectionStart?.invoke(pos)
+                    else return super.onSingleTapUp(e)
                     return true
                 }
 
@@ -168,7 +168,7 @@ class LyricAdapter(
                 }
 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    onLineDoubleTap?.invoke(lyricText)
+                    if (!shareSelectionMode) onLineDoubleTap?.invoke(lyricText)
                     return true
                 }
 
