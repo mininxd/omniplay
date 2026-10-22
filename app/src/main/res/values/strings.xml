@@ -70,6 +70,7 @@
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_style">Theme style</string>
+    <string name="theme_style_desc">Dynamic follows your wallpaper. Tonal Spot gives a balanced palette; Neutral and Monochrome keep album art in focus. Vibrant brings stronger color.</string>
     <string name="theme_style_dynamic">Dynamic (System)</string>
     <string name="theme_style_neutral">Neutral</string>
     <string name="theme_style_tone">Tonal Spot</string>

@@ -345,6 +345,7 @@ class SettingsActivity : AppCompatActivity() {
 
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.theme_style)
+            .setMessage(R.string.theme_style_desc)
             .setSingleChoiceItems(names, selectedIndex) { dialog, which ->
                 val chosenStyle = styles[which]
                 if (chosenStyle != currentStyle) {

@@ -38,7 +38,6 @@ class LyricAdapter(
     var baseFontSizeSp: Float = 48f
 
     private var shareSelectionMode = false
-    private var shareSelectionAnchor = -1
     private var shareSelectionStart = -1
     private var shareSelectionEnd = -1
     private var shareSelectionFontScale = 1f
@@ -98,16 +97,10 @@ class LyricAdapter(
 
     fun setShareSelectionMode(enabled: Boolean, start: Int = -1, end: Int = start) {
         shareSelectionMode = enabled
-        shareSelectionAnchor = if (enabled) start.coerceIn(lines.indices) else -1
         shareSelectionStart = if (enabled) minOf(start, end).coerceIn(lines.indices) else -1
         shareSelectionEnd = if (enabled) maxOf(start, end).coerceIn(lines.indices) else -1
         shareSelectionFontScale = 1f
         notifyDataSetChanged()
-    }
-
-    fun setShareSelectionEnd(end: Int) {
-        if (!shareSelectionMode || end !in lines.indices) return
-        setShareSelectionRange(minOf(shareSelectionAnchor, end), maxOf(shareSelectionAnchor, end))
     }
 
     fun setShareSelectionRange(start: Int, end: Int) {
