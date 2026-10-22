@@ -3,7 +3,6 @@ package xyz.omniplay.ui
 import android.Manifest
 import android.content.ClipData
 import android.content.ContentValues
-import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -19,8 +18,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -32,146 +29,12 @@ import androidx.core.content.FileProvider
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.slider.Slider
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import xyz.omniplay.R
-import xyz.omniplay.databinding.BottomSheetLyricsRangeBinding
 import xyz.omniplay.databinding.BottomSheetLyricsShareBinding
 import xyz.omniplay.util.ThemeColors
-
-class LyricsShareRangeBottomSheet : BottomSheetDialogFragment() {
-
-    private var _binding: BottomSheetLyricsRangeBinding? = null
-    private val binding get() = _binding!!
-    private var pendingThemeSheet: LyricsShareThemeBottomSheet? = null
-
-    override fun getTheme(): Int = R.style.BottomSheetDialogTheme
-
-    override fun onStart() {
-        super.onStart()
-        (dialog as? BottomSheetDialog)?.behavior?.apply {
-            state = BottomSheetBehavior.STATE_EXPANDED
-            skipCollapsed = true
-        }
-    }
-
-    override fun onCreateView(
-        inflater: android.view.LayoutInflater,
-        container: android.view.ViewGroup?,
-        savedInstanceState: Bundle?
-    ): android.view.View {
-        _binding = BottomSheetLyricsRangeBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onViewCreated(view: android.view.View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val args = requireArguments()
-        val lines = args.getStringArrayList(ARG_LINES).orEmpty()
-        if (lines.isEmpty()) {
-            dismiss()
-            return
-        }
-
-        val title = args.getString(ARG_TITLE).orEmpty()
-        val artist = args.getString(ARG_ARTIST).orEmpty()
-        val anchor = args.getInt(ARG_ANCHOR).coerceIn(lines.indices)
-        binding.lyricsRangeSong.text = listOf(title, artist)
-            .filter { it.isNotBlank() }
-            .joinToString(" • ")
-
-        val availableBefore = minOf(MAX_LINES_EACH_SIDE, anchor)
-        val availableAfter = minOf(MAX_LINES_EACH_SIDE, lines.lastIndex - anchor)
-        configureRangeSlider(
-            binding.lyricsRangeBeforeSlider,
-            availableBefore,
-            minOf(DEFAULT_LINES_EACH_SIDE, availableBefore)
-        ) { updateRangePreview(lines, anchor) }
-        configureRangeSlider(
-            binding.lyricsRangeAfterSlider,
-            availableAfter,
-            minOf(DEFAULT_LINES_EACH_SIDE, availableAfter)
-        ) { updateRangePreview(lines, anchor) }
-        updateRangePreview(lines, anchor)
-
-        binding.lyricsRangeCancel.setOnClickListener { dismiss() }
-        binding.lyricsRangeShare.setOnClickListener {
-            val before = binding.lyricsRangeBeforeSlider.value.toInt()
-            val after = binding.lyricsRangeAfterSlider.value.toInt()
-            val excerpt = lines.subList(anchor - before, anchor + after + 1)
-            pendingThemeSheet = LyricsShareThemeBottomSheet.newInstance(title, artist, excerpt)
-            dismiss()
-        }
-    }
-
-    override fun onDismiss(dialog: DialogInterface) {
-        super.onDismiss(dialog)
-        val nextSheet = pendingThemeSheet ?: return
-        pendingThemeSheet = null
-        val manager = parentFragmentManager
-        Handler(Looper.getMainLooper()).post {
-            if (!manager.isStateSaved) {
-                nextSheet.show(manager, LyricsShareThemeBottomSheet.TAG)
-            }
-        }
-    }
-
-    override fun onDestroyView() {
-        _binding = null
-        super.onDestroyView()
-    }
-
-    private fun configureRangeSlider(slider: Slider, maximum: Int, initialValue: Int, onChange: () -> Unit) {
-        slider.valueFrom = 0f
-        slider.valueTo = maximum.coerceAtLeast(1).toFloat()
-        slider.stepSize = 1f
-        slider.value = initialValue.toFloat()
-        slider.isEnabled = maximum > 0
-        slider.addOnChangeListener { _, _, fromUser ->
-            if (fromUser) onChange()
-        }
-    }
-
-    private fun updateRangePreview(lines: List<String>, anchor: Int) {
-        val before = binding.lyricsRangeBeforeSlider.value.toInt()
-        val after = binding.lyricsRangeAfterSlider.value.toInt()
-        binding.lyricsRangeBeforeValue.text = resources.getQuantityString(
-            R.plurals.lyrics_line_count,
-            before,
-            before
-        )
-        binding.lyricsRangeAfterValue.text = resources.getQuantityString(
-            R.plurals.lyrics_line_count,
-            after,
-            after
-        )
-        binding.lyricsRangePreview.text = lines
-            .subList(anchor - before, anchor + after + 1)
-            .joinToString("\n") { it.trimEnd() }
-    }
-
-    companion object {
-        const val TAG = "LyricsShareRangeBottomSheet"
-        private const val ARG_TITLE = "title"
-        private const val ARG_ARTIST = "artist"
-        private const val ARG_LINES = "lines"
-        private const val ARG_ANCHOR = "anchor"
-        private const val MAX_LINES_EACH_SIDE = 4
-        private const val DEFAULT_LINES_EACH_SIDE = 2
-
-        fun newInstance(title: String, artist: String, lines: List<String>, anchorIndex: Int) =
-            LyricsShareRangeBottomSheet().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_TITLE, title)
-                    putString(ARG_ARTIST, artist)
-                    putStringArrayList(ARG_LINES, ArrayList(lines))
-                    putInt(ARG_ANCHOR, anchorIndex)
-                }
-            }
-    }
-}
 
 class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
 

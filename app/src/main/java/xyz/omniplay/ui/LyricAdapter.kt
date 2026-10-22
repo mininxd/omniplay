@@ -1,7 +1,10 @@
 package xyz.omniplay.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -23,7 +26,8 @@ class LyricAdapter(
     val isFullScreen: Boolean = false,
     var onLineClick: ((LyricLine) -> Unit)? = null,
     var onLineDoubleTap: ((View?) -> Unit)? = null,
-    var onLineLongPress: ((Int) -> Unit)? = null
+    var onLineLongPress: ((Int) -> Unit)? = null,
+    var onSelectionLineClick: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
     var activeIndex: Int = -1
@@ -31,6 +35,10 @@ class LyricAdapter(
 
     /** Base font size in SP for fullscreen active line (default 48sp, adjustable via pinch). */
     var baseFontSizeSp: Float = 48f
+
+    private var shareSelectionMode = false
+    private var shareSelectionStart = -1
+    private var shareSelectionEnd = -1
 
     companion object {
         private var cachedBlackTypeface: Typeface? = null
@@ -84,6 +92,22 @@ class LyricAdapter(
         return true
     }
 
+    fun setShareSelectionMode(enabled: Boolean, start: Int = -1, end: Int = start) {
+        shareSelectionMode = enabled
+        shareSelectionStart = if (enabled) start.coerceIn(lines.indices) else -1
+        shareSelectionEnd = if (enabled) end.coerceIn(lines.indices) else -1
+        notifyDataSetChanged()
+    }
+
+    fun setShareSelectionEnd(end: Int) {
+        if (!shareSelectionMode || end !in lines.indices) return
+        if (shareSelectionEnd == end) return
+        val oldEnd = shareSelectionEnd
+        shareSelectionEnd = end
+        val firstChanged = minOf(oldEnd, end)
+        notifyItemRangeChanged(firstChanged, kotlin.math.abs(oldEnd - end) + 1)
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_lyric_line, parent, false)
@@ -91,13 +115,16 @@ class LyricAdapter(
     }
 
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
-        holder.bind(lines[position], position == activeIndex)
+        val selected = shareSelectionMode && position in
+            minOf(shareSelectionStart, shareSelectionEnd)..maxOf(shareSelectionStart, shareSelectionEnd)
+        holder.bind(lines[position], position == activeIndex, shareSelectionMode, selected)
     }
 
     override fun getItemCount(): Int = lines.size
 
     inner class LyricViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val lyricText: TextView = itemView.findViewById(R.id.lyric_line_text)
+        private val normalBackground = itemView.background
         private val gestureDetector: GestureDetector
 
         init {
@@ -105,13 +132,17 @@ class LyricAdapter(
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices) {
-                        if (pos != activeIndex) onLineClick?.invoke(lines[pos])
+                        if (shareSelectionMode) {
+                            onSelectionLineClick?.invoke(pos)
+                        } else if (pos != activeIndex) {
+                            onLineClick?.invoke(lines[pos])
+                        }
                     }
                     return true
                 }
 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    onLineDoubleTap?.invoke(lyricText)
+                    if (!shareSelectionMode) onLineDoubleTap?.invoke(lyricText)
                     return true
                 }
 
@@ -124,8 +155,27 @@ class LyricAdapter(
                 }
             })
             
-            itemView.setOnTouchListener { _, event ->
+            itemView.setOnTouchListener { view, event ->
                 gestureDetector.onTouchEvent(event)
+                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_MOVE) {
+                    val recyclerView = view.parent as? RecyclerView
+                    if (recyclerView != null) {
+                        val location = IntArray(2)
+                        recyclerView.getLocationOnScreen(location)
+                        val child = recyclerView.findChildViewUnder(
+                            event.rawX - location[0],
+                            event.rawY - location[1]
+                        )
+                        val hoveredPosition = if (child != null) {
+                            recyclerView.getChildAdapterPosition(child)
+                        } else {
+                            RecyclerView.NO_POSITION
+                        }
+                        if (hoveredPosition in lines.indices && lines[hoveredPosition].text.isNotBlank()) {
+                            onSelectionLineClick?.invoke(hoveredPosition)
+                        }
+                    }
+                }
                 true
             }
         }
@@ -138,7 +188,7 @@ class LyricAdapter(
             lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
         }
 
-        fun bind(line: LyricLine, isActive: Boolean) {
+        fun bind(line: LyricLine, isActive: Boolean, selectionMode: Boolean, isSelected: Boolean) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
 
@@ -161,6 +211,31 @@ class LyricAdapter(
 
             // Apply letter spacing (-2%)
             lyricText.letterSpacing = LETTER_SPACING
+
+            if (selectionMode) {
+                if (isSelected) {
+                    val highlight = GradientDrawable().apply {
+                        color = ColorStateList.valueOf(ThemeColors.getPrimaryContainer(ctx))
+                        cornerRadius = dpToPx(ctx, 20).toFloat()
+                    }
+                    itemView.background = InsetDrawable(highlight, 0, dpToPx(ctx, 3), 0, dpToPx(ctx, 3))
+                    lyricText.alpha = 1f
+                    lyricText.setTextColor(ThemeColors.getOnPrimaryContainer(ctx))
+                    lyricText.typeface = getBlackTypeface(ctx)
+                } else {
+                    itemView.background = normalBackground
+                    lyricText.alpha = 0.42f
+                    lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
+                    lyricText.typeface = getMediumTypeface(ctx)
+                }
+                lyricText.setTextSize(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    if (isFullScreen) baseFontSizeSp else 17f
+                )
+                return
+            }
+
+            itemView.background = normalBackground
 
             if (isActive) {
                 lyricText.alpha = 1.0f
