@@ -1,13 +1,25 @@
 package xyz.omniplay.util
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.annotation.StyleRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import com.google.android.material.color.ColorResourcesOverride
 import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.MaterialColorUtilitiesHelper
+import com.google.android.material.color.utilities.DynamicScheme
+import com.google.android.material.color.utilities.Hct
+import com.google.android.material.color.utilities.SchemeExpressive
+import com.google.android.material.color.utilities.SchemeFruitSalad
+import com.google.android.material.color.utilities.SchemeMonochrome
+import com.google.android.material.color.utilities.SchemeRainbow
+import com.google.android.material.color.utilities.SchemeTonalSpot
+import com.google.android.material.color.utilities.SchemeVibrant
 import xyz.omniplay.R
 import xyz.omniplay.ui.MainActivity
 
@@ -111,10 +123,33 @@ object ThemeHelper {
         val mode = getThemeMode(activity)
         AppCompatDelegate.setDefaultNightMode(mode.nightMode)
         val style = getThemeStyle(activity)
-        if (style.themeOverlayRes != 0) {
+        val hasDynamicScheme = applyDynamicScheme(activity, style)
+        if (!hasDynamicScheme && style.themeOverlayRes != 0) {
             activity.theme.applyStyle(style.themeOverlayRes, true)
         }
         applySystemBars(activity)
+    }
+
+    @SuppressLint("RestrictedApi")
+    private fun applyDynamicScheme(activity: Activity, style: ThemeStyle): Boolean {
+        if (style == ThemeStyle.DYNAMIC || !DynamicColors.isDynamicColorAvailable()) return false
+
+        val sourceColor = ContextCompat.getColor(activity, R.color.primary_accent)
+        val sourceColorHct = Hct.fromInt(sourceColor)
+        val isDark = isNightMode(activity)
+        val scheme: DynamicScheme = when (style) {
+            ThemeStyle.DYNAMIC -> return false
+            // Fruit Salad keeps the user-described Neutral style lively instead of gray.
+            ThemeStyle.NEUTRAL -> SchemeFruitSalad(sourceColorHct, isDark, 0.0)
+            ThemeStyle.MONOCHROME -> SchemeMonochrome(sourceColorHct, isDark, 0.0)
+            ThemeStyle.TONAL_SPOT -> SchemeTonalSpot(sourceColorHct, isDark, 0.0)
+            ThemeStyle.VIBRANT -> SchemeVibrant(sourceColorHct, isDark, 0.0)
+            ThemeStyle.RAINBOW -> SchemeRainbow(sourceColorHct, isDark, 0.0)
+            ThemeStyle.EXPRESSIVE -> SchemeExpressive(sourceColorHct, isDark, 0.0)
+        }
+        val colorResourcesOverride = ColorResourcesOverride.getInstance() ?: return false
+        val colorValues = MaterialColorUtilitiesHelper.createColorResourcesIdsToColorValues(scheme)
+        return colorResourcesOverride.applyIfPossible(activity, colorValues)
     }
 
     fun applySystemBars(activity: Activity) {
