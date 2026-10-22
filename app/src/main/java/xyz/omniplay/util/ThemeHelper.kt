@@ -33,15 +33,16 @@ enum class ThemeStyle(
     @StyleRes val themeOverlayRes: Int
 ) {
     DYNAMIC("dynamic", R.string.theme_style_dynamic, 0),
-    EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive),
-    TONE("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
-    SALAD("salad", R.string.theme_style_salad, R.style.ThemeOverlay_Omniplay_Salad),
+    NEUTRAL("neutral", R.string.theme_style_neutral, R.style.ThemeOverlay_Omniplay_Neutral),
     MONOCHROME("monochrome", R.string.theme_style_monochrome, R.style.ThemeOverlay_Omniplay_Monochrome),
-    VIBRANT("vibrant", R.string.theme_style_vibrant, R.style.ThemeOverlay_Omniplay_Vibrant);
+    TONAL_SPOT("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
+    VIBRANT("vibrant", R.string.theme_style_vibrant, R.style.ThemeOverlay_Omniplay_Vibrant),
+    RAINBOW("rainbow", R.string.theme_style_rainbow, R.style.ThemeOverlay_Omniplay_Rainbow),
+    EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive);
 
     companion object {
         fun getDefault(): ThemeStyle {
-            return if (DynamicColors.isDynamicColorAvailable()) DYNAMIC else EXPRESSIVE
+            return if (DynamicColors.isDynamicColorAvailable()) DYNAMIC else NEUTRAL
         }
 
         fun fromKey(key: String?): ThemeStyle {
@@ -95,7 +96,7 @@ object ThemeHelper {
         val key = prefs.getString(KEY_THEME_STYLE, defaultKey)
         val style = ThemeStyle.fromKey(key)
         return if (!DynamicColors.isDynamicColorAvailable() && style == ThemeStyle.DYNAMIC) {
-            ThemeStyle.EXPRESSIVE
+            ThemeStyle.NEUTRAL
         } else {
             style
         }

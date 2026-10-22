@@ -53,7 +53,19 @@
     <color name="theme_expressive_primary_container">@android:color/system_accent3_100</color>
     <color name="theme_expressive_on_primary_container">@android:color/system_accent3_900</color>
 
-    <!-- Salad (System Accent 2 - Playful secondary dynamic hue) -->
+    <!-- Salad (System Accent 2 - Playful secondary dynamic hue) — kept for migration -->
+    <color name="theme_salad_primary">@android:color/system_accent2_600</color>
+    <color name="theme_salad_on_primary">@android:color/white</color>
+    <color name="theme_salad_primary_container">@android:color/system_accent2_100</color>
+    <color name="theme_salad_on_primary_container">@android:color/system_accent2_900</color>
+
+    <!-- Neutral (System Accent 2 - Spritz-like refreshing secondary hue) — Light -->
+    <color name="theme_neutral_primary">@android:color/system_accent2_600</color>
+    <color name="theme_neutral_on_primary">@android:color/white</color>
+    <color name="theme_neutral_primary_container">@android:color/system_accent2_100</color>
+    <color name="theme_neutral_on_primary_container">@android:color/system_accent2_900</color>
+
+    <!-- Monochrome (System Neutral 1 - Pure grayscale dynamic values) -->
     <color name="theme_salad_primary">@android:color/system_accent2_600</color>
     <color name="theme_salad_on_primary">@android:color/white</color>
     <color name="theme_salad_primary_container">@android:color/system_accent2_100</color>
@@ -70,4 +82,10 @@
     <color name="theme_vibrant_on_primary">@android:color/white</color>
     <color name="theme_vibrant_primary_container">@android:color/system_accent1_100</color>
     <color name="theme_vibrant_on_primary_container">@android:color/system_accent1_900</color>
+
+    <!-- Rainbow (System Accent 3 - Cross-spectrum tertiary hue) — Light -->
+    <color name="theme_rainbow_primary">@android:color/system_accent3_600</color>
+    <color name="theme_rainbow_on_primary">@android:color/white</color>
+    <color name="theme_rainbow_primary_container">@android:color/system_accent3_100</color>
+    <color name="theme_rainbow_on_primary_container">@android:color/system_accent3_900</color>
 </resources>

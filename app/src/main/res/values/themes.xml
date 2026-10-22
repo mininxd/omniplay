@@ -70,12 +70,15 @@
         <item name="colorOnPrimaryContainer">@color/theme_expressive_on_primary_container</item>
     </style>
 
-    <style name="ThemeOverlay.Omniplay.Salad" parent="">
-        <item name="colorPrimary">@color/theme_salad_primary</item>
-        <item name="colorOnPrimary">@color/theme_salad_on_primary</item>
-        <item name="colorPrimaryContainer">@color/theme_salad_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/theme_salad_on_primary_container</item>
+    <style name="ThemeOverlay.Omniplay.Neutral" parent="">
+        <item name="colorPrimary">@color/theme_neutral_primary</item>
+        <item name="colorOnPrimary">@color/theme_neutral_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_neutral_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_neutral_on_primary_container</item>
     </style>
+
+    <!-- kept for migration: old "salad" key still resolves via fromKey -->
+    <style name="ThemeOverlay.Omniplay.Salad" parent="ThemeOverlay.Omniplay.Neutral" />
 
     <style name="ThemeOverlay.Omniplay.Monochrome" parent="">
         <item name="colorPrimary">@color/theme_monochrome_primary</item>
@@ -89,6 +92,13 @@
         <item name="colorOnPrimary">@color/theme_vibrant_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_vibrant_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_vibrant_on_primary_container</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Rainbow" parent="">
+        <item name="colorPrimary">@color/theme_rainbow_primary</item>
+        <item name="colorOnPrimary">@color/theme_rainbow_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_rainbow_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_rainbow_on_primary_container</item>
     </style>
 
     <!-- Split Button Shapes for Settings and Switches -->

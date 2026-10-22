@@ -50,7 +50,19 @@
     <color name="theme_expressive_primary_container">#930006</color>
     <color name="theme_expressive_on_primary_container">#FFDAD4</color>
 
-    <!-- Salad (Fruit Salad / Fresh Emerald & Lime) -->
+    <!-- Salad (Fruit Salad / Fresh Emerald & Lime) — kept for migration -->
+    <color name="theme_salad_primary">#7DDC97</color>
+    <color name="theme_salad_on_primary">#003919</color>
+    <color name="theme_salad_primary_container">#005327</color>
+    <color name="theme_salad_on_primary_container">#99F9B1</color>
+
+    <!-- Neutral (Spritz / Lively Refreshing — default fallback) — Dark -->
+    <color name="theme_neutral_primary">#82D5C9</color>
+    <color name="theme_neutral_on_primary">#003731</color>
+    <color name="theme_neutral_primary_container">#005048</color>
+    <color name="theme_neutral_on_primary_container">#9EF2E4</color>
+
+    <!-- Monochrome (Minimalist Grayscale Silver) -->
     <color name="theme_salad_primary">#7DDC97</color>
     <color name="theme_salad_on_primary">#003919</color>
     <color name="theme_salad_primary_container">#005327</color>
@@ -67,4 +79,10 @@
     <color name="theme_vibrant_on_primary">#00363F</color>
     <color name="theme_vibrant_primary_container">#004E5B</color>
     <color name="theme_vibrant_on_primary_container">#A3EEFF</color>
+
+    <!-- Rainbow (Diverse spectrum / Fuchsia-to-violet — Dark) -->
+    <color name="theme_rainbow_primary">#E89EFF</color>
+    <color name="theme_rainbow_on_primary">#570070</color>
+    <color name="theme_rainbow_primary_container">#7B009E</color>
+    <color name="theme_rainbow_on_primary_container">#F3DAFF</color>
 </resources>
