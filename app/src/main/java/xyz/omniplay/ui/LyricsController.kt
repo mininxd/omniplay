@@ -13,7 +13,6 @@ import android.os.Looper
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.LineBackgroundSpan
-import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
@@ -23,6 +22,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import android.util.TypedValue
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
@@ -66,6 +66,7 @@ class LyricsController(
     private var lyricsShareSelectionIsFullscreen = false
     private var lyricsShareSelectionAdapter: LyricAdapter? = null
     private var lyricsShareSelectionTextView: TextView? = null
+    private var lyricsShareSelectionPlainBaseTextSizePx: Float? = null
     private var lyricsShareSelectionFontScale = 1f
     private var lastOnlineLyricsSongId: Long? = null
 
@@ -441,7 +442,11 @@ class LyricsController(
                 if (holder != null) adapter.updateSelectionTextSize(holder)
             }
         }
-        lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
+        lyricsShareSelectionTextView?.let { textView ->
+            val baseSizePx = lyricsShareSelectionPlainBaseTextSizePx ?: textView.textSize
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, baseSizePx * scale)
+            renderPlainLyricsSelection(textView)
+        }
     }
 
     private fun plainLyricsLineAt(textView: TextView, event: MotionEvent): Int? {
@@ -483,6 +488,7 @@ class LyricsController(
         lyricsShareSelectionFontScale = 1f
         lyricsShareSelectionIsFullscreen = isFullscreen
         lyricsShareSelectionTextView = plainTextView
+        lyricsShareSelectionPlainBaseTextSizePx = plainTextView?.textSize
         lyricsShareSelectionAdapter = if (plainTextView == null) {
             if (isFullscreen) fullScreenLyricAdapter else lyricAdapter
         } else {
@@ -563,14 +569,6 @@ class LyricsController(
                 end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             )
-            if (lyricsShareSelectionFontScale != 1f) {
-                annotatedLyrics.setSpan(
-                    RelativeSizeSpan(lyricsShareSelectionFontScale),
-                    start,
-                    end,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
         }
         textView.text = annotatedLyrics
     }
@@ -640,6 +638,9 @@ class LyricsController(
         val wasFullscreen = lyricsShareSelectionIsFullscreen
         lyricsShareSelectionAdapter?.setShareSelectionMode(false)
         lyricsShareSelectionTextView?.let { textView ->
+            lyricsShareSelectionPlainBaseTextSizePx?.let { baseSizePx ->
+                textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, baseSizePx)
+            }
             currentLyrics?.plainLyrics?.let { textView.text = it }
         }
         isLyricsShareSelectionMode = false
@@ -648,6 +649,7 @@ class LyricsController(
         lyricsShareSelectionEnd = -1
         lyricsShareSelectionAdapter = null
         lyricsShareSelectionTextView = null
+        lyricsShareSelectionPlainBaseTextSizePx = null
         lyricsShareSelectionIsFullscreen = false
         lyricsShareSelectionFontScale = 1f
 

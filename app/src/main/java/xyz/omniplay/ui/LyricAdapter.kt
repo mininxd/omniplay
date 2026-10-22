@@ -41,7 +41,6 @@ class LyricAdapter(
     private var shareSelectionAnchor = -1
     private var shareSelectionStart = -1
     private var shareSelectionEnd = -1
-    private var shareSelectionActiveIndex = -1
     private var shareSelectionFontScale = 1f
 
     companion object {
@@ -102,7 +101,6 @@ class LyricAdapter(
         shareSelectionAnchor = if (enabled) start.coerceIn(lines.indices) else -1
         shareSelectionStart = if (enabled) minOf(start, end).coerceIn(lines.indices) else -1
         shareSelectionEnd = if (enabled) maxOf(start, end).coerceIn(lines.indices) else -1
-        shareSelectionActiveIndex = if (enabled) activeIndex else -1
         shareSelectionFontScale = 1f
         notifyDataSetChanged()
     }
@@ -131,11 +129,7 @@ class LyricAdapter(
     fun updateSelectionTextSize(holder: LyricViewHolder) {
         val position = holder.bindingAdapterPosition
         if (!shareSelectionMode || position !in lines.indices) return
-        val first = minOf(shareSelectionStart, shareSelectionEnd)
-        val last = maxOf(shareSelectionStart, shareSelectionEnd)
-        if (position in first..last) {
-            holder.updateSelectionTextSize(position == shareSelectionActiveIndex, shareSelectionFontScale)
-        }
+        holder.updateSelectionTextSize(shareSelectionFontScale)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
@@ -151,8 +145,7 @@ class LyricAdapter(
             lines[position],
             position == activeIndex,
             shareSelectionMode,
-            selected,
-            position == shareSelectionActiveIndex
+            selected
         )
     }
 
@@ -229,11 +222,7 @@ class LyricAdapter(
             if (!isFullScreen) return
             val pos = bindingAdapterPosition
             if (shareSelectionMode) {
-                val first = minOf(shareSelectionStart, shareSelectionEnd)
-                val last = maxOf(shareSelectionStart, shareSelectionEnd)
-                if (pos in first..last) {
-                    updateSelectionTextSize(pos == shareSelectionActiveIndex, shareSelectionFontScale)
-                }
+                updateSelectionTextSize(shareSelectionFontScale)
                 return
             }
             val isActive = (pos == activeIndex)
@@ -241,10 +230,10 @@ class LyricAdapter(
             lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
         }
 
-        fun updateSelectionTextSize(isSelectionAnchor: Boolean, scale: Float) {
+        fun updateSelectionTextSize(scale: Float) {
             lyricText.setTextSize(
                 TypedValue.COMPLEX_UNIT_SP,
-                selectionFontSizeSp(isSelectionAnchor) * scale
+                selectionFontSizeSp() * scale
             )
         }
 
@@ -252,8 +241,7 @@ class LyricAdapter(
             line: LyricLine,
             isActive: Boolean,
             selectionMode: Boolean,
-            isSelected: Boolean,
-            wasActiveAtSelectionStart: Boolean
+            isSelected: Boolean
         ) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
@@ -311,7 +299,7 @@ class LyricAdapter(
                 lyricText.typeface = if (isSelected) getBlackTypeface(ctx) else getMediumTypeface(ctx)
                 lyricText.setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
-                    selectionFontSizeSp(wasActiveAtSelectionStart) * shareSelectionFontScale
+                    selectionFontSizeSp() * shareSelectionFontScale
                 )
                 return
             }
@@ -350,11 +338,10 @@ class LyricAdapter(
             }
         }
 
-        private fun selectionFontSizeSp(isSelectionAnchor: Boolean): Float = when {
-            isFullScreen && isSelectionAnchor -> baseFontSizeSp
-            isFullScreen -> (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
-            isSelectionAnchor -> 17f
-            else -> 15f
+        private fun selectionFontSizeSp(): Float = if (isFullScreen) {
+            (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
+        } else {
+            16f
         }
     }
 }
