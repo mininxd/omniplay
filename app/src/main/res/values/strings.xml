@@ -70,8 +70,15 @@
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_style">Theme style</string>
-    <string name="theme_style_desc">Dynamic (System) is the default. For music, Tonal Spot, Neutral, and Monochrome keep the UI balanced around album art. Vibrant adds stronger color; Expressive, Rainbow, and Fruit Salad offer playful alternatives.</string>
-    <string name="theme_style_recommended">%1$s · Recommended for music</string>
+    <string name="theme_style_desc">Choose how the app builds its colors from your system palette.</string>
+    <string name="theme_style_dynamic_desc">Uses the system color scheme for a familiar look that follows your device.</string>
+    <string name="theme_style_tone_desc">Moderate color with subtle accent shifts for a calm, balanced interface.</string>
+    <string name="theme_style_neutral_desc">Very low saturation keeps surfaces muted and text easy to focus on.</string>
+    <string name="theme_style_monochrome_desc">Grayscale colors for a minimal, distraction-free look.</string>
+    <string name="theme_style_vibrant_desc">Strong, closely matched colors for a punchier, more colorful interface.</string>
+    <string name="theme_style_expressive_desc">High color with shifted accent hues for a playful, varied palette.</string>
+    <string name="theme_style_rainbow_desc">Widely distributed hues for a bright, multicolor palette.</string>
+    <string name="theme_style_salad_desc">Moderate to strong complementary colors for an eclectic palette.</string>
     <string name="theme_style_dynamic">Dynamic (System)</string>
     <string name="theme_style_neutral">Neutral</string>
     <string name="theme_style_tone">Tonal Spot</string>

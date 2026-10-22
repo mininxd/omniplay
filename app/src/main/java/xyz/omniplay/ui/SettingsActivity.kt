@@ -5,16 +5,27 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.graphics.Typeface
+import android.view.Gravity
 import android.view.View
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
@@ -334,38 +345,75 @@ class SettingsActivity : AppCompatActivity() {
     private fun showThemeStyleDialog() {
         val currentStyle = ThemeHelper.getThemeStyle(this)
         val styles = ThemeHelper.getAvailableStyles()
-        val musicFriendlyStyles = setOf(
-            ThemeStyle.TONAL_SPOT,
-            ThemeStyle.NEUTRAL,
-            ThemeStyle.MONOCHROME
+        val details = mapOf(
+            ThemeStyle.DYNAMIC to R.string.theme_style_dynamic_desc,
+            ThemeStyle.TONAL_SPOT to R.string.theme_style_tone_desc,
+            ThemeStyle.NEUTRAL to R.string.theme_style_neutral_desc,
+            ThemeStyle.MONOCHROME to R.string.theme_style_monochrome_desc,
+            ThemeStyle.VIBRANT to R.string.theme_style_vibrant_desc,
+            ThemeStyle.EXPRESSIVE to R.string.theme_style_expressive_desc,
+            ThemeStyle.RAINBOW to R.string.theme_style_rainbow_desc,
+            ThemeStyle.FRUIT_SALAD to R.string.theme_style_salad_desc
         )
-        val names = styles.map { style ->
-            val title = getString(style.titleRes)
-            if (style in musicFriendlyStyles) {
-                getString(R.string.theme_style_recommended, title)
-            } else {
-                title
+        val radioGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.VERTICAL
+            val detailColor = MaterialColors.getColor(
+                this@SettingsActivity,
+                com.google.android.material.R.attr.colorOnSurfaceVariant,
+                android.graphics.Color.GRAY
+            )
+            styles.forEach { style ->
+                val title = getString(style.titleRes)
+                val description = getString(details.getValue(style))
+                val label = SpannableString("$title\n$description").apply {
+                    setSpan(StyleSpan(Typeface.BOLD), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    setSpan(RelativeSizeSpan(0.875f), title.length + 1, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    setSpan(ForegroundColorSpan(detailColor), title.length + 1, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+                addView(MaterialRadioButton(this@SettingsActivity).apply {
+                    id = style.ordinal
+                    text = label
+                    gravity = Gravity.CENTER_VERTICAL
+                    minHeight = (64 * resources.displayMetrics.density).toInt()
+                    setPadding(
+                        (16 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt(),
+                        (16 * resources.displayMetrics.density).toInt(),
+                        (8 * resources.displayMetrics.density).toInt()
+                    )
+                })
             }
-        }.toTypedArray()
-        val selectedIndex = styles.indexOf(currentStyle).let { if (it >= 0) it else 0 }
+        }
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            addView(radioGroup)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (minOf(520f, resources.displayMetrics.heightPixels / resources.displayMetrics.density * 0.7f)
+                    * resources.displayMetrics.density).toInt()
+            )
+        }
+        val selectedStyle = styles.firstOrNull { it == currentStyle } ?: styles.first()
+        radioGroup.check(selectedStyle.ordinal)
 
-        MaterialAlertDialogBuilder(this)
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.theme_style)
             .setMessage(R.string.theme_style_desc)
-            .setSingleChoiceItems(names, selectedIndex) { dialog, which ->
-                val chosenStyle = styles[which]
-                if (chosenStyle != currentStyle) {
-                    ThemeHelper.setThemeStyle(this, chosenStyle)
-                    isThemeChanged = true
-                    prepareResult()
-                    dialog.dismiss()
-                    recreate()
-                } else {
-                    dialog.dismiss()
-                }
-            }
+            .setView(scrollView)
             .setNegativeButton(R.string.close, null)
-            .show()
+            .create()
+
+        radioGroup.setOnCheckedChangeListener { _, checkedId ->
+            val chosenStyle = styles.firstOrNull { it.ordinal == checkedId } ?: return@setOnCheckedChangeListener
+            if (chosenStyle != currentStyle) {
+                ThemeHelper.setThemeStyle(this, chosenStyle)
+                isThemeChanged = true
+                prepareResult()
+                dialog.dismiss()
+                recreate()
+            }
+        }
+        dialog.show()
     }
 
     private fun updateFolderSubtitle() {
