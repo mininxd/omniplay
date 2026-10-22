@@ -40,6 +40,7 @@ class LyricAdapter(
     private var shareSelectionStart = -1
     private var shareSelectionEnd = -1
     private var shareSelectionActiveIndex = -1
+    private var shareSelectionFontScale = 1f
 
     companion object {
         private var cachedBlackTypeface: Typeface? = null
@@ -75,6 +76,7 @@ class LyricAdapter(
         (dp * ctx.resources.displayMetrics.density).toInt()
 
     fun submitLines(newLines: List<LyricLine>) {
+        if (newLines == lines) return
         lines = newLines
         activeIndex = -1
         notifyDataSetChanged()
@@ -98,6 +100,7 @@ class LyricAdapter(
         shareSelectionStart = if (enabled) start.coerceIn(lines.indices) else -1
         shareSelectionEnd = if (enabled) end.coerceIn(lines.indices) else -1
         shareSelectionActiveIndex = if (enabled) activeIndex else -1
+        shareSelectionFontScale = 1f
         notifyDataSetChanged()
     }
 
@@ -106,8 +109,23 @@ class LyricAdapter(
         if (shareSelectionEnd == end) return
         val oldEnd = shareSelectionEnd
         shareSelectionEnd = end
-        val firstChanged = minOf(oldEnd, end)
-        notifyItemRangeChanged(firstChanged, kotlin.math.abs(oldEnd - end) + 1)
+        val firstChanged = minOf(shareSelectionStart, oldEnd, end)
+        val lastChanged = maxOf(shareSelectionStart, oldEnd, end)
+        notifyItemRangeChanged(firstChanged, lastChanged - firstChanged + 1)
+    }
+
+    fun setShareSelectionFontScale(scale: Float) {
+        shareSelectionFontScale = scale
+    }
+
+    fun updateSelectionTextSize(holder: LyricViewHolder) {
+        val position = holder.bindingAdapterPosition
+        if (!shareSelectionMode || position !in lines.indices) return
+        val first = minOf(shareSelectionStart, shareSelectionEnd)
+        val last = maxOf(shareSelectionStart, shareSelectionEnd)
+        if (position in first..last) {
+            holder.updateSelectionTextSize(position == shareSelectionActiveIndex, shareSelectionFontScale)
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LyricViewHolder {
@@ -159,6 +177,7 @@ class LyricAdapter(
                     if (pos in lines.indices && lines[pos].text.isNotBlank()) {
                         itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onLineLongPress?.invoke(pos)
+                        itemView.parent?.requestDisallowInterceptTouchEvent(true)
                     }
                 }
             })
@@ -179,7 +198,7 @@ class LyricAdapter(
                         } else {
                             RecyclerView.NO_POSITION
                         }
-                        if (hoveredPosition in lines.indices && lines[hoveredPosition].text.isNotBlank()) {
+                        if (hoveredPosition in lines.indices) {
                             onSelectionLineClick?.invoke(hoveredPosition)
                         }
                     }
@@ -191,9 +210,24 @@ class LyricAdapter(
         fun updateTextSize(baseSp: Float) {
             if (!isFullScreen) return
             val pos = bindingAdapterPosition
+            if (shareSelectionMode) {
+                val first = minOf(shareSelectionStart, shareSelectionEnd)
+                val last = maxOf(shareSelectionStart, shareSelectionEnd)
+                if (pos in first..last) {
+                    updateSelectionTextSize(pos == shareSelectionActiveIndex, shareSelectionFontScale)
+                }
+                return
+            }
             val isActive = (pos == activeIndex)
             val targetSp = if (isActive) baseSp else (baseSp * 0.75f).coerceAtLeast(16f)
             lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
+        }
+
+        fun updateSelectionTextSize(isSelectionAnchor: Boolean, scale: Float) {
+            lyricText.setTextSize(
+                TypedValue.COMPLEX_UNIT_SP,
+                selectionFontSizeSp(isSelectionAnchor) * scale
+            )
         }
 
         fun bind(
@@ -232,7 +266,14 @@ class LyricAdapter(
                         color = ColorStateList.valueOf(ThemeColors.getPrimaryContainer(ctx))
                         cornerRadius = dpToPx(ctx, 20).toFloat()
                     }
-                    itemView.background = InsetDrawable(highlight, 0, dpToPx(ctx, 3), 0, dpToPx(ctx, 3))
+                    val sideInset = dpToPx(ctx, 8)
+                    itemView.background = InsetDrawable(
+                        highlight,
+                        sideInset,
+                        dpToPx(ctx, 3),
+                        sideInset,
+                        dpToPx(ctx, 3)
+                    )
                     lyricText.alpha = 1f
                     lyricText.setTextColor(ThemeColors.getOnPrimaryContainer(ctx))
                 } else {
@@ -240,15 +281,10 @@ class LyricAdapter(
                     lyricText.alpha = 0.42f
                     lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
                 }
-                lyricText.typeface = if (wasActiveAtSelectionStart) getBlackTypeface(ctx) else getMediumTypeface(ctx)
+                lyricText.typeface = if (isSelected) getBlackTypeface(ctx) else getMediumTypeface(ctx)
                 lyricText.setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
-                    when {
-                        isFullScreen && wasActiveAtSelectionStart -> baseFontSizeSp
-                        isFullScreen -> (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
-                        wasActiveAtSelectionStart -> 17f
-                        else -> 15f
-                    }
+                    selectionFontSizeSp(wasActiveAtSelectionStart) * shareSelectionFontScale
                 )
                 return
             }
@@ -279,6 +315,13 @@ class LyricAdapter(
                     lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 }
             }
+        }
+
+        private fun selectionFontSizeSp(isSelectionAnchor: Boolean): Float = when {
+            isFullScreen && isSelectionAnchor -> baseFontSizeSp
+            isFullScreen -> (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
+            isSelectionAnchor -> 17f
+            else -> 15f
         }
     }
 }
