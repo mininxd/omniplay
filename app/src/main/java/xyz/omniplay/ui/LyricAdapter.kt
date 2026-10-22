@@ -39,6 +39,7 @@ class LyricAdapter(
     private var shareSelectionMode = false
     private var shareSelectionStart = -1
     private var shareSelectionEnd = -1
+    private var shareSelectionActiveIndex = -1
 
     companion object {
         private var cachedBlackTypeface: Typeface? = null
@@ -96,6 +97,7 @@ class LyricAdapter(
         shareSelectionMode = enabled
         shareSelectionStart = if (enabled) start.coerceIn(lines.indices) else -1
         shareSelectionEnd = if (enabled) end.coerceIn(lines.indices) else -1
+        shareSelectionActiveIndex = if (enabled) activeIndex else -1
         notifyDataSetChanged()
     }
 
@@ -117,7 +119,13 @@ class LyricAdapter(
     override fun onBindViewHolder(holder: LyricViewHolder, position: Int) {
         val selected = shareSelectionMode && position in
             minOf(shareSelectionStart, shareSelectionEnd)..maxOf(shareSelectionStart, shareSelectionEnd)
-        holder.bind(lines[position], position == activeIndex, shareSelectionMode, selected)
+        holder.bind(
+            lines[position],
+            position == activeIndex,
+            shareSelectionMode,
+            selected,
+            position == shareSelectionActiveIndex
+        )
     }
 
     override fun getItemCount(): Int = lines.size
@@ -188,7 +196,13 @@ class LyricAdapter(
             lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
         }
 
-        fun bind(line: LyricLine, isActive: Boolean, selectionMode: Boolean, isSelected: Boolean) {
+        fun bind(
+            line: LyricLine,
+            isActive: Boolean,
+            selectionMode: Boolean,
+            isSelected: Boolean,
+            wasActiveAtSelectionStart: Boolean
+        ) {
             lyricText.text = if (line.text.isBlank()) "• • •" else line.text
             val ctx = itemView.context
 
@@ -221,16 +235,20 @@ class LyricAdapter(
                     itemView.background = InsetDrawable(highlight, 0, dpToPx(ctx, 3), 0, dpToPx(ctx, 3))
                     lyricText.alpha = 1f
                     lyricText.setTextColor(ThemeColors.getOnPrimaryContainer(ctx))
-                    lyricText.typeface = getBlackTypeface(ctx)
                 } else {
                     itemView.background = normalBackground
                     lyricText.alpha = 0.42f
                     lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
-                    lyricText.typeface = getMediumTypeface(ctx)
                 }
+                lyricText.typeface = if (wasActiveAtSelectionStart) getBlackTypeface(ctx) else getMediumTypeface(ctx)
                 lyricText.setTextSize(
                     TypedValue.COMPLEX_UNIT_SP,
-                    if (isFullScreen) baseFontSizeSp else 17f
+                    when {
+                        isFullScreen && wasActiveAtSelectionStart -> baseFontSizeSp
+                        isFullScreen -> (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
+                        wasActiveAtSelectionStart -> 17f
+                        else -> 15f
+                    }
                 )
                 return
             }

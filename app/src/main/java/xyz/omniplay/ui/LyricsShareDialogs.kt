@@ -8,10 +8,8 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.Shader
+import android.graphics.Path
 import android.graphics.Typeface
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -21,7 +19,6 @@ import android.os.Environment
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.text.TextUtils
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -34,6 +31,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import xyz.omniplay.R
 import xyz.omniplay.databinding.BottomSheetLyricsShareBinding
+import xyz.omniplay.model.Song
 import xyz.omniplay.util.ThemeColors
 
 class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
@@ -100,10 +98,14 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun renderPreview() {
-        val title = requireArguments().getString(ARG_TITLE).orEmpty()
-        val artist = requireArguments().getString(ARG_ARTIST).orEmpty()
         val lines = requireArguments().getStringArrayList(ARG_LINES).orEmpty()
-        renderedBitmap = LyricsShareImageRenderer.render(requireContext(), title, artist, lines, selectedTheme)
+        renderedBitmap = LyricsShareImageRenderer.render(
+            requireContext(),
+            lines,
+            selectedTheme,
+            requireArguments().getLong(ARG_POSITION_MS),
+            requireArguments().getLong(ARG_DURATION_MS)
+        )
         binding.lyricsShareImagePreview.setImageBitmap(renderedBitmap)
     }
 
@@ -162,13 +164,23 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_TITLE = "title"
         private const val ARG_ARTIST = "artist"
         private const val ARG_LINES = "lines"
+        private const val ARG_POSITION_MS = "position_ms"
+        private const val ARG_DURATION_MS = "duration_ms"
 
-        fun newInstance(title: String, artist: String, lines: List<String>) =
+        fun newInstance(
+            title: String,
+            artist: String,
+            lines: List<String>,
+            positionMs: Long,
+            durationMs: Long
+        ) =
             LyricsShareThemeBottomSheet().apply {
                 arguments = Bundle().apply {
                     putString(ARG_TITLE, title)
                     putString(ARG_ARTIST, artist)
                     putStringArrayList(ARG_LINES, ArrayList(lines))
+                    putLong(ARG_POSITION_MS, positionMs)
+                    putLong(ARG_DURATION_MS, durationMs)
                 }
             }
     }
@@ -179,82 +191,99 @@ private object LyricsShareImageRenderer {
     const val THEME_MIDNIGHT = 1
     const val THEME_PAPER = 2
 
-    fun render(context: android.content.Context, title: String, artist: String, lines: List<String>, theme: Int): Bitmap {
+    fun render(
+        context: android.content.Context,
+        lines: List<String>,
+        theme: Int,
+        positionMs: Long,
+        durationMs: Long
+    ): Bitmap {
         val palette = paletteFor(context, theme)
         val quote = lines.joinToString("\n").trim().ifBlank { "♪" }
         val width = IMAGE_WIDTH
-        val horizontalInset = 132f
+        val horizontalInset = 72f
         val bodyWidth = (width - horizontalInset * 2).toInt()
 
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.body
-            textSize = 52f
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            color = palette.foreground
+            textSize = 150f
+            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
         }
-        val quoteLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        fun createQuoteLayout(): StaticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(quote, 0, quote.length, quotePaint, bodyWidth)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                .setLineSpacing(15f, 1f)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setLineSpacing(20f, 1f)
                 .setIncludePad(false)
                 .build()
         } else {
-            StaticLayout(quote, quotePaint, bodyWidth, Layout.Alignment.ALIGN_CENTER, 1f, 15f, false)
+            StaticLayout(quote, quotePaint, bodyWidth, Layout.Alignment.ALIGN_NORMAL, 1f, 20f, false)
+        }
+        var quoteLayout = createQuoteLayout()
+        while (quoteLayout.height > MAX_QUOTE_HEIGHT && quotePaint.textSize > MIN_QUOTE_TEXT_SIZE) {
+            quotePaint.textSize -= 8f
+            quoteLayout = createQuoteLayout()
         }
 
-        val height = maxOf(MIN_IMAGE_HEIGHT, quoteLayout.height + 700)
+        val height = maxOf(MIN_IMAGE_HEIGHT, quoteLayout.height + EXTRA_CARD_HEIGHT)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-
-        val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                0f,
-                0f,
-                width.toFloat(),
-                height.toFloat(),
-                palette.background,
-                palette.backgroundEnd,
-                Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), backgroundPaint)
-
-        val accentGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accentGlow }
-        canvas.drawCircle(width - 34f, 108f, 330f, accentGlow)
-        canvas.drawCircle(12f, height - 44f, 290f, accentGlow)
-
-        val card = RectF(48f, 48f, width - 48f, height - 48f)
-        val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.card }
-        canvas.drawRoundRect(card, 58f, 58f, cardPaint)
-
-        val headerPaint = textPaint(palette.accent, 25f, Typeface.BOLD, Paint.Align.LEFT)
-        canvas.drawText("OMNIPLAY  /  LYRICS", horizontalInset, 154f, headerPaint)
-
-        val titlePaint = textPaint(palette.title, 45f, Typeface.BOLD, Paint.Align.LEFT)
-        val safeTitle = ellipsize(title.ifBlank { context.getString(R.string.app_name) }, titlePaint, bodyWidth.toFloat())
-        canvas.drawText(safeTitle, horizontalInset, 244f, titlePaint)
-
-        val artistPaint = textPaint(palette.muted, 31f, Typeface.NORMAL, Paint.Align.LEFT)
-        if (artist.isNotBlank()) {
-            canvas.drawText(ellipsize(artist, artistPaint, bodyWidth.toFloat()), horizontalInset, 302f, artistPaint)
-        }
-
-        val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent }
-        canvas.drawRoundRect(RectF(horizontalInset, 350f, horizontalInset + 104f, 360f), 5f, 5f, accentPaint)
+        canvas.drawColor(palette.background)
 
         canvas.save()
-        canvas.translate(horizontalInset, 410f)
+        canvas.translate(horizontalInset, 48f)
         quoteLayout.draw(canvas)
         canvas.restore()
 
-        val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.divider
-            strokeWidth = 2f
+        val progressStart = horizontalInset
+        val progressEnd = width - horizontalInset
+        val progressY = height - 140f
+        val safeDurationMs = durationMs.coerceAtLeast(0L)
+        val safePositionMs = if (safeDurationMs > 0L) {
+            positionMs.coerceIn(0L, safeDurationMs)
+        } else {
+            positionMs.coerceAtLeast(0L)
         }
-        val footerY = height - 146f
-        canvas.drawLine(horizontalInset, footerY - 42f, width - horizontalInset, footerY - 42f, dividerPaint)
-        canvas.drawText("OMNIPLAY", horizontalInset, footerY, headerPaint)
-        val footerNotePaint = textPaint(palette.muted, 22f, Typeface.NORMAL, Paint.Align.RIGHT)
-        canvas.drawText("LYRIC SHARE", width - horizontalInset, footerY, footerNotePaint)
+        val progress = if (safeDurationMs > 0L) {
+            safePositionMs.toFloat() / safeDurationMs.toFloat()
+        } else {
+            0f
+        }
+        val progressX = progressStart + (progressEnd - progressStart) * progress
+
+        val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = palette.track
+            strokeWidth = 12f
+            strokeCap = Paint.Cap.ROUND
+        }
+        canvas.drawLine(progressStart, progressY, progressEnd, progressY, trackPaint)
+
+        val playedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = palette.accent
+            style = Paint.Style.STROKE
+            strokeWidth = 12f
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        if (progressX > progressStart + 1f) {
+            val wave = Path().apply {
+                var x = progressStart
+                moveTo(x, progressY)
+                while (x < progressX) {
+                    x = (x + 4f).coerceAtMost(progressX)
+                    val angle = ((x - progressStart) / WAVE_LENGTH) * (Math.PI * 2.0).toFloat()
+                    lineTo(x, progressY + WAVE_AMPLITUDE * kotlin.math.sin(angle.toDouble()).toFloat())
+                }
+            }
+            canvas.drawPath(wave, playedPaint)
+        }
+        canvas.drawCircle(progressX, progressY, 21f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent })
+
+        val timePaint = textPaint(palette.muted, 36f, Typeface.NORMAL, Paint.Align.LEFT)
+        val elapsed = Song.formatTime(safePositionMs)
+        canvas.drawText(elapsed, progressStart, height - 30f, timePaint)
+        timePaint.textAlign = Paint.Align.RIGHT
+        val total = Song.formatTime(safeDurationMs)
+        canvas.drawText(total, progressEnd, height - 30f, timePaint)
         return bitmap
     }
 
@@ -308,41 +337,17 @@ private object LyricsShareImageRenderer {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    private fun paletteFor(context: android.content.Context, theme: Int): Palette = when (theme) {
-        THEME_MIDNIGHT -> Palette(
-            background = Color.rgb(12, 16, 25),
-            backgroundEnd = Color.rgb(35, 43, 61),
-            card = Color.rgb(24, 31, 45),
-            accent = Color.rgb(184, 199, 255),
-            title = Color.rgb(244, 245, 251),
-            body = Color.rgb(225, 229, 241),
-            muted = Color.rgb(174, 183, 205),
-            accentGlow = Color.argb(28, 153, 177, 255),
-            divider = Color.argb(65, 184, 199, 255)
-        )
-        THEME_PAPER -> Palette(
-            background = Color.rgb(234, 222, 202),
-            backgroundEnd = Color.rgb(248, 239, 222),
-            card = Color.rgb(255, 250, 240),
-            accent = Color.rgb(126, 83, 48),
-            title = Color.rgb(48, 38, 29),
-            body = Color.rgb(59, 48, 38),
-            muted = Color.rgb(116, 100, 83),
-            accentGlow = Color.argb(20, 138, 99, 58),
-            divider = Color.argb(55, 126, 83, 48)
-        )
-        else -> Palette(
-            background = ThemeColors.getSurface(context),
-            backgroundEnd = ThemeColors.getSurfaceContainerLow(context),
-            card = ThemeColors.getSurfaceContainerHigh(context),
-            accent = ThemeColors.getPrimary(context),
-            title = ThemeColors.getOnSurface(context),
-            body = ThemeColors.getOnSurface(context),
-            muted = ThemeColors.getOnSurfaceVariant(context),
-            accentGlow = withAlpha(ThemeColors.getPrimary(context), 28),
-            divider = withAlpha(ThemeColors.getPrimary(context), 58)
-        )
-    }
+    private fun paletteFor(context: android.content.Context, theme: Int) = Palette(
+        background = Color.rgb(13, 19, 16),
+        foreground = Color.rgb(232, 237, 232),
+        muted = Color.rgb(188, 197, 191),
+        track = Color.rgb(48, 56, 51),
+        accent = when (theme) {
+            THEME_MIDNIGHT -> Color.rgb(245, 169, 181)
+            THEME_PAPER -> Color.rgb(158, 239, 202)
+            else -> ThemeColors.getPrimary(context)
+        }
+    )
 
     private fun textPaint(color: Int, size: Float, style: Int, align: Paint.Align) =
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -352,29 +357,20 @@ private object LyricsShareImageRenderer {
             textAlign = align
         }
 
-    private fun ellipsize(text: String, paint: Paint, availableWidth: Float): String =
-        TextUtils.ellipsize(text, TextPaint(paint), availableWidth, TextUtils.TruncateAt.END).toString()
-
-    private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(
-        alpha,
-        Color.red(color),
-        Color.green(color),
-        Color.blue(color)
-    )
-
     private data class Palette(
         val background: Int,
-        val backgroundEnd: Int,
-        val card: Int,
-        val accent: Int,
-        val title: Int,
-        val body: Int,
+        val foreground: Int,
         val muted: Int,
-        val accentGlow: Int,
-        val divider: Int
+        val track: Int,
+        val accent: Int
     )
 
     private const val IMAGE_WIDTH = 1080
-    private const val MIN_IMAGE_HEIGHT = 1080
+    private const val MIN_IMAGE_HEIGHT = 540
+    private const val MAX_QUOTE_HEIGHT = 4000
+    private const val MIN_QUOTE_TEXT_SIZE = 32f
+    private const val WAVE_LENGTH = 68f
+    private const val WAVE_AMPLITUDE = 13f
+    private const val EXTRA_CARD_HEIGHT = 370
     private const val CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000L
 }

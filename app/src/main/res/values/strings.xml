@@ -172,15 +172,13 @@
     <string name="balance_center">Center</string>
     <string name="balance_left">Left %1$d%%</string>
     <string name="balance_right">Right %1$d%%</string>
-    <string name="lyrics_share_select_title">Select Lyrics</string>
-    <string name="lyrics_cancel_selection">Cancel lyric selection</string>
     <string name="lyrics_share_next">Next</string>
     <string name="lyrics_share_button">Share</string>
     <string name="lyrics_choose_theme">Choose a theme</string>
     <string name="lyrics_theme_desc">Preview your lyric card</string>
     <string name="lyrics_theme_material">Material You</string>
-    <string name="lyrics_theme_midnight">Midnight</string>
-    <string name="lyrics_theme_paper">Paper</string>
+    <string name="lyrics_theme_midnight">Rose</string>
+    <string name="lyrics_theme_paper">Mint</string>
     <string name="lyrics_save_image">Save image</string>
     <string name="lyrics_share_chooser">Share lyrics</string>
     <string name="lyrics_image_saved">Saved to Pictures/OmniPlay</string>

@@ -4,8 +4,14 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.LineBackgroundSpan
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -29,7 +35,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import xyz.omniplay.R
 import xyz.omniplay.databinding.ActivityMainBinding
-import xyz.omniplay.lyrics.LyricLine
 import xyz.omniplay.lyrics.Lyrics
 import xyz.omniplay.lyrics.LyricsResult
 import xyz.omniplay.lyrics.LrcLibClient
@@ -52,7 +57,9 @@ class LyricsController(
     private var isLyricsShareSelectionMode = false
     private var lyricsShareSelectionStart = -1
     private var lyricsShareSelectionEnd = -1
-    private var lyricsSharePreviousPlainScrollY = 0
+    private var lyricsShareSelectionIsFullscreen = false
+    private var lyricsShareSelectionAdapter: LyricAdapter? = null
+    private var lyricsShareSelectionTextView: TextView? = null
     private var lastOnlineLyricsSongId: Long? = null
 
     var isLyricsShowing: Boolean = false
@@ -203,8 +210,10 @@ class LyricsController(
                 openFullScreenLyrics(view)
             },
             onLineLongPress = { index ->
-                beginLyricsShareSelection(index)
-            }
+                if (isLyricsShareSelectionMode) updateLyricsShareSelectionEnd(index)
+                else beginLyricsShareSelection(index, isFullscreen = false)
+            },
+            onSelectionLineClick = { index -> updateLyricsShareSelectionEnd(index) }
         )
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.lyricsRecyclerView.adapter = lyricAdapter
@@ -242,7 +251,7 @@ class LyricsController(
             },
             onLineLongPress = { index ->
                 if (isLyricsShareSelectionMode) updateLyricsShareSelectionEnd(index)
-                else beginLyricsShareSelection(index)
+                else beginLyricsShareSelection(index, isFullscreen = true)
             },
             onSelectionLineClick = { index -> updateLyricsShareSelectionEnd(index) }
         ).apply {
@@ -288,19 +297,20 @@ class LyricsController(
         setupPlainLyricsShareGesture(binding.fullscreenLyricsPlainText)
 
         binding.btnCloseLyrics.setOnClickListener {
+            if (isLyricsShareSelectionMode) finishLyricsShareSelectionMode()
             closeLyricsCard()
         }
 
         binding.btnCloseFullscreenLyrics.setOnClickListener {
-            if (isLyricsShareSelectionMode) finishLyricsShareSelectionMode()
-            else closeFullScreenLyrics()
-        }
-
-        binding.btnLyricsSelectionClose.setOnClickListener {
-            finishLyricsShareSelectionMode()
+            if (isLyricsShareSelectionMode && lyricsShareSelectionIsFullscreen) finishLyricsShareSelectionMode()
+            closeFullScreenLyrics()
         }
 
         binding.btnLyricsShareNext.setOnClickListener {
+            shareSelectedLyrics()
+        }
+
+        binding.btnLyricsCardShareNext.setOnClickListener {
             shareSelectedLyrics()
         }
 
@@ -320,16 +330,18 @@ class LyricsController(
     private fun setupPlainLyricsShareGesture(textView: TextView) {
         val detector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onLongPress(event: MotionEvent) {
-                val textLayout = textView.layout ?: return
-                val text = textView.text ?: return
-                if (text.isBlank()) return
+                val lineIndex = plainLyricsLineAt(textView, event) ?: return
+                beginLyricsShareSelection(
+                    lineIndex,
+                    isFullscreen = textView.id == R.id.fullscreen_lyrics_plain_text,
+                    plainTextView = textView
+                )
+            }
 
-                val y = (event.y + textView.scrollY).toInt().coerceIn(0, textLayout.height - 1)
-                val visualLine = textLayout.getLineForVertical(y)
-                val offset = textLayout.getOffsetForHorizontal(visualLine, event.x)
-                    .coerceIn(0, text.length)
-                val lyricIndex = text.subSequence(0, offset).count { it == '\n' }
-                beginLyricsShareSelection(lyricIndex)
+            override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) return false
+                plainLyricsLineAt(textView, event)?.let(::updateLyricsShareSelectionEnd)
+                return true
             }
         })
 
@@ -337,6 +349,17 @@ class LyricsController(
             detector.onTouchEvent(event)
             false
         }
+    }
+
+    private fun plainLyricsLineAt(textView: TextView, event: MotionEvent): Int? {
+        val textLayout = textView.layout ?: return null
+        val text = textView.text ?: return null
+        if (text.isBlank() || textLayout.height <= 0) return null
+
+        val y = (event.y + textView.scrollY).toInt().coerceIn(0, textLayout.height - 1)
+        val visualLine = textLayout.getLineForVertical(y)
+        val offset = textLayout.getOffsetForHorizontal(visualLine, event.x).coerceIn(0, text.length)
+        return text.subSequence(0, offset).count { it == '\n' }
     }
 
     private fun getLyricsShareLines(): List<String> {
@@ -348,41 +371,45 @@ class LyricsController(
         }
     }
 
-    private fun beginLyricsShareSelection(anchorIndex: Int) {
+    private fun beginLyricsShareSelection(
+        anchorIndex: Int,
+        isFullscreen: Boolean,
+        plainTextView: TextView? = null
+    ) {
+        if (isLyricsShareSelectionMode) {
+            updateLyricsShareSelectionEnd(anchorIndex)
+            return
+        }
         val lines = getLyricsShareLines()
         if (lines.isEmpty()) return
-        if (!isFullScreenLyricsShowing) openFullScreenLyrics()
-        enterLyricsShareSelectionMode(anchorIndex.coerceIn(lines.indices), lines)
-    }
-
-    private fun enterLyricsShareSelectionMode(anchorIndex: Int, lines: List<String>) {
+        val safeAnchor = anchorIndex.coerceIn(lines.indices)
         isLyricsShareSelectionMode = true
-        lyricsShareSelectionStart = anchorIndex
-        lyricsShareSelectionEnd = anchorIndex
-
-        binding.fullscreenLyricsSongTitle.text = activity.getString(R.string.lyrics_share_select_title)
-        binding.fullscreenLyricsSongTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 22f)
-        binding.fullscreenLyricsArtistName.visibility = View.GONE
-        binding.fullscreenLyricsSourceBadge.visibility = View.GONE
-        binding.btnCloseFullscreenLyrics.visibility = View.GONE
-        binding.btnLyricsSelectionClose.visibility = View.VISIBLE
-        binding.fullscreenLyricsControls.visibility = View.GONE
-        binding.lyricsShareSelectionFooter.visibility = View.VISIBLE
-        setLyricsContentBottomConstraint(R.id.lyrics_share_selection_footer)
-
-        val syncedLines = currentLyrics?.syncedLyrics
-        if (syncedLines.isNullOrEmpty()) {
-            lyricsSharePreviousPlainScrollY = binding.fullscreenLyricsPlainScroll.scrollY
-            fullScreenLyricAdapter?.submitLines(lines.map { LyricLine(0L, it) })
-            binding.fullscreenLyricsPlainScroll.visibility = View.GONE
-            binding.fullscreenLyricsRecyclerView.visibility = View.VISIBLE
+        lyricsShareSelectionStart = safeAnchor
+        lyricsShareSelectionEnd = safeAnchor
+        lyricsShareSelectionIsFullscreen = isFullscreen
+        lyricsShareSelectionTextView = plainTextView
+        lyricsShareSelectionAdapter = if (plainTextView == null) {
+            if (isFullscreen) fullScreenLyricAdapter else lyricAdapter
+        } else {
+            null
         }
-        fullScreenLyricAdapter?.setShareSelectionMode(true, anchorIndex, anchorIndex)
 
-        binding.fullscreenLyricsRecyclerView.post {
-            val layoutManager = binding.fullscreenLyricsRecyclerView.layoutManager as? LinearLayoutManager
-            val offset = minOf(dpToPx(150), binding.fullscreenLyricsRecyclerView.height / 3)
-            layoutManager?.scrollToPositionWithOffset(anchorIndex, offset)
+        lyricsShareSelectionAdapter?.setShareSelectionMode(true, safeAnchor, safeAnchor)
+        if (plainTextView != null) renderPlainLyricsSelection(plainTextView)
+
+        if (isFullscreen) {
+            binding.lyricsShareCardFooter.visibility = View.GONE
+            binding.lyricsShareFullscreenFooter.visibility = View.VISIBLE
+            setLyricsContentBottomConstraint(R.id.lyrics_share_fullscreen_footer)
+            animateSelectionControls(listOf(binding.fullscreenLyricsControls), hide = true)
+        } else {
+            binding.lyricsShareFullscreenFooter.visibility = View.GONE
+            binding.lyricsShareCardFooter.visibility = View.VISIBLE
+            setLyricsCardContentBottomConstraint(showFooter = true)
+            animateSelectionControls(
+                listOf(binding.playbackSlider, binding.currentTimeText, binding.totalTimeText, binding.controlsLayout),
+                hide = true
+            )
         }
     }
 
@@ -390,8 +417,47 @@ class LyricsController(
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || endIndex !in lines.indices || lyricsShareSelectionEnd == endIndex) return
         lyricsShareSelectionEnd = endIndex
-        fullScreenLyricAdapter?.setShareSelectionEnd(endIndex)
-        binding.fullscreenLyricsRecyclerView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        lyricsShareSelectionAdapter?.setShareSelectionEnd(endIndex)
+        lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
+        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    private fun renderPlainLyricsSelection(textView: TextView) {
+        val plainLyrics = currentLyrics?.plainLyrics ?: return
+        val annotatedLyrics = SpannableString(plainLyrics)
+        val firstLine = minOf(lyricsShareSelectionStart, lyricsShareSelectionEnd)
+        val lastLine = maxOf(lyricsShareSelectionStart, lyricsShareSelectionEnd)
+        val start = plainLineStartOffset(plainLyrics, firstLine)
+        val nextLineStart = plainLineStartOffset(plainLyrics, lastLine + 1)
+        val end = if (nextLineStart == plainLyrics.length && lastLine == getLyricsShareLines().lastIndex) {
+            plainLyrics.length
+        } else {
+            nextLineStart
+        }
+        if (end > start) {
+            annotatedLyrics.setSpan(
+                RoundedLyricsSelectionSpan(
+                    ThemeColors.getPrimaryContainer(activity),
+                    dpToPx(8).toFloat(),
+                    dpToPx(10).toFloat()
+                ),
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        textView.text = annotatedLyrics
+    }
+
+    private fun plainLineStartOffset(text: String, lineIndex: Int): Int {
+        if (lineIndex <= 0) return 0
+        var offset = 0
+        repeat(lineIndex) {
+            val newline = text.indexOf('\n', offset)
+            if (newline < 0) return text.length
+            offset = newline + 1
+        }
+        return offset
     }
 
     private fun setLyricsContentBottomConstraint(targetId: Int) {
@@ -406,40 +472,68 @@ class LyricsController(
         }
     }
 
-    private fun finishLyricsShareSelectionMode(restoreLyrics: Boolean = true) {
+    private fun setLyricsCardContentBottomConstraint(showFooter: Boolean) {
+        listOf(binding.lyricsRecyclerView, binding.lyricsPlainScroll, binding.lyricsStatusLayout).forEach { view ->
+            val params = view.layoutParams as? ConstraintLayout.LayoutParams ?: return@forEach
+            params.bottomToTop = if (showFooter) R.id.lyrics_share_card_footer else -1
+            params.bottomToBottom = if (showFooter) -1 else 0
+            view.layoutParams = params
+        }
+    }
+
+    private fun animateSelectionControls(views: List<View>, hide: Boolean) {
+        val sharedParent = views.firstOrNull()?.parent as? View
+        val sharedDistance = if (hide && views.all { it.parent === views.firstOrNull()?.parent } && sharedParent != null) {
+            (sharedParent.height - views.minOf { it.top } + dpToPx(24)).coerceAtLeast(dpToPx(96)).toFloat()
+        } else {
+            null
+        }
+        views.forEach { view ->
+            view.animate().cancel()
+            if (hide) {
+                val parentHeight = (view.parent as? View)?.height ?: binding.root.height
+                val distance = sharedDistance
+                    ?: (parentHeight - view.top + dpToPx(24)).coerceAtLeast(dpToPx(96)).toFloat()
+                view.animate()
+                    .translationY(distance)
+                    .alpha(0f)
+                    .setDuration(220L)
+                    .start()
+            } else {
+                view.animate()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(220L)
+                    .start()
+            }
+        }
+    }
+
+    private fun finishLyricsShareSelectionMode() {
         if (!isLyricsShareSelectionMode) return
+        val wasFullscreen = lyricsShareSelectionIsFullscreen
+        lyricsShareSelectionAdapter?.setShareSelectionMode(false)
+        lyricsShareSelectionTextView?.let { textView ->
+            currentLyrics?.plainLyrics?.let { textView.text = it }
+        }
         isLyricsShareSelectionMode = false
         lyricsShareSelectionStart = -1
         lyricsShareSelectionEnd = -1
-        fullScreenLyricAdapter?.setShareSelectionMode(false)
+        lyricsShareSelectionAdapter = null
+        lyricsShareSelectionTextView = null
+        lyricsShareSelectionIsFullscreen = false
 
-        binding.lyricsShareSelectionFooter.visibility = View.GONE
-        binding.fullscreenLyricsControls.visibility = View.VISIBLE
-        binding.btnLyricsSelectionClose.visibility = View.GONE
-        binding.btnCloseFullscreenLyrics.visibility = View.VISIBLE
-        binding.fullscreenLyricsSongTitle.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
-        binding.fullscreenLyricsArtistName.visibility = View.VISIBLE
-        setLyricsContentBottomConstraint(R.id.fullscreen_lyrics_controls)
-        if (restoreLyrics) {
-            val lyrics = currentLyrics
-            if (lyrics?.hasSynced == true) {
-                val song = getActiveSong()
-                binding.fullscreenLyricsSongTitle.text = song?.title ?: lyrics.trackName
-                binding.fullscreenLyricsArtistName.text = song?.artist?.trim().orEmpty().ifEmpty {
-                    if (OmniSyncManager.getInstance(activity).currentRole == OmniSyncRole.LISTENER) {
-                        "OmniSync Stream"
-                    } else {
-                        activity.getString(R.string.unknown_artist)
-                    }
-                }
-                updateLyricsSourceBadge(lyrics.source, lyrics.isOffline)
-            } else {
-                val previousScrollY = lyricsSharePreviousPlainScrollY
-                prepareFullscreenLyricsForOpen()
-                binding.fullscreenLyricsPlainScroll.post {
-                    binding.fullscreenLyricsPlainScroll.scrollTo(0, previousScrollY)
-                }
-            }
+        if (wasFullscreen) {
+            binding.lyricsShareFullscreenFooter.visibility = View.GONE
+            setLyricsContentBottomConstraint(R.id.fullscreen_lyrics_controls)
+            animateSelectionControls(listOf(binding.fullscreenLyricsControls), hide = false)
+        } else {
+            binding.lyricsShareCardFooter.visibility = View.GONE
+            setLyricsCardContentBottomConstraint(showFooter = false)
+            animateSelectionControls(
+                listOf(binding.playbackSlider, binding.currentTimeText, binding.totalTimeText, binding.controlsLayout),
+                hide = false
+            )
         }
     }
 
@@ -456,8 +550,20 @@ class LyricsController(
         if (manager.findFragmentByTag(LyricsShareThemeBottomSheet.TAG) != null) return
         val title = lyrics.trackName.ifBlank { getActiveSong()?.title.orEmpty() }
         val artist = lyrics.artistName.ifBlank { getActiveSong()?.artist.orEmpty() }
+        val sync = OmniSyncManager.getInstance(activity)
+        val activeSongDuration = getActiveSong()?.duration ?: 0L
+        val positionMs = if (sync.currentRole == OmniSyncRole.LISTENER) {
+            sync.getListenerCurrentPosition()
+        } else {
+            getPlaybackService()?.getCurrentPosition()?.toLong() ?: 0L
+        }
+        val durationMs = if (sync.currentRole == OmniSyncRole.LISTENER) {
+            sync.currentStreamDurationMs.takeIf { it > 0L } ?: activeSongDuration
+        } else {
+            getPlaybackService()?.getDuration()?.takeIf { it > 0 }?.toLong() ?: activeSongDuration
+        }
         finishLyricsShareSelectionMode()
-        LyricsShareThemeBottomSheet.newInstance(title, artist, excerpt)
+        LyricsShareThemeBottomSheet.newInstance(title, artist, excerpt, positionMs, durationMs)
             .show(manager, LyricsShareThemeBottomSheet.TAG)
     }
 
@@ -501,6 +607,7 @@ class LyricsController(
         // Double-tap on the plain lyric text to open fullscreen lyrics.
         val plainTextDoubleTapDetector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (isLyricsShareSelectionMode) return false
                 openFullScreenLyrics(binding.lyricsPlainText)
                 return true
             }
@@ -1158,7 +1265,7 @@ class LyricsController(
             lyricAdapter?.let { adapter ->
                 if (activeIndex != adapter.activeIndex) {
                     val changed = adapter.setActiveIndex(activeIndex)
-                    if (changed && !isUserScrollingLyrics) {
+                    if (changed && !isUserScrollingLyrics && !isLyricsShareSelectionMode) {
                         val layoutManager = binding.lyricsRecyclerView.layoutManager as? LinearLayoutManager
                         if (layoutManager != null && binding.lyricsRecyclerView.height > 0) {
                             if (activeIndex >= 0) {
@@ -1221,7 +1328,7 @@ class LyricsController(
     }
 
     fun onTrackChanged(newSong: Song?) {
-        finishLyricsShareSelectionMode(restoreLyrics = false)
+        finishLyricsShareSelectionMode()
         lyricsFetchJob?.cancel()
         currentLyrics = null
         lastOnlineLyricsSongId = null
@@ -1300,5 +1407,39 @@ class LyricsController(
         fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
         activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding.fullscreenLyricsContainer.keepScreenOn = false
+    }
+}
+
+private class RoundedLyricsSelectionSpan(
+    color: Int,
+    private val horizontalInset: Float,
+    private val cornerRadius: Float
+) : LineBackgroundSpan {
+    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+    }
+
+    override fun drawBackground(
+        canvas: Canvas,
+        paint: Paint,
+        left: Int,
+        right: Int,
+        top: Int,
+        baseline: Int,
+        bottom: Int,
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        lineNumber: Int
+    ) {
+        if (right <= left) return
+        val bounds = RectF(
+            left - horizontalInset,
+            top.toFloat(),
+            right + horizontalInset,
+            bottom.toFloat()
+        )
+        canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, backgroundPaint)
     }
 }
