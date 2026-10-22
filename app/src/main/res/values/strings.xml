@@ -110,8 +110,8 @@
     <string name="sort_songs">Sort Songs</string>
     <string name="filter_short_audio">Filter short audio</string>
     <string name="filter_short_audio_desc">Hide tracks shorter than 30 seconds (ringtones, clips)</string>
-    <string name="volume_normalization">Volume normalization</string>
-    <string name="volume_normalization_desc">Balance volume across tracks using ReplayGain and loudness leveling</string>
+    <string name="replay_gain">Replay Gain</string>
+    <string name="replay_gain_desc">Apply FLAC Replay Gain metadata; add a small boost when tags are missing</string>
     <string name="omnisync_master_volume">Broadcast Master Volume</string>
 
     <!-- Equalizer Settings -->
@@ -166,7 +166,7 @@
     <string name="mono_audio_title">Mono audio</string>
     <string name="mono_audio_desc">Mixes left and right channels into both sides</string>
     <string name="stereo_balance_title">Balance</string>
-    <string name="stereo_balance_desc">Shift playback toward the left or right channel</string>
+    <string name="stereo_balance_desc">Shift playback left or right; double-tap to center</string>
     <string name="effect_off">Off</string>
     <string name="effect_percent">%1$d%%</string>
     <string name="balance_center">Center</string>

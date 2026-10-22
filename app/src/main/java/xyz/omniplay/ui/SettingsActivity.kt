@@ -203,7 +203,7 @@ class SettingsActivity : AppCompatActivity() {
             }
         })
 
-        // Volume Normalization (ReplayGain) Switch & Row Click
+        // Replay Gain Switch & Row Click
         binding.titleVolumeNormalization.isSelected = true
         val isVolumeNormalization = prefs.getBoolean(MainActivity.KEY_VOLUME_NORMALIZATION, false)
         binding.switchVolumeNormalization.isChecked = isVolumeNormalization

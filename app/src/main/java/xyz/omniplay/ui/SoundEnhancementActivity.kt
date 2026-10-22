@@ -1,6 +1,8 @@
 package xyz.omniplay.ui
 
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
@@ -199,6 +201,33 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                     eqManager.setStereoBalance(balance)
                 }
             }
+        }
+        setupBalanceSliderResetGesture()
+    }
+
+    private fun setupBalanceSliderResetGesture() {
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean = true
+
+            override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+                if (e.actionMasked == MotionEvent.ACTION_UP) {
+                    binding.sliderStereoBalance.post { resetBalanceToCenter() }
+                }
+                return true
+            }
+        })
+
+        binding.sliderStereoBalance.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            false
+        }
+    }
+
+    private fun resetBalanceToCenter() {
+        binding.sliderStereoBalance.value = 0f
+        binding.tvStereoBalanceValue.text = formatBalance(0)
+        if (eqManager.getStereoBalance() != 0) {
+            eqManager.setStereoBalance(0)
         }
     }
 
