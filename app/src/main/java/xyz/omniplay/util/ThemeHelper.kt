@@ -231,7 +231,7 @@ object ThemeHelper {
         val neutralPalette = TonalPalette.fromHueAndChroma(neutralHue, neutralChroma)
         val neutralVariantPalette = TonalPalette.fromHueAndChroma(neutralHue, neutralVariantChroma)
         return DynamicScheme(
-            Hct.fromInt(primaryPalette.get(50.0)),
+            Hct.fromInt(primaryPalette.tone(50)),
             variant,
             isDark,
             0.0,
