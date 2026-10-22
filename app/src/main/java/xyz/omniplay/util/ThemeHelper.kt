@@ -15,11 +15,11 @@ import com.google.android.material.color.MaterialColorUtilitiesHelper
 import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
 import com.google.android.material.color.utilities.SchemeExpressive
-import com.google.android.material.color.utilities.SchemeFruitSalad
 import com.google.android.material.color.utilities.SchemeMonochrome
-import com.google.android.material.color.utilities.SchemeRainbow
 import com.google.android.material.color.utilities.SchemeTonalSpot
 import com.google.android.material.color.utilities.SchemeVibrant
+import com.google.android.material.color.utilities.TonalPalette
+import com.google.android.material.color.utilities.Variant
 import xyz.omniplay.R
 import xyz.omniplay.ui.MainActivity
 
@@ -139,18 +139,52 @@ object ThemeHelper {
         val isDark = isNightMode(activity)
         val scheme: DynamicScheme = when (style) {
             ThemeStyle.DYNAMIC -> return false
-            // Fruit Salad keeps the user-described Neutral style lively instead of gray.
-            ThemeStyle.NEUTRAL -> SchemeFruitSalad(sourceColorHct, isDark, 0.0)
+            ThemeStyle.NEUTRAL -> createSpritzScheme(sourceColorHct, isDark)
             ThemeStyle.MONOCHROME -> SchemeMonochrome(sourceColorHct, isDark, 0.0)
             ThemeStyle.TONAL_SPOT -> SchemeTonalSpot(sourceColorHct, isDark, 0.0)
             ThemeStyle.VIBRANT -> SchemeVibrant(sourceColorHct, isDark, 0.0)
-            ThemeStyle.RAINBOW -> SchemeRainbow(sourceColorHct, isDark, 0.0)
+            ThemeStyle.RAINBOW -> createRainbowScheme(sourceColorHct, isDark)
             ThemeStyle.EXPRESSIVE -> SchemeExpressive(sourceColorHct, isDark, 0.0)
         }
         val colorResourcesOverride = ColorResourcesOverride.getInstance() ?: return false
         val colorValues = MaterialColorUtilitiesHelper.createColorResourcesIdsToColorValues(scheme)
         return colorResourcesOverride.applyIfPossible(activity, colorValues)
     }
+
+    @SuppressLint("RestrictedApi")
+    private fun createSpritzScheme(source: Hct, isDark: Boolean): DynamicScheme {
+        val hue = source.getHue()
+        val neutralHue = rotateHue(hue, 24.0)
+        return DynamicScheme(
+            source,
+            Variant.FRUIT_SALAD,
+            isDark,
+            0.0,
+            TonalPalette.fromHueAndChroma(rotateHue(hue, 12.0), 56.0),
+            TonalPalette.fromHueAndChroma(rotateHue(hue, 42.0), 40.0),
+            TonalPalette.fromHueAndChroma(rotateHue(hue, 155.0), 38.0),
+            TonalPalette.fromHueAndChroma(neutralHue, 10.0),
+            TonalPalette.fromHueAndChroma(neutralHue, 16.0)
+        )
+    }
+
+    @SuppressLint("RestrictedApi")
+    private fun createRainbowScheme(source: Hct, isDark: Boolean): DynamicScheme {
+        val hue = source.getHue()
+        return DynamicScheme(
+            source,
+            Variant.RAINBOW,
+            isDark,
+            0.0,
+            TonalPalette.fromHueAndChroma(hue, 48.0),
+            TonalPalette.fromHueAndChroma(rotateHue(hue, 120.0), 44.0),
+            TonalPalette.fromHueAndChroma(rotateHue(hue, 240.0), 48.0),
+            TonalPalette.fromHueAndChroma(hue, 8.0),
+            TonalPalette.fromHueAndChroma(hue, 14.0)
+        )
+    }
+
+    private fun rotateHue(hue: Double, degrees: Double): Double = (hue + degrees) % 360.0
 
     fun applySystemBars(activity: Activity) {
         if (activity.javaClass.simpleName == "VideoPlayerActivity") return

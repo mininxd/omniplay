@@ -79,4 +79,24 @@
     <color name="theme_rainbow_on_primary">#FFFFFF</color>
     <color name="theme_rainbow_primary_container">#F3DAFF</color>
     <color name="theme_rainbow_on_primary_container">#33004B</color>
+
+    <!-- Light surface palettes used when runtime dynamic resources are unavailable. -->
+    <color name="theme_neutral_surface">#FFF8F0</color>
+    <color name="theme_neutral_surface_container">#F9EADF</color>
+    <color name="theme_neutral_surface_container_high">#F1DDCB</color>
+    <color name="theme_monochrome_surface">#FBFBFB</color>
+    <color name="theme_monochrome_surface_container">#F0F0F0</color>
+    <color name="theme_monochrome_surface_container_high">#E5E5E5</color>
+    <color name="theme_tone_surface">#FEF7FF</color>
+    <color name="theme_tone_surface_container">#F3EDF7</color>
+    <color name="theme_tone_surface_container_high">#ECE6F0</color>
+    <color name="theme_vibrant_surface">#F4FBFD</color>
+    <color name="theme_vibrant_surface_container">#E7F4F8</color>
+    <color name="theme_vibrant_surface_container_high">#D9EDF3</color>
+    <color name="theme_rainbow_surface">#FFF7FA</color>
+    <color name="theme_rainbow_surface_container">#F5EAF2</color>
+    <color name="theme_rainbow_surface_container_high">#ECD9E7</color>
+    <color name="theme_expressive_surface">#FFF7F5</color>
+    <color name="theme_expressive_surface_container">#F7E9E5</color>
+    <color name="theme_expressive_surface_container_high">#EFD9D4</color>
 </resources>

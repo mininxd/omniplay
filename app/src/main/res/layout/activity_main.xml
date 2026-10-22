@@ -548,7 +548,7 @@
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="Hi-Res"
-                android:textColor="#F6C445"
+                android:textColor="?attr/colorOnSecondaryContainer"
                 android:textSize="11sp"
                 android:visibility="gone" />
 
@@ -566,7 +566,7 @@
                 android:paddingEnd="8dp"
                 android:paddingBottom="3dp"
                 android:text="Bit Perfect"
-                android:textColor="#00E5FF"
+                android:textColor="?attr/colorOnTertiaryContainer"
                 android:textSize="11sp"
                 android:visibility="gone" />
 
