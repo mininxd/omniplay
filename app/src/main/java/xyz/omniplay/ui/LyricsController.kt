@@ -353,8 +353,15 @@ class LyricsController(
 
     private fun setupPlainLyricsShareGesture(textView: TextView) {
         var selectionDragActive = false
+        var selectionTapDownLine: Int? = null
+        var selectionTapDownX = 0f
+        var selectionTapDownY = 0f
+        var selectionTapMoved = false
+        var selectionTapLongPressed = false
+        val touchSlop = ViewConfiguration.get(activity).scaledTouchSlop
         val detector = GestureDetector(activity, object : GestureDetector.SimpleOnGestureListener() {
             override fun onLongPress(event: MotionEvent) {
+                selectionTapLongPressed = true
                 val lineIndex = plainLyricsLineAt(textView, event) ?: return
                 beginLyricsShareSelection(
                     lineIndex,
@@ -371,7 +378,6 @@ class LyricsController(
                 if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) {
                     return super.onSingleTapUp(event)
                 }
-                plainLyricsLineAt(textView, event)?.let(::toggleLyricsShareSelection)
                 return true
             }
 
@@ -382,8 +388,24 @@ class LyricsController(
 
         textView.setOnTouchListener { _, event ->
             val selectionTextActive = isLyricsShareSelectionMode && lyricsShareSelectionTextView === textView
-            if (selectionTextActive && event.actionMasked == MotionEvent.ACTION_DOWN) {
-                plainLyricsLineAt(textView, event)?.let(::setLyricsShareSelectionDragAnchor)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    selectionTapDownLine = if (selectionTextActive) plainLyricsLineAt(textView, event) else null
+                    selectionTapDownX = event.x
+                    selectionTapDownY = event.y
+                    selectionTapMoved = false
+                    selectionTapLongPressed = false
+                    if (selectionTextActive) {
+                        selectionTapDownLine?.let(::setLyricsShareSelectionDragAnchor)
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val deltaX = event.x - selectionTapDownX
+                    val deltaY = event.y - selectionTapDownY
+                    if (deltaX * deltaX + deltaY * deltaY > touchSlop * touchSlop) {
+                        selectionTapMoved = true
+                    }
+                }
             }
             if (selectionTextActive) {
                 scaleGestureDetector.onTouchEvent(event)
@@ -401,11 +423,18 @@ class LyricsController(
                 plainLyricsLineAt(textView, event)?.let(::extendLyricsShareSelection)
             }
 
-            val consumeSelectionDrag = selectionDragActive
+            if (event.actionMasked == MotionEvent.ACTION_UP && selectionTextActive &&
+                !selectionTapMoved && !selectionTapLongPressed
+            ) {
+                val upLine = plainLyricsLineAt(textView, event)
+                if (upLine != null && upLine == selectionTapDownLine) {
+                    toggleLyricsShareSelection(upLine)
+                }
+            }
             if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
                 selectionDragActive = false
             }
-            consumeSelectionDrag
+            selectionTextActive || selectionDragActive
         }
     }
 

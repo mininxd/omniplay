@@ -19,6 +19,7 @@ import xyz.omniplay.util.ThemeColors
 
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 
 class LyricAdapter(
@@ -146,15 +147,17 @@ class LyricAdapter(
         private val normalBackground = itemView.background
         private val normalTextBackground = lyricText.background
         private val gestureDetector: GestureDetector
+        private val touchSlop = ViewConfiguration.get(itemView.context).scaledTouchSlop
+        private var selectionGestureDownPosition = RecyclerView.NO_POSITION
+        private var selectionGestureDownX = 0f
+        private var selectionGestureDownY = 0f
+        private var selectionGestureMoved = false
+        private var selectionGestureLongPressed = false
 
         init {
             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    if (shareSelectionMode) {
-                        val pos = bindingAdapterPosition
-                        if (pos in lines.indices) onSelectionLineClick?.invoke(pos)
-                        return true
-                    }
+                    if (shareSelectionMode) return true
                     return super.onSingleTapUp(e)
                 }
 
@@ -176,6 +179,7 @@ class LyricAdapter(
                 override fun onLongPress(e: MotionEvent) {
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices && lines[pos].text.isNotBlank()) {
+                        selectionGestureLongPressed = true
                         itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onLineLongPress?.invoke(pos)
                         itemView.parent?.requestDisallowInterceptTouchEvent(true)
@@ -185,9 +189,32 @@ class LyricAdapter(
             
             itemView.setOnTouchListener { view, event ->
                 gestureDetector.onTouchEvent(event)
-                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    val pos = bindingAdapterPosition
-                    if (pos in lines.indices) onSelectionLineDragStart?.invoke(pos)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        selectionGestureDownPosition = bindingAdapterPosition
+                        selectionGestureDownX = event.x
+                        selectionGestureDownY = event.y
+                        selectionGestureMoved = false
+                        selectionGestureLongPressed = false
+                        if (shareSelectionMode && selectionGestureDownPosition in lines.indices) {
+                            onSelectionLineDragStart?.invoke(selectionGestureDownPosition)
+                        }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val deltaX = event.x - selectionGestureDownX
+                        val deltaY = event.y - selectionGestureDownY
+                        if (deltaX * deltaX + deltaY * deltaY > touchSlop * touchSlop) {
+                            selectionGestureMoved = true
+                        }
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        if (shareSelectionMode && !selectionGestureMoved && !selectionGestureLongPressed) {
+                            val pos = bindingAdapterPosition
+                            if (pos == selectionGestureDownPosition && pos in lines.indices) {
+                                onSelectionLineClick?.invoke(pos)
+                            }
+                        }
+                    }
                 }
                 if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_MOVE) {
                     val recyclerView = view.parent as? RecyclerView
