@@ -26,7 +26,7 @@ class LyricAdapter(
     val isFullScreen: Boolean = false,
     var onLineClick: ((LyricLine) -> Unit)? = null,
     var onLineDoubleTap: ((View?) -> Unit)? = null,
-    var onLineLongPress: ((Int) -> Unit)? = null,
+    var onLineSelectionStart: ((Int) -> Unit)? = null,
     var onSelectionLineClick: ((Int) -> Unit)? = null,
     var onSelectionLineDragStart: ((Int) -> Unit)? = null,
     var onSelectionLineDrag: ((Int) -> Unit)? = null
@@ -150,12 +150,11 @@ class LyricAdapter(
         init {
             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    if (shareSelectionMode) {
-                        val pos = bindingAdapterPosition
-                        if (pos in lines.indices) onSelectionLineClick?.invoke(pos)
-                        return true
-                    }
-                    return super.onSingleTapUp(e)
+                    val pos = bindingAdapterPosition
+                    if (pos !in lines.indices || lines[pos].text.isBlank()) return super.onSingleTapUp(e)
+                    if (shareSelectionMode) onSelectionLineClick?.invoke(pos)
+                    else onLineSelectionStart?.invoke(pos)
+                    return true
                 }
 
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -169,7 +168,7 @@ class LyricAdapter(
                 }
 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
-                    if (!shareSelectionMode) onLineDoubleTap?.invoke(lyricText)
+                    onLineDoubleTap?.invoke(lyricText)
                     return true
                 }
 
@@ -177,7 +176,7 @@ class LyricAdapter(
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices && lines[pos].text.isNotBlank()) {
                         itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onLineLongPress?.invoke(pos)
+                        onLineSelectionStart?.invoke(pos)
                         itemView.parent?.requestDisallowInterceptTouchEvent(true)
                     }
                 }
