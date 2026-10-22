@@ -1,17 +1,14 @@
 package xyz.omniplay.ui
 
-import android.app.Dialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
-import com.google.android.material.color.DynamicColors
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
 import xyz.omniplay.databinding.BottomSheetEqualizerBinding
-import xyz.omniplay.util.ThemeHelper
 
 /**
  * Material You (Material 3 Expressive) Equalizer Bottom Sheet.
@@ -30,17 +27,6 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     private var isUpdatingUi = false
 
     override fun getTheme(): Int = R.style.BottomSheetDialogTheme
-
-    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val dialog = super.onCreateDialog(savedInstanceState)
-        if (DynamicColors.isDynamicColorAvailable()) {
-            val style = ThemeHelper.getThemeStyle(requireContext())
-            if (style.themeOverlayRes != 0) {
-                dialog.context.theme.applyStyle(style.themeOverlayRes, true)
-            }
-        }
-        return dialog
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,

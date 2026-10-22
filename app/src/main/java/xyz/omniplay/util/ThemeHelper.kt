@@ -14,10 +14,7 @@ import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.MaterialColorUtilitiesHelper
 import com.google.android.material.color.utilities.DynamicScheme
 import com.google.android.material.color.utilities.Hct
-import com.google.android.material.color.utilities.SchemeExpressive
 import com.google.android.material.color.utilities.SchemeMonochrome
-import com.google.android.material.color.utilities.SchemeTonalSpot
-import com.google.android.material.color.utilities.SchemeVibrant
 import com.google.android.material.color.utilities.TonalPalette
 import com.google.android.material.color.utilities.Variant
 import xyz.omniplay.R
@@ -50,7 +47,8 @@ enum class ThemeStyle(
     TONAL_SPOT("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
     VIBRANT("vibrant", R.string.theme_style_vibrant, R.style.ThemeOverlay_Omniplay_Vibrant),
     RAINBOW("rainbow", R.string.theme_style_rainbow, R.style.ThemeOverlay_Omniplay_Rainbow),
-    EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive);
+    EXPRESSIVE("expressive", R.string.theme_style_expressive, R.style.ThemeOverlay_Omniplay_Expressive),
+    FRUIT_SALAD("fruit_salad", R.string.theme_style_salad, R.style.ThemeOverlay_Omniplay_Salad);
 
     companion object {
         fun getDefault(): ThemeStyle {
@@ -58,6 +56,7 @@ enum class ThemeStyle(
         }
 
         fun fromKey(key: String?): ThemeStyle {
+            if (key == "salad") return FRUIT_SALAD
             return values().firstOrNull { it.key == key } ?: getDefault()
         }
     }
@@ -139,12 +138,73 @@ object ThemeHelper {
         val isDark = isNightMode(activity)
         val scheme: DynamicScheme = when (style) {
             ThemeStyle.DYNAMIC -> return false
-            ThemeStyle.NEUTRAL -> createSpritzScheme(sourceColorHct, isDark)
+            ThemeStyle.NEUTRAL -> createProfileScheme(
+                variant = Variant.NEUTRAL,
+                isDark = isDark,
+                primaryHue = 102.0,
+                primaryChroma = 27.0,
+                secondaryHue = 82.0,
+                secondaryChroma = 17.0,
+                tertiaryHue = 140.0,
+                tertiaryChroma = 18.0,
+                neutralHue = 95.0,
+                neutralChroma = 4.0,
+                neutralVariantChroma = 9.0
+            )
             ThemeStyle.MONOCHROME -> SchemeMonochrome(sourceColorHct, isDark, 0.0)
-            ThemeStyle.TONAL_SPOT -> SchemeTonalSpot(sourceColorHct, isDark, 0.0)
-            ThemeStyle.VIBRANT -> SchemeVibrant(sourceColorHct, isDark, 0.0)
+            ThemeStyle.TONAL_SPOT -> createProfileScheme(
+                variant = Variant.TONAL_SPOT,
+                isDark = isDark,
+                primaryHue = 108.0,
+                primaryChroma = 46.0,
+                secondaryHue = 185.0,
+                secondaryChroma = 25.0,
+                tertiaryHue = 96.0,
+                tertiaryChroma = 19.0,
+                neutralHue = 100.0,
+                neutralChroma = 4.0,
+                neutralVariantChroma = 9.0
+            )
+            ThemeStyle.VIBRANT -> createProfileScheme(
+                variant = Variant.VIBRANT,
+                isDark = isDark,
+                primaryHue = 105.0,
+                primaryChroma = 88.0,
+                secondaryHue = 132.0,
+                secondaryChroma = 50.0,
+                tertiaryHue = 75.0,
+                tertiaryChroma = 42.0,
+                neutralHue = 100.0,
+                neutralChroma = 4.0,
+                neutralVariantChroma = 9.0
+            )
             ThemeStyle.RAINBOW -> createRainbowScheme(sourceColorHct, isDark)
-            ThemeStyle.EXPRESSIVE -> SchemeExpressive(sourceColorHct, isDark, 0.0)
+            ThemeStyle.EXPRESSIVE -> createProfileScheme(
+                variant = Variant.EXPRESSIVE,
+                isDark = isDark,
+                primaryHue = 18.0,
+                primaryChroma = 56.0,
+                secondaryHue = 188.0,
+                secondaryChroma = 29.0,
+                tertiaryHue = 145.0,
+                tertiaryChroma = 30.0,
+                neutralHue = 180.0,
+                neutralChroma = 6.0,
+                neutralVariantChroma = 12.0
+            )
+            ThemeStyle.FRUIT_SALAD -> createProfileScheme(
+                variant = Variant.FRUIT_SALAD,
+                isDark = isDark,
+                primaryHue = 52.0,
+                primaryChroma = 68.0,
+                secondaryHue = 100.0,
+                secondaryChroma = 42.0,
+                tertiaryHue = 28.0,
+                tertiaryChroma = 48.0,
+                neutralHue = 48.0,
+                neutralChroma = 7.0,
+                neutralVariantChroma = 13.0
+            )
         }
         val colorResourcesOverride = ColorResourcesOverride.getInstance() ?: return false
         val colorValues = MaterialColorUtilitiesHelper.createColorResourcesIdsToColorValues(scheme)
@@ -152,35 +212,52 @@ object ThemeHelper {
     }
 
     @SuppressLint("RestrictedApi")
-    private fun createSpritzScheme(source: Hct, isDark: Boolean): DynamicScheme {
-        val hue = source.getHue()
-        val neutralHue = rotateHue(hue, 24.0)
+    private fun createProfileScheme(
+        variant: Variant,
+        isDark: Boolean,
+        primaryHue: Double,
+        primaryChroma: Double,
+        secondaryHue: Double,
+        secondaryChroma: Double,
+        tertiaryHue: Double,
+        tertiaryChroma: Double,
+        neutralHue: Double,
+        neutralChroma: Double,
+        neutralVariantChroma: Double
+    ): DynamicScheme {
+        val primaryPalette = TonalPalette.fromHueAndChroma(primaryHue, primaryChroma)
+        val secondaryPalette = TonalPalette.fromHueAndChroma(secondaryHue, secondaryChroma)
+        val tertiaryPalette = TonalPalette.fromHueAndChroma(tertiaryHue, tertiaryChroma)
+        val neutralPalette = TonalPalette.fromHueAndChroma(neutralHue, neutralChroma)
+        val neutralVariantPalette = TonalPalette.fromHueAndChroma(neutralHue, neutralVariantChroma)
         return DynamicScheme(
-            source,
-            Variant.FRUIT_SALAD,
+            Hct.fromInt(primaryPalette.get(50.0)),
+            variant,
             isDark,
             0.0,
-            TonalPalette.fromHueAndChroma(rotateHue(hue, 12.0), 56.0),
-            TonalPalette.fromHueAndChroma(rotateHue(hue, 42.0), 40.0),
-            TonalPalette.fromHueAndChroma(rotateHue(hue, 155.0), 38.0),
-            TonalPalette.fromHueAndChroma(neutralHue, 10.0),
-            TonalPalette.fromHueAndChroma(neutralHue, 16.0)
+            primaryPalette,
+            secondaryPalette,
+            tertiaryPalette,
+            neutralPalette,
+            neutralVariantPalette
         )
     }
 
     @SuppressLint("RestrictedApi")
     private fun createRainbowScheme(source: Hct, isDark: Boolean): DynamicScheme {
         val hue = source.getHue()
-        return DynamicScheme(
-            source,
-            Variant.RAINBOW,
-            isDark,
-            0.0,
-            TonalPalette.fromHueAndChroma(hue, 48.0),
-            TonalPalette.fromHueAndChroma(rotateHue(hue, 120.0), 44.0),
-            TonalPalette.fromHueAndChroma(rotateHue(hue, 240.0), 48.0),
-            TonalPalette.fromHueAndChroma(hue, 8.0),
-            TonalPalette.fromHueAndChroma(hue, 14.0)
+        return createProfileScheme(
+            variant = Variant.RAINBOW,
+            isDark = isDark,
+            primaryHue = hue,
+            primaryChroma = 48.0,
+            secondaryHue = rotateHue(hue, 65.0),
+            secondaryChroma = 36.0,
+            tertiaryHue = rotateHue(hue, 150.0),
+            tertiaryChroma = 38.0,
+            neutralHue = 0.0,
+            neutralChroma = 0.0,
+            neutralVariantChroma = 0.0
         )
     }
 

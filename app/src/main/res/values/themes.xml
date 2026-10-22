@@ -39,6 +39,18 @@
         <item name="colorSurfaceVariant">@color/theme_neutral_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_neutral_surface</item>
         <item name="colorSurfaceBright">@color/theme_neutral_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_neutral_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_neutral_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_neutral_outline</item>
+        <item name="colorOutlineVariant">@color/theme_neutral_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_neutral_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_neutral_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_neutral_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_neutral_primary</item>
+        <item name="android:colorBackground">@color/theme_neutral_surface</item>
+        <item name="android:textColorPrimary">@color/theme_neutral_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_neutral_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_neutral_primary</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Surfaces.Monochrome" parent="">
@@ -51,6 +63,18 @@
         <item name="colorSurfaceVariant">@color/theme_monochrome_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_monochrome_surface</item>
         <item name="colorSurfaceBright">@color/theme_monochrome_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_monochrome_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_monochrome_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_monochrome_outline</item>
+        <item name="colorOutlineVariant">@color/theme_monochrome_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_monochrome_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_monochrome_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_monochrome_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_monochrome_primary</item>
+        <item name="android:colorBackground">@color/theme_monochrome_surface</item>
+        <item name="android:textColorPrimary">@color/theme_monochrome_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_monochrome_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_monochrome_primary</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Surfaces.Tone" parent="">
@@ -63,6 +87,18 @@
         <item name="colorSurfaceVariant">@color/theme_tone_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_tone_surface</item>
         <item name="colorSurfaceBright">@color/theme_tone_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_tone_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_tone_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_tone_outline</item>
+        <item name="colorOutlineVariant">@color/theme_tone_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_tone_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_tone_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_tone_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_tone_primary</item>
+        <item name="android:colorBackground">@color/theme_tone_surface</item>
+        <item name="android:textColorPrimary">@color/theme_tone_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_tone_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_tone_primary</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Surfaces.Vibrant" parent="">
@@ -75,6 +111,18 @@
         <item name="colorSurfaceVariant">@color/theme_vibrant_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_vibrant_surface</item>
         <item name="colorSurfaceBright">@color/theme_vibrant_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_vibrant_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_vibrant_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_vibrant_outline</item>
+        <item name="colorOutlineVariant">@color/theme_vibrant_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_vibrant_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_vibrant_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_vibrant_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_vibrant_primary</item>
+        <item name="android:colorBackground">@color/theme_vibrant_surface</item>
+        <item name="android:textColorPrimary">@color/theme_vibrant_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_vibrant_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_vibrant_primary</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Surfaces.Rainbow" parent="">
@@ -87,6 +135,18 @@
         <item name="colorSurfaceVariant">@color/theme_rainbow_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_rainbow_surface</item>
         <item name="colorSurfaceBright">@color/theme_rainbow_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_rainbow_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_rainbow_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_rainbow_outline</item>
+        <item name="colorOutlineVariant">@color/theme_rainbow_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_rainbow_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_rainbow_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_rainbow_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_rainbow_primary</item>
+        <item name="android:colorBackground">@color/theme_rainbow_surface</item>
+        <item name="android:textColorPrimary">@color/theme_rainbow_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_rainbow_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_rainbow_primary</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Surfaces.Expressive" parent="">
@@ -99,6 +159,42 @@
         <item name="colorSurfaceVariant">@color/theme_expressive_surface_container</item>
         <item name="colorSurfaceDim">@color/theme_expressive_surface</item>
         <item name="colorSurfaceBright">@color/theme_expressive_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_expressive_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_expressive_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_expressive_outline</item>
+        <item name="colorOutlineVariant">@color/theme_expressive_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_expressive_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_expressive_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_expressive_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_expressive_primary</item>
+        <item name="android:colorBackground">@color/theme_expressive_surface</item>
+        <item name="android:textColorPrimary">@color/theme_expressive_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_expressive_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_expressive_primary</item>
+    </style>
+
+    <style name="ThemeOverlay.Omniplay.Surfaces.Salad" parent="">
+        <item name="colorSurface">@color/theme_salad_surface</item>
+        <item name="colorSurfaceContainerLowest">@color/theme_salad_surface</item>
+        <item name="colorSurfaceContainerLow">@color/theme_salad_surface_container</item>
+        <item name="colorSurfaceContainer">@color/theme_salad_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/theme_salad_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/theme_salad_surface_container_high</item>
+        <item name="colorSurfaceVariant">@color/theme_salad_surface_container</item>
+        <item name="colorSurfaceDim">@color/theme_salad_surface</item>
+        <item name="colorSurfaceBright">@color/theme_salad_surface_container_high</item>
+        <item name="colorOnSurface">@color/theme_salad_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/theme_salad_on_surface_variant</item>
+        <item name="colorOutline">@color/theme_salad_outline</item>
+        <item name="colorOutlineVariant">@color/theme_salad_outline_variant</item>
+        <item name="colorSurfaceInverse">@color/theme_salad_on_surface</item>
+        <item name="colorOnSurfaceInverse">@color/theme_salad_surface</item>
+        <item name="colorPrimaryInverse">@color/theme_salad_primary_container</item>
+        <item name="colorSurfaceTint">@color/theme_salad_primary</item>
+        <item name="android:colorBackground">@color/theme_salad_surface</item>
+        <item name="android:textColorPrimary">@color/theme_salad_on_surface</item>
+        <item name="android:textColorSecondary">@color/theme_salad_on_surface_variant</item>
+        <item name="android:colorAccent">@color/theme_salad_primary</item>
     </style>
 
     <!-- Theme Overlays for Dynamic Theme Styles -->
@@ -107,14 +203,14 @@
         <item name="colorOnPrimary">@color/theme_tone_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_tone_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_tone_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_tone_primary</item>
-        <item name="colorOnSecondary">@color/theme_tone_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_tone_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_tone_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_tone_primary</item>
-        <item name="colorOnTertiary">@color/theme_tone_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_tone_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_tone_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_tone_secondary</item>
+        <item name="colorOnSecondary">@color/theme_tone_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_tone_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_tone_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_tone_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_tone_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_tone_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_tone_on_tertiary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Expressive" parent="ThemeOverlay.Omniplay.Surfaces.Expressive">
@@ -122,14 +218,14 @@
         <item name="colorOnPrimary">@color/theme_expressive_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_expressive_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_expressive_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_tone_primary</item>
-        <item name="colorOnSecondary">@color/theme_tone_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_tone_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_tone_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_neutral_primary</item>
-        <item name="colorOnTertiary">@color/theme_neutral_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_neutral_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_neutral_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_expressive_secondary</item>
+        <item name="colorOnSecondary">@color/theme_expressive_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_expressive_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_expressive_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_expressive_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_expressive_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_expressive_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_expressive_on_tertiary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Neutral" parent="ThemeOverlay.Omniplay.Surfaces.Neutral">
@@ -137,32 +233,44 @@
         <item name="colorOnPrimary">@color/theme_neutral_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_neutral_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_neutral_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_tone_primary</item>
-        <item name="colorOnSecondary">@color/theme_tone_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_tone_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_tone_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_expressive_primary</item>
-        <item name="colorOnTertiary">@color/theme_expressive_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_expressive_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_expressive_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_neutral_secondary</item>
+        <item name="colorOnSecondary">@color/theme_neutral_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_neutral_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_neutral_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_neutral_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_neutral_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_neutral_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_neutral_on_tertiary_container</item>
     </style>
 
-    <!-- kept for migration: old "salad" key still resolves via fromKey -->
-    <style name="ThemeOverlay.Omniplay.Salad" parent="ThemeOverlay.Omniplay.Neutral" />
+    <style name="ThemeOverlay.Omniplay.Salad" parent="ThemeOverlay.Omniplay.Surfaces.Salad">
+        <item name="colorPrimary">@color/theme_salad_primary</item>
+        <item name="colorOnPrimary">@color/theme_salad_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_salad_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_salad_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_salad_secondary</item>
+        <item name="colorOnSecondary">@color/theme_salad_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_salad_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_salad_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_salad_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_salad_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_salad_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_salad_on_tertiary_container</item>
+    </style>
 
     <style name="ThemeOverlay.Omniplay.Monochrome" parent="ThemeOverlay.Omniplay.Surfaces.Monochrome">
         <item name="colorPrimary">@color/theme_monochrome_primary</item>
         <item name="colorOnPrimary">@color/theme_monochrome_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_monochrome_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_monochrome_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_monochrome_primary</item>
-        <item name="colorOnSecondary">@color/theme_monochrome_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_monochrome_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_monochrome_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_monochrome_primary</item>
-        <item name="colorOnTertiary">@color/theme_monochrome_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_monochrome_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_monochrome_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_monochrome_secondary</item>
+        <item name="colorOnSecondary">@color/theme_monochrome_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_monochrome_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_monochrome_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_monochrome_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_monochrome_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_monochrome_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_monochrome_on_tertiary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Vibrant" parent="ThemeOverlay.Omniplay.Surfaces.Vibrant">
@@ -170,14 +278,14 @@
         <item name="colorOnPrimary">@color/theme_vibrant_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_vibrant_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_vibrant_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_expressive_primary</item>
-        <item name="colorOnSecondary">@color/theme_expressive_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_expressive_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_expressive_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_salad_primary</item>
-        <item name="colorOnTertiary">@color/theme_salad_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_salad_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_salad_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_vibrant_secondary</item>
+        <item name="colorOnSecondary">@color/theme_vibrant_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_vibrant_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_vibrant_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_vibrant_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_vibrant_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_vibrant_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_vibrant_on_tertiary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Rainbow" parent="ThemeOverlay.Omniplay.Surfaces.Rainbow">
@@ -185,14 +293,14 @@
         <item name="colorOnPrimary">@color/theme_rainbow_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_rainbow_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_rainbow_on_primary_container</item>
-        <item name="colorSecondary">@color/theme_neutral_primary</item>
-        <item name="colorOnSecondary">@color/theme_neutral_on_primary</item>
-        <item name="colorSecondaryContainer">@color/theme_neutral_primary_container</item>
-        <item name="colorOnSecondaryContainer">@color/theme_neutral_on_primary_container</item>
-        <item name="colorTertiary">@color/theme_tone_primary</item>
-        <item name="colorOnTertiary">@color/theme_tone_on_primary</item>
-        <item name="colorTertiaryContainer">@color/theme_tone_primary_container</item>
-        <item name="colorOnTertiaryContainer">@color/theme_tone_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_rainbow_secondary</item>
+        <item name="colorOnSecondary">@color/theme_rainbow_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/theme_rainbow_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_rainbow_on_secondary_container</item>
+        <item name="colorTertiary">@color/theme_rainbow_tertiary</item>
+        <item name="colorOnTertiary">@color/theme_rainbow_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/theme_rainbow_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_rainbow_on_tertiary_container</item>
     </style>
 
     <!-- Split Button Shapes for Settings and Switches -->
