@@ -7,7 +7,9 @@ import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
 import android.util.Log
+import androidx.media3.common.audio.AudioProcessor
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -38,6 +40,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     private val listeners = CopyOnWriteArrayList<EqualizerListener>()
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val audioProcessorConfig = AtomicReference(StereoEffectsConfig())
 
     private val nativeHardwareBinding = NativeAudioEffectBinding()
     private var equalizer: Equalizer? = null
@@ -45,6 +48,10 @@ class EqualizerManager private constructor(private val context: Context) {
     private var virtualizer: Virtualizer? = null
     private var xloudEnhancer: LoudnessEnhancer? = null
     private var activeAudioSessionId: Int = 0
+
+    init {
+        updateAudioProcessorConfig()
+    }
 
     val isHardwareAccelerated: Boolean
         get() = nativeHardwareBinding.isSonyActive || nativeHardwareBinding.isDolbyActive
@@ -176,6 +183,42 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MASTER_ENABLED, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun createStereoEffectsAudioProcessor(): AudioProcessor {
+        return StereoEffectsAudioProcessor { audioProcessorConfig.get() }
+    }
+
+    fun getCrossfeedAmount(): Int = prefs.getInt(KEY_CROSSFEED_AMOUNT, 0).coerceIn(0, 100)
+
+    fun setCrossfeedAmount(amount: Int) {
+        prefs.edit().putInt(KEY_CROSSFEED_AMOUNT, amount.coerceIn(0, 100)).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun getDynamicRangeAmount(): Int = prefs.getInt(KEY_DYNAMIC_RANGE_AMOUNT, 0).coerceIn(0, 100)
+
+    fun setDynamicRangeAmount(amount: Int) {
+        prefs.edit().putInt(KEY_DYNAMIC_RANGE_AMOUNT, amount.coerceIn(0, 100)).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun isMonoAudioEnabled(): Boolean = prefs.getBoolean(KEY_MONO_AUDIO, false)
+
+    fun setMonoAudioEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun getStereoBalance(): Int = prefs.getInt(KEY_STEREO_BALANCE, 0).coerceIn(-100, 100)
+
+    fun setStereoBalance(balance: Int) {
+        prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -337,6 +380,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     private fun applyCurrentStateToEffects() {
+        updateAudioProcessorConfig()
         val isMasterOn = isEnabled()
 
         // 1. Hardware Equalizer application
@@ -501,6 +545,18 @@ class EqualizerManager private constructor(private val context: Context) {
         )
     }
 
+    private fun updateAudioProcessorConfig() {
+        audioProcessorConfig.set(
+            StereoEffectsConfig(
+                enabled = isEnabled(),
+                crossfeedAmount = getCrossfeedAmount(),
+                dynamicRangeAmount = getDynamicRangeAmount(),
+                monoAudio = isMonoAudioEnabled(),
+                stereoBalance = getStereoBalance()
+            )
+        )
+    }
+
     companion object {
         private const val TAG = "EqualizerManager"
         private const val PREFS_NAME = "omniplay_sound_enhancement_prefs"
@@ -510,6 +566,10 @@ class EqualizerManager private constructor(private val context: Context) {
         const val KEY_IEQ_PRESET = "key_ieq_preset"
         const val KEY_DIALOG_ENHANCER = "key_dialog_enhancer"
         const val KEY_CLEAR_BASS = "key_clear_bass"
+        const val KEY_CROSSFEED_AMOUNT = "key_crossfeed_amount"
+        const val KEY_DYNAMIC_RANGE_AMOUNT = "key_dynamic_range_amount"
+        const val KEY_MONO_AUDIO = "key_mono_audio"
+        const val KEY_STEREO_BALANCE = "key_stereo_balance"
         const val KEY_DYNAMIC_NORMALIZER = "key_dynamic_normalizer"
         const val KEY_AUTOMATIC_OPTIMIZATION = "key_automatic_optimization"
         const val KEY_CLEAR_PHASE = "key_clear_phase"

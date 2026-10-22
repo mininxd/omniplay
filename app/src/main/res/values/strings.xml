@@ -158,5 +158,19 @@
     <string name="vpt_concert_hall">Concert Hall</string>
     <string name="clear_bass_title">Sub-Bass</string>
     <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
+    <string name="playback_effects_title">Playback Effects</string>
+    <string name="crossfeed_title">Crossfeed</string>
+    <string name="crossfeed_desc">Blends a little of each stereo channel for headphone listening</string>
+    <string name="dynamic_range_control_title">Dynamic Range Control</string>
+    <string name="dynamic_range_control_desc">Compresses loud peaks to reduce volume swings</string>
+    <string name="mono_audio_title">Mono audio</string>
+    <string name="mono_audio_desc">Mixes left and right channels into both sides</string>
+    <string name="stereo_balance_title">Balance</string>
+    <string name="stereo_balance_desc">Shift playback toward the left or right channel</string>
+    <string name="effect_off">Off</string>
+    <string name="effect_percent">%1$d%%</string>
+    <string name="balance_center">Center</string>
+    <string name="balance_left">Left %1$d%%</string>
+    <string name="balance_right">Right %1$d%%</string>
 </resources>
 

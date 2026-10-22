@@ -45,6 +45,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         setupHeader()
         setupBandSliders()
         setupClearBass()
+        setupPlaybackEffects()
         setupIeq()
         setupButtons()
 
@@ -67,6 +68,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     private fun setupHeader() {
         binding.switchEqualizer.isChecked = eqManager.isEnabled()
         binding.switchEqualizer.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
             eqManager.setEnabled(isChecked)
             updateEnabledState(isChecked)
         }
@@ -98,6 +100,63 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
                 val db = value.toInt()
                 binding.tvBassBoostValue.text = formatDb(db)
                 eqManager.setClearBassLevel(db)
+            }
+        }
+    }
+
+    private fun setupPlaybackEffects() {
+        binding.sliderCrossfeed.apply {
+            isTickVisible = false
+            valueFrom = 0f
+            valueTo = 100f
+            stepSize = 5f
+            value = eqManager.getCrossfeedAmount().toFloat()
+            binding.tvCrossfeedValue.text = formatEffectAmount(value.toInt())
+            addOnChangeListener { _, value, fromUser ->
+                if (fromUser) {
+                    val amount = value.toInt()
+                    binding.tvCrossfeedValue.text = formatEffectAmount(amount)
+                    eqManager.setCrossfeedAmount(amount)
+                }
+            }
+        }
+
+        binding.sliderDynamicRange.apply {
+            isTickVisible = false
+            valueFrom = 0f
+            valueTo = 100f
+            stepSize = 5f
+            value = eqManager.getDynamicRangeAmount().toFloat()
+            binding.tvDynamicRangeValue.text = formatEffectAmount(value.toInt())
+            addOnChangeListener { _, value, fromUser ->
+                if (fromUser) {
+                    val amount = value.toInt()
+                    binding.tvDynamicRangeValue.text = formatEffectAmount(amount)
+                    eqManager.setDynamicRangeAmount(amount)
+                }
+            }
+        }
+
+        binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
+        binding.rowMonoAudio.setOnClickListener {
+            val enabled = !binding.switchMonoAudio.isChecked
+            binding.switchMonoAudio.isChecked = enabled
+            eqManager.setMonoAudioEnabled(enabled)
+        }
+
+        binding.sliderStereoBalance.apply {
+            isTickVisible = false
+            valueFrom = -100f
+            valueTo = 100f
+            stepSize = 1f
+            value = eqManager.getStereoBalance().toFloat()
+            binding.tvStereoBalanceValue.text = formatBalance(value.toInt())
+            addOnChangeListener { _, value, fromUser ->
+                if (fromUser) {
+                    val balance = value.toInt()
+                    binding.tvStereoBalanceValue.text = formatBalance(balance)
+                    eqManager.setStereoBalance(balance)
+                }
             }
         }
     }
@@ -158,6 +217,20 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.sliderBassBoost.value = cb
         binding.tvBassBoostValue.text = formatDb(cb.toInt())
 
+        val crossfeed = eqManager.getCrossfeedAmount()
+        binding.sliderCrossfeed.value = crossfeed.toFloat()
+        binding.tvCrossfeedValue.text = formatEffectAmount(crossfeed)
+
+        val dynamicRange = eqManager.getDynamicRangeAmount()
+        binding.sliderDynamicRange.value = dynamicRange.toFloat()
+        binding.tvDynamicRangeValue.text = formatEffectAmount(dynamicRange)
+
+        binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
+
+        val balance = eqManager.getStereoBalance()
+        binding.sliderStereoBalance.value = balance.toFloat()
+        binding.tvStereoBalanceValue.text = formatBalance(balance)
+
         updateIeqChipSelection(eqManager.getIeqPreset())
 
         isUpdatingUi = false
@@ -167,11 +240,17 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         val alpha = if (enabled) 1.0f else 0.45f
 
         binding.cardEqualizerBands.alpha = alpha
+        binding.cardSubBass.alpha = alpha
         binding.cardEnhancements.alpha = alpha
         binding.btnResetEqualizer.isEnabled = enabled
 
         binding.sheetEqBarsView.isEnabled = enabled
         binding.sliderBassBoost.isEnabled = enabled
+        binding.sliderCrossfeed.isEnabled = enabled
+        binding.sliderDynamicRange.isEnabled = enabled
+        binding.rowMonoAudio.isEnabled = enabled
+        binding.switchMonoAudio.isEnabled = enabled
+        binding.sliderStereoBalance.isEnabled = enabled
 
         for (i in 0 until binding.chipGroupIeqSheet.childCount) {
             binding.chipGroupIeqSheet.getChildAt(i).isEnabled = enabled
@@ -183,6 +262,18 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
             db > 0 -> "+$db dB"
             db < 0 -> "$db dB"
             else -> "0 dB"
+        }
+    }
+
+    private fun formatEffectAmount(amount: Int): String {
+        return if (amount <= 0) getString(R.string.effect_off) else getString(R.string.effect_percent, amount)
+    }
+
+    private fun formatBalance(balance: Int): String {
+        return when {
+            balance < 0 -> getString(R.string.balance_left, -balance)
+            balance > 0 -> getString(R.string.balance_right, balance)
+            else -> getString(R.string.balance_center)
         }
     }
 

@@ -35,6 +35,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -402,15 +404,27 @@ class PlaybackService : MediaBrowserServiceCompat() {
         override fun onError(message: String) {}
     }
 
-    /**
-     * Initializes ExoPlayer configured for High-Res Audio output by default.
-     * Enables 32-bit floating point PCM output (setEnableAudioFloatOutput)
-     * so 24-bit and 32-bit / 192kHz FLAC, WAV, ALAC, etc. play without downsampling or distortion.
-     */
+    /** Initializes both players with the shared, session-independent PCM effects chain. */
     private fun initPlayer() {
-        val renderersFactory = DefaultRenderersFactory(applicationContext)
-            .setEnableAudioFloatOutput(true) // Native 32-bit float Hi-Res output
-            .setEnableAudioTrackPlaybackParams(true)
+        val eqManager = xyz.omniplay.audio.EqualizerManager.getInstance(applicationContext)
+        val renderersFactory = object : DefaultRenderersFactory(applicationContext) {
+            init {
+                setEnableAudioFloatOutput(false)
+                setEnableAudioTrackPlaybackParams(true)
+            }
+
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioOutputPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(eqManager.createStereoEffectsAudioProcessor()))
+                    .setEnableFloatOutput(false)
+                    .setEnableAudioTrackPlaybackParams(enableAudioOutputPlaybackParams)
+                    .build()
+            }
+        }
 
         val extractorsFactory = ExtractorsFactory {
             arrayOf(
