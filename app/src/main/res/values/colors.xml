@@ -63,12 +63,6 @@
     <color name="theme_neutral_on_primary_container">#00201D</color>
 
     <!-- Monochrome (Minimalist Grayscale Silver) -->
-    <color name="theme_salad_primary">#006E34</color>
-    <color name="theme_salad_on_primary">#FFFFFF</color>
-    <color name="theme_salad_primary_container">#99F9B1</color>
-    <color name="theme_salad_on_primary_container">#00210B</color>
-
-    <!-- Monochrome (Minimalist Grayscale Silver) -->
     <color name="theme_monochrome_primary">#5E5E62</color>
     <color name="theme_monochrome_on_primary">#FFFFFF</color>
     <color name="theme_monochrome_primary_container">#E2E2E6</color>
