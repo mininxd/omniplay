@@ -39,6 +39,10 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
     private var _binding: BottomSheetLyricsShareBinding? = null
     private val binding get() = _binding!!
     private var selectedTheme = LyricsShareImageRenderer.THEME_MATERIAL
+    private var lyricsScalePercent = DEFAULT_LYRICS_SCALE_PERCENT
+    private var showTitle = false
+    private var showArtist = false
+    private var showProgress = true
     private var renderedBitmap: Bitmap? = null
 
     private val writePermissionLauncher = registerForActivityResult(
@@ -86,6 +90,25 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             }
             renderPreview()
         }
+        binding.lyricsShareFontSize.value = lyricsScalePercent.toFloat()
+        binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsScalePercent)
+        binding.lyricsShareFontSize.addOnChangeListener { _, value, _ ->
+            lyricsScalePercent = value.toInt().coerceIn(MIN_LYRICS_SCALE_PERCENT, MAX_LYRICS_SCALE_PERCENT)
+            binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsScalePercent)
+            renderPreview()
+        }
+        binding.lyricsShareIncludeTitle.setOnCheckedChangeListener { _, checked ->
+            showTitle = checked
+            renderPreview()
+        }
+        binding.lyricsShareIncludeArtist.setOnCheckedChangeListener { _, checked ->
+            showArtist = checked
+            renderPreview()
+        }
+        binding.lyricsShareIncludeProgress.setOnCheckedChangeListener { _, checked ->
+            showProgress = checked
+            renderPreview()
+        }
         binding.lyricsShareSave.setOnClickListener { requestSaveImage() }
         binding.lyricsShareSend.setOnClickListener { shareImage() }
         renderPreview()
@@ -104,7 +127,11 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             lines,
             selectedTheme,
             requireArguments().getLong(ARG_POSITION_MS),
-            requireArguments().getLong(ARG_DURATION_MS)
+            requireArguments().getLong(ARG_DURATION_MS),
+            lyricsScalePercent,
+            if (showTitle) requireArguments().getString(ARG_TITLE).orEmpty() else "",
+            if (showArtist) requireArguments().getString(ARG_ARTIST).orEmpty() else "",
+            showProgress
         )
         binding.lyricsShareImagePreview.setImageBitmap(renderedBitmap)
     }
@@ -139,8 +166,8 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         try {
             val context = requireContext()
             val uri = LyricsShareImageRenderer.writeShareCopy(context, bitmap)
-            val title = requireArguments().getString(ARG_TITLE).orEmpty()
-            val artist = requireArguments().getString(ARG_ARTIST).orEmpty()
+            val title = if (showTitle) requireArguments().getString(ARG_TITLE).orEmpty() else ""
+            val artist = if (showArtist) requireArguments().getString(ARG_ARTIST).orEmpty() else ""
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
@@ -166,6 +193,9 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_LINES = "lines"
         private const val ARG_POSITION_MS = "position_ms"
         private const val ARG_DURATION_MS = "duration_ms"
+        private const val DEFAULT_LYRICS_SCALE_PERCENT = 100
+        private const val MIN_LYRICS_SCALE_PERCENT = 80
+        private const val MAX_LYRICS_SCALE_PERCENT = 140
 
         fun newInstance(
             title: String,
@@ -196,7 +226,11 @@ private object LyricsShareImageRenderer {
         lines: List<String>,
         theme: Int,
         positionMs: Long,
-        durationMs: Long
+        durationMs: Long,
+        lyricsScalePercent: Int,
+        title: String,
+        artist: String,
+        showProgress: Boolean
     ): Bitmap {
         val palette = paletteFor(context, theme)
         val quote = lines.joinToString("\n").trim().ifBlank { "♪" }
@@ -206,7 +240,7 @@ private object LyricsShareImageRenderer {
 
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = palette.foreground
-            textSize = 150f
+            textSize = 150f * lyricsScalePercent.coerceIn(80, 140) / 100f
             typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
         }
         fun createQuoteLayout(): StaticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -224,7 +258,10 @@ private object LyricsShareImageRenderer {
             quoteLayout = createQuoteLayout()
         }
 
-        val height = maxOf(MIN_IMAGE_HEIGHT, quoteLayout.height + EXTRA_CARD_HEIGHT)
+        val metadata = listOf(title, artist).filter { it.isNotBlank() }
+        val metadataHeight = if (metadata.isEmpty()) 0f else 104f + (metadata.size - 1) * 46f
+        val progressCardHeight = if (showProgress) PROGRESS_CARD_HEIGHT else NO_PROGRESS_CARD_HEIGHT
+        val height = maxOf(MIN_IMAGE_HEIGHT, quoteLayout.height + metadataHeight.toInt() + progressCardHeight)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(palette.background)
@@ -233,6 +270,20 @@ private object LyricsShareImageRenderer {
         canvas.translate(horizontalInset, 48f)
         quoteLayout.draw(canvas)
         canvas.restore()
+
+        var metadataY = 48f + quoteLayout.height + 58f
+        metadata.forEachIndexed { index, value ->
+            val metadataPaint = textPaint(
+                if (index == 0 && title.isNotBlank()) palette.foreground else palette.muted,
+                if (index == 0 && title.isNotBlank()) 38f else 30f,
+                if (index == 0 && title.isNotBlank()) Typeface.BOLD else Typeface.NORMAL,
+                Paint.Align.LEFT
+            )
+            canvas.drawText(value, horizontalInset, metadataY, metadataPaint)
+            metadataY += 46f
+        }
+
+        if (!showProgress) return bitmap
 
         val progressStart = horizontalInset
         val progressEnd = width - horizontalInset
@@ -371,6 +422,7 @@ private object LyricsShareImageRenderer {
     private const val MIN_QUOTE_TEXT_SIZE = 32f
     private const val WAVE_LENGTH = 68f
     private const val WAVE_AMPLITUDE = 13f
-    private const val EXTRA_CARD_HEIGHT = 370
+    private const val PROGRESS_CARD_HEIGHT = 370
+    private const val NO_PROGRESS_CARD_HEIGHT = 128
     private const val CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000L
 }

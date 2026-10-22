@@ -247,14 +247,20 @@ class LyricAdapter(
             itemView.pivotY = 0f
 
             // Layout gravity & padding
+            val horizontalContentInset = when {
+                selectionMode && isSelected && isFullScreen -> 36
+                selectionMode && isSelected -> 28
+                isFullScreen -> 24
+                else -> 16
+            }
             if (isFullScreen) {
                 lyricText.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                itemView.setPadding(dpToPx(ctx, 24), dpToPx(ctx, 8), dpToPx(ctx, 24), dpToPx(ctx, 8))
+                itemView.setPadding(dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 8), dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 8))
             } else {
                 lyricText.gravity = Gravity.CENTER
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_CENTER
-                itemView.setPadding(dpToPx(ctx, 16), dpToPx(ctx, 10), dpToPx(ctx, 16), dpToPx(ctx, 10))
+                itemView.setPadding(dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 10), dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 10))
             }
 
             // Apply letter spacing (-2%)

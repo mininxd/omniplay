@@ -173,8 +173,15 @@
     <string name="balance_left">Left %1$d%%</string>
     <string name="balance_right">Right %1$d%%</string>
     <string name="lyrics_share_next">Next</string>
+    <string name="lyrics_customize_title">Customize your card</string>
     <string name="lyrics_share_button">Share</string>
     <string name="lyrics_choose_theme">Choose a theme</string>
+    <string name="lyrics_share_font_size">Lyrics size</string>
+    <string name="lyrics_share_font_size_value">%1$d%%</string>
+    <string name="lyrics_share_details">Show on card</string>
+    <string name="lyrics_include_title">Song title</string>
+    <string name="lyrics_include_artist">Artist</string>
+    <string name="lyrics_include_progress">Playback progress</string>
     <string name="lyrics_theme_desc">Preview your lyric card</string>
     <string name="lyrics_theme_material">Material You</string>
     <string name="lyrics_theme_midnight">Rose</string>
