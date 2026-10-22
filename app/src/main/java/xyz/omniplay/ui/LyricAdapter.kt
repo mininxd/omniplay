@@ -166,12 +166,19 @@ class LyricAdapter(
 
         init {
             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    if (shareSelectionMode) {
+                        val pos = bindingAdapterPosition
+                        if (pos in lines.indices) onSelectionLineClick?.invoke(pos)
+                        return true
+                    }
+                    return super.onSingleTapUp(e)
+                }
+
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices) {
-                        if (shareSelectionMode) {
-                            onSelectionLineClick?.invoke(pos)
-                        } else if (pos != activeIndex) {
+                        if (!shareSelectionMode && pos != activeIndex) {
                             onLineClick?.invoke(lines[pos])
                         }
                     }

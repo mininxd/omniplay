@@ -365,10 +365,16 @@ class LyricsController(
                 }
             }
 
-            override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
-                if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) return false
+            override fun onSingleTapUp(event: MotionEvent): Boolean {
+                if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) {
+                    return super.onSingleTapUp(event)
+                }
                 plainLyricsLineAt(textView, event)?.let(::extendLyricsShareSelection)
                 return true
+            }
+
+            override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                return isLyricsShareSelectionMode && lyricsShareSelectionTextView === textView
             }
         })
 
