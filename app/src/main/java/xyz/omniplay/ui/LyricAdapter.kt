@@ -19,6 +19,7 @@ import xyz.omniplay.util.ThemeColors
 
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 
 class LyricAdapter(
@@ -31,6 +32,8 @@ class LyricAdapter(
     var onSelectionLineDragStart: ((Int) -> Unit)? = null,
     var onSelectionLineDrag: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
+
+    private enum class SelectionGestureState { IDLE, PRESSED, DRAGGING, LONG_PRESSED }
 
     var activeIndex: Int = -1
         private set
@@ -146,18 +149,30 @@ class LyricAdapter(
         private val normalBackground = itemView.background
         private val normalTextBackground = lyricText.background
         private val gestureDetector: GestureDetector
+        private val touchSlop = ViewConfiguration.get(itemView.context).scaledTouchSlop
+        private var selectionGestureState = SelectionGestureState.IDLE
+        private var selectionTapHandled = false
+        private var selectionDownX = 0f
+        private var selectionDownY = 0f
 
         init {
             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
                     val pos = bindingAdapterPosition
                     if (pos !in lines.indices || lines[pos].text.isBlank()) return super.onSingleTapUp(e)
-                    if (shareSelectionMode) onSelectionLineClick?.invoke(pos)
+                    if (shareSelectionMode && selectionGestureState == SelectionGestureState.PRESSED) {
+                        selectionTapHandled = true
+                        onSelectionLineClick?.invoke(pos)
+                    }
                     else return super.onSingleTapUp(e)
                     return true
                 }
 
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    if (selectionTapHandled) {
+                        selectionTapHandled = false
+                        return true
+                    }
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices) {
                         if (!shareSelectionMode && pos != activeIndex) {
@@ -175,6 +190,7 @@ class LyricAdapter(
                 override fun onLongPress(e: MotionEvent) {
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices && lines[pos].text.isNotBlank()) {
+                        selectionGestureState = SelectionGestureState.LONG_PRESSED
                         itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onLineSelectionStart?.invoke(pos)
                         itemView.parent?.requestDisallowInterceptTouchEvent(true)
@@ -184,11 +200,33 @@ class LyricAdapter(
             
             itemView.setOnTouchListener { view, event ->
                 gestureDetector.onTouchEvent(event)
-                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    val pos = bindingAdapterPosition
-                    if (pos in lines.indices) onSelectionLineDragStart?.invoke(pos)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        selectionGestureState = SelectionGestureState.PRESSED
+                        selectionTapHandled = false
+                        selectionDownX = event.x
+                        selectionDownY = event.y
+                        val pos = bindingAdapterPosition
+                        if (shareSelectionMode && pos in lines.indices) onSelectionLineDragStart?.invoke(pos)
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = event.x - selectionDownX
+                        val dy = event.y - selectionDownY
+                        if (selectionGestureState == SelectionGestureState.PRESSED &&
+                            dx * dx + dy * dy > touchSlop * touchSlop
+                        ) {
+                            selectionGestureState = SelectionGestureState.DRAGGING
+                            view.parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        selectionGestureState = SelectionGestureState.IDLE
+                    }
                 }
-                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_MOVE) {
+                if (shareSelectionMode && event.actionMasked == MotionEvent.ACTION_MOVE &&
+                    (selectionGestureState == SelectionGestureState.DRAGGING ||
+                        selectionGestureState == SelectionGestureState.LONG_PRESSED)
+                ) {
                     val recyclerView = view.parent as? RecyclerView
                     if (recyclerView != null) {
                         val location = IntArray(2)
