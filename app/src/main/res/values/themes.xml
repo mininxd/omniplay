@@ -34,6 +34,14 @@
         <item name="colorOnPrimary">@color/theme_tone_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_tone_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_tone_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_neutral_primary</item>
+        <item name="colorOnSecondary">@color/theme_neutral_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_neutral_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_neutral_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_expressive_primary</item>
+        <item name="colorOnTertiary">@color/theme_expressive_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_expressive_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_expressive_on_primary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Expressive" parent="">
@@ -41,6 +49,14 @@
         <item name="colorOnPrimary">@color/theme_expressive_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_expressive_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_expressive_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_tone_primary</item>
+        <item name="colorOnSecondary">@color/theme_tone_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_tone_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_tone_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_neutral_primary</item>
+        <item name="colorOnTertiary">@color/theme_neutral_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_neutral_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_neutral_on_primary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Neutral" parent="">
@@ -48,6 +64,14 @@
         <item name="colorOnPrimary">@color/theme_neutral_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_neutral_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_neutral_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_tone_primary</item>
+        <item name="colorOnSecondary">@color/theme_tone_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_tone_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_tone_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_expressive_primary</item>
+        <item name="colorOnTertiary">@color/theme_expressive_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_expressive_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_expressive_on_primary_container</item>
     </style>
 
     <!-- kept for migration: old "salad" key still resolves via fromKey -->
@@ -58,6 +82,14 @@
         <item name="colorOnPrimary">@color/theme_monochrome_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_monochrome_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_monochrome_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_monochrome_primary</item>
+        <item name="colorOnSecondary">@color/theme_monochrome_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_monochrome_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_monochrome_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_monochrome_primary</item>
+        <item name="colorOnTertiary">@color/theme_monochrome_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_monochrome_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_monochrome_on_primary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Vibrant" parent="">
@@ -65,13 +97,29 @@
         <item name="colorOnPrimary">@color/theme_vibrant_on_primary</item>
         <item name="colorPrimaryContainer">@color/theme_vibrant_primary_container</item>
         <item name="colorOnPrimaryContainer">@color/theme_vibrant_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_expressive_primary</item>
+        <item name="colorOnSecondary">@color/theme_expressive_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_expressive_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_expressive_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_neutral_primary</item>
+        <item name="colorOnTertiary">@color/theme_neutral_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_neutral_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_neutral_on_primary_container</item>
     </style>
 
     <style name="ThemeOverlay.Omniplay.Rainbow" parent="">
-        <item name="colorPrimary">@color/theme_rainbow_primary</item>
-        <item name="colorOnPrimary">@color/theme_rainbow_on_primary</item>
-        <item name="colorPrimaryContainer">@color/theme_rainbow_primary_container</item>
-        <item name="colorOnPrimaryContainer">@color/theme_rainbow_on_primary_container</item>
+        <item name="colorPrimary">@color/theme_neutral_primary</item>
+        <item name="colorOnPrimary">@color/theme_neutral_on_primary</item>
+        <item name="colorPrimaryContainer">@color/theme_neutral_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/theme_neutral_on_primary_container</item>
+        <item name="colorSecondary">@color/theme_expressive_primary</item>
+        <item name="colorOnSecondary">@color/theme_expressive_on_primary</item>
+        <item name="colorSecondaryContainer">@color/theme_expressive_primary_container</item>
+        <item name="colorOnSecondaryContainer">@color/theme_expressive_on_primary_container</item>
+        <item name="colorTertiary">@color/theme_tone_primary</item>
+        <item name="colorOnTertiary">@color/theme_tone_on_primary</item>
+        <item name="colorTertiaryContainer">@color/theme_tone_primary_container</item>
+        <item name="colorOnTertiaryContainer">@color/theme_tone_on_primary_container</item>
     </style>
 
     <!-- Split Button Shapes for Settings and Switches -->
