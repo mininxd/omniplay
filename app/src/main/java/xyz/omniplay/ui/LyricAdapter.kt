@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,7 +22,8 @@ class LyricAdapter(
     private var lines: List<LyricLine> = emptyList(),
     val isFullScreen: Boolean = false,
     var onLineClick: ((LyricLine) -> Unit)? = null,
-    var onLineDoubleTap: ((View?) -> Unit)? = null
+    var onLineDoubleTap: ((View?) -> Unit)? = null,
+    var onLineLongPress: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
     var activeIndex: Int = -1
@@ -111,6 +113,14 @@ class LyricAdapter(
                 override fun onDoubleTap(e: MotionEvent): Boolean {
                     onLineDoubleTap?.invoke(lyricText)
                     return true
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    val pos = bindingAdapterPosition
+                    if (pos in lines.indices && lines[pos].text.isNotBlank()) {
+                        itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onLineLongPress?.invoke(pos)
+                    }
                 }
             })
             

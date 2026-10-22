@@ -172,5 +172,28 @@
     <string name="balance_center">Center</string>
     <string name="balance_left">Left %1$d%%</string>
     <string name="balance_right">Right %1$d%%</string>
+    <string name="lyrics_share_select_title">Select lyric lines</string>
+    <string name="lyrics_cancel">Cancel</string>
+    <string name="lyrics_share_select_desc">Choose how many lines to include before and after the held line.</string>
+    <string name="lyrics_lines_before_title">Before</string>
+    <string name="lyrics_lines_after_title">After</string>
+    <string name="lyrics_share_preview">Preview</string>
+    <string name="lyrics_share_button">Share</string>
+    <string name="lyrics_choose_theme">Choose a theme</string>
+    <string name="lyrics_theme_desc">Preview your lyric card</string>
+    <string name="lyrics_theme_material">Material You</string>
+    <string name="lyrics_theme_midnight">Midnight</string>
+    <string name="lyrics_theme_paper">Paper</string>
+    <string name="lyrics_save_image">Save image</string>
+    <string name="lyrics_share_chooser">Share lyrics</string>
+    <string name="lyrics_image_saved">Saved to Pictures/OmniPlay</string>
+    <string name="lyrics_image_save_failed">Could not save the image</string>
+    <string name="lyrics_image_share_failed">Could not prepare the image for sharing</string>
+    <string name="lyrics_image_permission_denied">Storage permission is needed to save the image</string>
+    <string name="lyrics_image_preview_description">Preview of the lyric share image</string>
+    <plurals name="lyrics_line_count">
+        <item quantity="one">%d line</item>
+        <item quantity="other">%d lines</item>
+    </plurals>
 </resources>
 
