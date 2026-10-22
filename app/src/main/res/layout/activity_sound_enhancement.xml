@@ -221,7 +221,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_marginTop="16dp"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="8dp"
                 android:alpha="0.2"
                 android:background="?attr/colorOutlineVariant" />
 
@@ -252,7 +252,8 @@
                     android:id="@+id/chip_group_ieq"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="8dp"
+                    app:chipSpacingHorizontal="4dp"
                     app:singleSelection="true">
 
                     <com.google.android.material.chip.Chip
@@ -261,7 +262,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/ieq_off" />
+                        android:text="@string/ieq_off"
+                        app:chipStartPadding="4dp"
+                        app:chipEndPadding="4dp" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chip_ieq_balanced"
@@ -269,7 +272,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/ieq_balanced" />
+                        android:text="@string/ieq_balanced"
+                        app:chipStartPadding="4dp"
+                        app:chipEndPadding="4dp" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chip_ieq_warm"
@@ -277,7 +282,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/ieq_warm" />
+                        android:text="@string/ieq_warm"
+                        app:chipStartPadding="4dp"
+                        app:chipEndPadding="4dp" />
 
                     <com.google.android.material.chip.Chip
                         android:id="@+id/chip_ieq_detailed"
@@ -285,7 +292,9 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checkable="true"
-                        android:text="@string/ieq_detailed" />
+                        android:text="@string/ieq_detailed"
+                        app:chipStartPadding="4dp"
+                        app:chipEndPadding="4dp" />
                 </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
 
@@ -352,6 +361,7 @@
                 android:id="@+id/card_playback_effects"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
                 android:orientation="vertical">
 
                 <TextView
