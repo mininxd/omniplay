@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.InsetDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -20,6 +19,7 @@ import xyz.omniplay.util.ThemeColors
 
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.widget.FrameLayout
 
 class LyricAdapter(
     private var lines: List<LyricLine> = emptyList(),
@@ -27,7 +27,8 @@ class LyricAdapter(
     var onLineClick: ((LyricLine) -> Unit)? = null,
     var onLineDoubleTap: ((View?) -> Unit)? = null,
     var onLineLongPress: ((Int) -> Unit)? = null,
-    var onSelectionLineClick: ((Int) -> Unit)? = null
+    var onSelectionLineClick: ((Int) -> Unit)? = null,
+    var onSelectionLineDrag: ((Int) -> Unit)? = null
 ) : RecyclerView.Adapter<LyricAdapter.LyricViewHolder>() {
 
     var activeIndex: Int = -1
@@ -37,6 +38,7 @@ class LyricAdapter(
     var baseFontSizeSp: Float = 48f
 
     private var shareSelectionMode = false
+    private var shareSelectionAnchor = -1
     private var shareSelectionStart = -1
     private var shareSelectionEnd = -1
     private var shareSelectionActiveIndex = -1
@@ -97,8 +99,9 @@ class LyricAdapter(
 
     fun setShareSelectionMode(enabled: Boolean, start: Int = -1, end: Int = start) {
         shareSelectionMode = enabled
-        shareSelectionStart = if (enabled) start.coerceIn(lines.indices) else -1
-        shareSelectionEnd = if (enabled) end.coerceIn(lines.indices) else -1
+        shareSelectionAnchor = if (enabled) start.coerceIn(lines.indices) else -1
+        shareSelectionStart = if (enabled) minOf(start, end).coerceIn(lines.indices) else -1
+        shareSelectionEnd = if (enabled) maxOf(start, end).coerceIn(lines.indices) else -1
         shareSelectionActiveIndex = if (enabled) activeIndex else -1
         shareSelectionFontScale = 1f
         notifyDataSetChanged()
@@ -106,11 +109,18 @@ class LyricAdapter(
 
     fun setShareSelectionEnd(end: Int) {
         if (!shareSelectionMode || end !in lines.indices) return
-        if (shareSelectionEnd == end) return
-        val oldEnd = shareSelectionEnd
-        shareSelectionEnd = end
-        val firstChanged = minOf(shareSelectionStart, oldEnd, end)
-        val lastChanged = maxOf(shareSelectionStart, oldEnd, end)
+        setShareSelectionRange(minOf(shareSelectionAnchor, end), maxOf(shareSelectionAnchor, end))
+    }
+
+    fun setShareSelectionRange(start: Int, end: Int) {
+        if (!shareSelectionMode || lines.isEmpty()) return
+        val newStart = minOf(start, end).coerceIn(lines.indices)
+        val newEnd = maxOf(start, end).coerceIn(lines.indices)
+        if (shareSelectionStart == newStart && shareSelectionEnd == newEnd) return
+        val firstChanged = minOf(shareSelectionStart, newStart)
+        val lastChanged = maxOf(shareSelectionEnd, newEnd)
+        shareSelectionStart = newStart
+        shareSelectionEnd = newEnd
         notifyItemRangeChanged(firstChanged, lastChanged - firstChanged + 1)
     }
 
@@ -151,6 +161,7 @@ class LyricAdapter(
     inner class LyricViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val lyricText: TextView = itemView.findViewById(R.id.lyric_line_text)
         private val normalBackground = itemView.background
+        private val normalTextBackground = lyricText.background
         private val gestureDetector: GestureDetector
 
         init {
@@ -199,7 +210,7 @@ class LyricAdapter(
                             RecyclerView.NO_POSITION
                         }
                         if (hoveredPosition in lines.indices) {
-                            onSelectionLineClick?.invoke(hoveredPosition)
+                            onSelectionLineDrag?.invoke(hoveredPosition)
                         }
                     }
                 }
@@ -246,21 +257,16 @@ class LyricAdapter(
             itemView.pivotX = 0f
             itemView.pivotY = 0f
 
-            // Layout gravity & padding
-            val horizontalContentInset = when {
-                selectionMode && isSelected && isFullScreen -> 36
-                selectionMode && isSelected -> 28
-                isFullScreen -> 24
-                else -> 16
-            }
+            // Keep row geometry fixed; selection padding belongs inside the text highlight.
+            val rowHorizontalInset = if (isFullScreen) 24 else 16
             if (isFullScreen) {
                 lyricText.gravity = Gravity.START or Gravity.CENTER_VERTICAL
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
-                itemView.setPadding(dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 8), dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 8))
+                itemView.setPadding(dpToPx(ctx, rowHorizontalInset), dpToPx(ctx, 8), dpToPx(ctx, rowHorizontalInset), dpToPx(ctx, 8))
             } else {
                 lyricText.gravity = Gravity.CENTER
                 lyricText.textAlignment = View.TEXT_ALIGNMENT_CENTER
-                itemView.setPadding(dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 10), dpToPx(ctx, horizontalContentInset), dpToPx(ctx, 10))
+                itemView.setPadding(dpToPx(ctx, rowHorizontalInset), dpToPx(ctx, 10), dpToPx(ctx, rowHorizontalInset), dpToPx(ctx, 10))
             }
 
             // Apply letter spacing (-2%)
@@ -272,18 +278,26 @@ class LyricAdapter(
                         color = ColorStateList.valueOf(ThemeColors.getPrimaryContainer(ctx))
                         cornerRadius = dpToPx(ctx, 20).toFloat()
                     }
-                    val sideInset = dpToPx(ctx, 8)
-                    itemView.background = InsetDrawable(
-                        highlight,
-                        sideInset,
-                        dpToPx(ctx, 3),
-                        sideInset,
-                        dpToPx(ctx, 3)
-                    )
+                    val params = lyricText.layoutParams as? FrameLayout.LayoutParams
+                    params?.width = ViewGroup.LayoutParams.WRAP_CONTENT
+                    params?.gravity = if (isFullScreen) Gravity.START else Gravity.CENTER
+                    if (params != null) lyricText.layoutParams = params
+                    val availableWidth = (itemView.width.takeIf { it > 0 }
+                        ?: ctx.resources.displayMetrics.widthPixels) - dpToPx(ctx, rowHorizontalInset * 2)
+                    lyricText.maxWidth = availableWidth.coerceAtLeast(dpToPx(ctx, 120))
+                    lyricText.background = highlight
+                    val textInset = dpToPx(ctx, 16)
+                    lyricText.setPadding(textInset, dpToPx(ctx, 6), textInset, dpToPx(ctx, 6))
                     lyricText.alpha = 1f
                     lyricText.setTextColor(ThemeColors.getOnPrimaryContainer(ctx))
                 } else {
                     itemView.background = normalBackground
+                    lyricText.background = normalTextBackground
+                    lyricText.layoutParams = lyricText.layoutParams.apply {
+                        width = ViewGroup.LayoutParams.MATCH_PARENT
+                    }
+                    lyricText.maxWidth = Int.MAX_VALUE
+                    lyricText.setPadding(0, 0, 0, 0)
                     lyricText.alpha = 0.42f
                     lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
                 }
@@ -296,6 +310,12 @@ class LyricAdapter(
             }
 
             itemView.background = normalBackground
+            lyricText.background = normalTextBackground
+            lyricText.layoutParams = lyricText.layoutParams.apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+            lyricText.maxWidth = Int.MAX_VALUE
+            lyricText.setPadding(0, 0, 0, 0)
 
             if (isActive) {
                 lyricText.alpha = 1.0f

@@ -60,6 +60,7 @@ class LyricsController(
     private var fullScreenLyricAdapter: LyricAdapter? = null
     private var currentLyrics: Lyrics? = null
     private var isLyricsShareSelectionMode = false
+    private var lyricsShareSelectionAnchor = -1
     private var lyricsShareSelectionStart = -1
     private var lyricsShareSelectionEnd = -1
     private var lyricsShareSelectionIsFullscreen = false
@@ -226,10 +227,11 @@ class LyricsController(
                 openFullScreenLyrics(view)
             },
             onLineLongPress = { index ->
-                if (isLyricsShareSelectionMode) updateLyricsShareSelectionEnd(index)
+                if (isLyricsShareSelectionMode) extendLyricsShareSelection(index)
                 else beginLyricsShareSelection(index, isFullscreen = false)
             },
-            onSelectionLineClick = { index -> updateLyricsShareSelectionEnd(index) }
+            onSelectionLineClick = { index -> extendLyricsShareSelection(index) },
+            onSelectionLineDrag = { index -> updateLyricsShareSelectionEnd(index) }
         )
         binding.lyricsRecyclerView.layoutManager = LinearLayoutManager(activity)
         binding.lyricsRecyclerView.adapter = lyricAdapter
@@ -268,10 +270,11 @@ class LyricsController(
                 }
             },
             onLineLongPress = { index ->
-                if (isLyricsShareSelectionMode) updateLyricsShareSelectionEnd(index)
+                if (isLyricsShareSelectionMode) extendLyricsShareSelection(index)
                 else beginLyricsShareSelection(index, isFullscreen = true)
             },
-            onSelectionLineClick = { index -> updateLyricsShareSelectionEnd(index) }
+            onSelectionLineClick = { index -> extendLyricsShareSelection(index) },
+            onSelectionLineDrag = { index -> updateLyricsShareSelectionEnd(index) }
         ).apply {
             baseFontSizeSp = this@LyricsController.baseFontSizeSp
         }
@@ -364,7 +367,7 @@ class LyricsController(
 
             override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
                 if (!isLyricsShareSelectionMode || lyricsShareSelectionTextView !== textView) return false
-                plainLyricsLineAt(textView, event)?.let(::updateLyricsShareSelectionEnd)
+                plainLyricsLineAt(textView, event)?.let(::extendLyricsShareSelection)
                 return true
             }
         })
@@ -461,13 +464,14 @@ class LyricsController(
         plainTextView: TextView? = null
     ) {
         if (isLyricsShareSelectionMode) {
-            updateLyricsShareSelectionEnd(anchorIndex)
+            extendLyricsShareSelection(anchorIndex)
             return
         }
         val lines = getLyricsShareLines()
         if (lines.isEmpty()) return
         val safeAnchor = anchorIndex.coerceIn(lines.indices)
         isLyricsShareSelectionMode = true
+        lyricsShareSelectionAnchor = safeAnchor
         lyricsShareSelectionStart = safeAnchor
         lyricsShareSelectionEnd = safeAnchor
         lyricsShareSelectionFontScale = 1f
@@ -500,9 +504,26 @@ class LyricsController(
 
     private fun updateLyricsShareSelectionEnd(endIndex: Int) {
         val lines = getLyricsShareLines()
-        if (!isLyricsShareSelectionMode || endIndex !in lines.indices || lyricsShareSelectionEnd == endIndex) return
-        lyricsShareSelectionEnd = endIndex
-        lyricsShareSelectionAdapter?.setShareSelectionEnd(endIndex)
+        if (!isLyricsShareSelectionMode || endIndex !in lines.indices) return
+        val start = minOf(lyricsShareSelectionAnchor, endIndex)
+        val end = maxOf(lyricsShareSelectionAnchor, endIndex)
+        if (lyricsShareSelectionStart == start && lyricsShareSelectionEnd == end) return
+        lyricsShareSelectionStart = start
+        lyricsShareSelectionEnd = end
+        lyricsShareSelectionAdapter?.setShareSelectionRange(start, end)
+        lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
+        binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    private fun extendLyricsShareSelection(index: Int) {
+        val lines = getLyricsShareLines()
+        if (!isLyricsShareSelectionMode || index !in lines.indices) return
+        val start = minOf(lyricsShareSelectionStart, index)
+        val end = maxOf(lyricsShareSelectionEnd, index)
+        if (lyricsShareSelectionStart == start && lyricsShareSelectionEnd == end) return
+        lyricsShareSelectionStart = start
+        lyricsShareSelectionEnd = end
+        lyricsShareSelectionAdapter?.setShareSelectionRange(start, end)
         lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
         binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
@@ -616,6 +637,7 @@ class LyricsController(
             currentLyrics?.plainLyrics?.let { textView.text = it }
         }
         isLyricsShareSelectionMode = false
+        lyricsShareSelectionAnchor = -1
         lyricsShareSelectionStart = -1
         lyricsShareSelectionEnd = -1
         lyricsShareSelectionAdapter = null
