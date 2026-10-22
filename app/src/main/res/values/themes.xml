@@ -46,7 +46,6 @@
         <item name="colorSurfaceInverse">@color/theme_neutral_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_neutral_surface</item>
         <item name="colorPrimaryInverse">@color/theme_neutral_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_neutral_primary</item>
         <item name="android:colorBackground">@color/theme_neutral_surface</item>
         <item name="android:textColorPrimary">@color/theme_neutral_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_neutral_on_surface_variant</item>
@@ -70,7 +69,6 @@
         <item name="colorSurfaceInverse">@color/theme_monochrome_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_monochrome_surface</item>
         <item name="colorPrimaryInverse">@color/theme_monochrome_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_monochrome_primary</item>
         <item name="android:colorBackground">@color/theme_monochrome_surface</item>
         <item name="android:textColorPrimary">@color/theme_monochrome_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_monochrome_on_surface_variant</item>
@@ -94,7 +92,6 @@
         <item name="colorSurfaceInverse">@color/theme_tone_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_tone_surface</item>
         <item name="colorPrimaryInverse">@color/theme_tone_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_tone_primary</item>
         <item name="android:colorBackground">@color/theme_tone_surface</item>
         <item name="android:textColorPrimary">@color/theme_tone_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_tone_on_surface_variant</item>
@@ -118,7 +115,6 @@
         <item name="colorSurfaceInverse">@color/theme_vibrant_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_vibrant_surface</item>
         <item name="colorPrimaryInverse">@color/theme_vibrant_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_vibrant_primary</item>
         <item name="android:colorBackground">@color/theme_vibrant_surface</item>
         <item name="android:textColorPrimary">@color/theme_vibrant_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_vibrant_on_surface_variant</item>
@@ -142,7 +138,6 @@
         <item name="colorSurfaceInverse">@color/theme_rainbow_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_rainbow_surface</item>
         <item name="colorPrimaryInverse">@color/theme_rainbow_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_rainbow_primary</item>
         <item name="android:colorBackground">@color/theme_rainbow_surface</item>
         <item name="android:textColorPrimary">@color/theme_rainbow_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_rainbow_on_surface_variant</item>
@@ -166,7 +161,6 @@
         <item name="colorSurfaceInverse">@color/theme_expressive_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_expressive_surface</item>
         <item name="colorPrimaryInverse">@color/theme_expressive_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_expressive_primary</item>
         <item name="android:colorBackground">@color/theme_expressive_surface</item>
         <item name="android:textColorPrimary">@color/theme_expressive_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_expressive_on_surface_variant</item>
@@ -190,7 +184,6 @@
         <item name="colorSurfaceInverse">@color/theme_salad_on_surface</item>
         <item name="colorOnSurfaceInverse">@color/theme_salad_surface</item>
         <item name="colorPrimaryInverse">@color/theme_salad_primary_container</item>
-        <item name="colorSurfaceTint">@color/theme_salad_primary</item>
         <item name="android:colorBackground">@color/theme_salad_surface</item>
         <item name="android:textColorPrimary">@color/theme_salad_on_surface</item>
         <item name="android:textColorSecondary">@color/theme_salad_on_surface_variant</item>
