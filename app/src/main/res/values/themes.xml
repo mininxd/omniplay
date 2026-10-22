@@ -20,7 +20,7 @@
         <item name="android:background">@android:color/transparent</item>
     </style>
 
-    <style name="Theme.Omniplay.VideoPlayer" parent="Theme.Material3Expressive.Dark.NoActionBar">
+    <style name="Theme.Omniplay.VideoPlayer" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">#000000</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>

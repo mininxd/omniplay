@@ -45,6 +45,7 @@ enum class ThemeStyle(
     @StringRes val titleRes: Int,
     @StyleRes val themeOverlayRes: Int
 ) {
+    // Keep the music-friendly schemes immediately after the system default in the picker.
     DYNAMIC("dynamic", R.string.theme_style_dynamic, 0),
     TONAL_SPOT("tone", R.string.theme_style_tone, R.style.ThemeOverlay_Omniplay_Tone),
     NEUTRAL("neutral", R.string.theme_style_neutral, R.style.ThemeOverlay_Omniplay_Neutral),
@@ -98,11 +99,17 @@ object ThemeHelper {
     }
 
     fun getAvailableStyles(): List<ThemeStyle> {
-        return if (DynamicColors.isDynamicColorAvailable()) {
-            ThemeStyle.values().toList()
-        } else {
-            ThemeStyle.values().filter { it != ThemeStyle.DYNAMIC }
-        }
+        val styles = listOf(
+            ThemeStyle.DYNAMIC,
+            ThemeStyle.TONAL_SPOT,
+            ThemeStyle.NEUTRAL,
+            ThemeStyle.MONOCHROME,
+            ThemeStyle.VIBRANT,
+            ThemeStyle.EXPRESSIVE,
+            ThemeStyle.RAINBOW,
+            ThemeStyle.FRUIT_SALAD
+        )
+        return styles.filter { it != ThemeStyle.DYNAMIC || DynamicColors.isDynamicColorAvailable() }
     }
 
     fun getThemeStyle(context: Context): ThemeStyle {
@@ -137,8 +144,10 @@ object ThemeHelper {
     private fun applyDynamicScheme(activity: Activity, style: ThemeStyle): Boolean {
         if (style == ThemeStyle.DYNAMIC || !DynamicColors.isDynamicColorAvailable()) return false
 
-        val sourceColor = ContextCompat.getColor(activity, R.color.primary_accent)
-        val sourceColorHct = Hct.fromInt(sourceColor)
+        // On Android 12+, primary_accent resolves to Monet's wallpaper-derived system accent.
+        // HCT keeps that source hue/chroma while each scheme variant generates its own role tones.
+        val wallpaperSeed = ContextCompat.getColor(activity, R.color.primary_accent)
+        val sourceColorHct = Hct.fromInt(wallpaperSeed)
         val isDark = isNightMode(activity)
         val scheme: DynamicScheme = when (style) {
             ThemeStyle.DYNAMIC -> return false

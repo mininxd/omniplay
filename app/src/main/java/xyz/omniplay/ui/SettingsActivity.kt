@@ -334,7 +334,19 @@ class SettingsActivity : AppCompatActivity() {
     private fun showThemeStyleDialog() {
         val currentStyle = ThemeHelper.getThemeStyle(this)
         val styles = ThemeHelper.getAvailableStyles()
-        val names = styles.map { getString(it.titleRes) }.toTypedArray()
+        val musicFriendlyStyles = setOf(
+            ThemeStyle.TONAL_SPOT,
+            ThemeStyle.NEUTRAL,
+            ThemeStyle.MONOCHROME
+        )
+        val names = styles.map { style ->
+            val title = getString(style.titleRes)
+            if (style in musicFriendlyStyles) {
+                getString(R.string.theme_style_recommended, title)
+            } else {
+                title
+            }
+        }.toTypedArray()
         val selectedIndex = styles.indexOf(currentStyle).let { if (it >= 0) it else 0 }
 
         MaterialAlertDialogBuilder(this)

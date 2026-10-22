@@ -70,7 +70,8 @@
     <string name="theme_mode_light">Light</string>
     <string name="theme_mode_dark">Dark</string>
     <string name="theme_style">Theme style</string>
-    <string name="theme_style_desc">Dynamic follows system color. Tonal Spot is balanced; Neutral and Monochrome keep album art in focus. Vibrant, Expressive, Rainbow, and Fruit Salad offer more colorful palettes.</string>
+    <string name="theme_style_desc">Dynamic (System) is the default. For music, Tonal Spot, Neutral, and Monochrome keep the UI balanced around album art. Vibrant adds stronger color; Expressive, Rainbow, and Fruit Salad offer playful alternatives.</string>
+    <string name="theme_style_recommended">%1$s · Recommended for music</string>
     <string name="theme_style_dynamic">Dynamic (System)</string>
     <string name="theme_style_neutral">Neutral</string>
     <string name="theme_style_tone">Tonal Spot</string>
