@@ -70,10 +70,55 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        (dialog as? BottomSheetDialog)?.behavior?.apply {
-            state = BottomSheetBehavior.STATE_EXPANDED
-            skipCollapsed = true
-        }
+        val bottomSheetDialog = dialog as? BottomSheetDialog ?: return
+        val behavior = bottomSheetDialog.behavior
+        behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        behavior.skipCollapsed = true
+
+        // Only allow dismissing when swiped down > 60%, preventing premature closing at slight drags (~5%)
+        behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+            private var maxSwipeFraction = 0f
+
+            override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                val initialTop = behavior.expandedOffset
+                val travel = (bottomSheet.top - initialTop).coerceAtLeast(0)
+                val totalHeight = bottomSheet.height.toFloat().coerceAtLeast(1f)
+                val swipeFraction = travel / totalHeight
+                maxSwipeFraction = maxOf(maxSwipeFraction, swipeFraction)
+                behavior.isHideable = swipeFraction > 0.60f
+            }
+
+            override fun onStateChanged(bottomSheet: View, newState: Int) {
+                when (newState) {
+                    BottomSheetBehavior.STATE_DRAGGING -> {
+                        maxSwipeFraction = 0f
+                    }
+                    BottomSheetBehavior.STATE_SETTLING -> {
+                        val initialTop = behavior.expandedOffset
+                        val travel = (bottomSheet.top - initialTop).coerceAtLeast(0)
+                        val totalHeight = bottomSheet.height.toFloat().coerceAtLeast(1f)
+                        val swipeFraction = travel / totalHeight
+                        if (swipeFraction <= 0.60f && maxSwipeFraction <= 0.60f) {
+                            behavior.isHideable = false
+                            bottomSheet.post {
+                                if (behavior.state != BottomSheetBehavior.STATE_EXPANDED) {
+                                    behavior.state = BottomSheetBehavior.STATE_EXPANDED
+                                }
+                            }
+                        } else {
+                            behavior.isHideable = true
+                        }
+                    }
+                    BottomSheetBehavior.STATE_EXPANDED -> {
+                        behavior.isHideable = true
+                        maxSwipeFraction = 0f
+                    }
+                    BottomSheetBehavior.STATE_HIDDEN -> {
+                        dismissAllowingStateLoss()
+                    }
+                }
+            }
+        })
     }
 
     override fun onCreateView(
@@ -416,7 +461,7 @@ private object LyricsShareImageRenderer {
         val lastContentBottomY = topPadding + quoteLayout.height + metadataHeight
         // Margin between artist/metadata and progress bar reduced by 40% (86f)
         val progressY = lastContentBottomY + 86f
-        val durationLabelsY = progressY + 47f
+        val durationLabelsY = progressY + 53f
         val contentEndHeight = if (showProgress) (durationLabelsY + 48f).toInt() else (lastContentBottomY + 72f).toInt()
         val height = maxOf(MIN_IMAGE_HEIGHT, contentEndHeight)
 

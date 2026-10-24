@@ -1048,7 +1048,6 @@ class LyricsController(
         binding.fullscreenLyricsControls.setOnTouchListener(areaTouchListener)
         binding.fullscreenPlaybackControlsRow.setOnTouchListener(areaTouchListener)
         binding.fullscreenCurrentTimeText.setOnTouchListener(areaTouchListener)
-        binding.fullscreenTotalTimeText.setOnTouchListener(areaTouchListener)
 
         // Action buttons: allow normal tap clicks to proceed, but intercept vertical swipe-up with 1:1 sliding
         val actionButtons = listOf(

@@ -676,6 +676,9 @@
             android:text="@string/default_time"
             android:textColor="?attr/colorOutline"
             android:textSize="12sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@id/playback_slider" />
 
@@ -1050,6 +1053,8 @@
         android:focusable="true"
         android:elevation="14dp"
         android:fitsSystemWindows="true"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:visibility="gone">
 
         <!-- Top Bar -->
@@ -1251,6 +1256,8 @@
             android:paddingEnd="20dp"
             android:paddingBottom="24dp"
             android:paddingTop="8dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
@@ -1266,7 +1273,7 @@
             <RelativeLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="@dimen/time_margin_top"
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp">
 
@@ -1290,7 +1297,10 @@
                     android:letterSpacing="-0.02"
                     android:text="@string/default_time"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="12sp" />
+                    android:textSize="12sp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
             </RelativeLayout>
 
             <!-- Playback Controls Row -->

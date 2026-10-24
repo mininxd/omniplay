@@ -72,12 +72,32 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_ACTIVE_QUEUE_TITLE = "key_active_queue_title"
         const val KEY_ACTIVE_FILTER_VALUE = "key_active_filter_value"
         const val KEY_ACTIVE_FILTER_MODE = "key_active_filter_mode"
+        const val KEY_COUNTDOWN_TIMER_ENABLED = "key_countdown_timer_enabled"
     }
 
     private lateinit var binding: ActivityMainBinding
     private var playbackService: PlaybackService? = null
     private var isBound = false
     private var isUserTrackingSlider = false
+    private var isCountdownTimerEnabled = false
+
+    private fun formatTotalOrRemainingTime(currentPosMs: Long, totalDurationMs: Long): String {
+        return if (isCountdownTimerEnabled && totalDurationMs > 0L) {
+            val remainingMs = (totalDurationMs - currentPosMs).coerceAtLeast(0L)
+            "-${Song.formatTime(remainingMs)}"
+        } else {
+            Song.formatTime(totalDurationMs)
+        }
+    }
+
+    private fun updateTotalTimeViews(currentPosMs: Long? = null, totalDurationMs: Long? = null) {
+        if (!::binding.isInitialized) return
+        val current = currentPosMs ?: playbackService?.getCurrentPosition()?.toLong() ?: 0L
+        val total = totalDurationMs ?: playbackService?.getDuration()?.toLong() ?: 0L
+        val formatted = formatTotalOrRemainingTime(current, total)
+        binding.totalTimeText.text = formatted
+        binding.fullscreenTotalTimeText.text = formatted
+    }
 
     // Modular UI Controllers
     lateinit var lyricsController: LyricsController
@@ -324,6 +344,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         isSortAscending = prefs.getBoolean(KEY_SORT_ASCENDING, true)
         isUniversalSearch = prefs.getBoolean(KEY_UNIVERSAL_SEARCH, false)
+        isCountdownTimerEnabled = prefs.getBoolean(KEY_COUNTDOWN_TIMER_ENABLED, false)
 
         initControllers()
 
@@ -939,8 +960,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
                 if (fromUser) {
-                    binding.currentTimeText.text = Song.formatTime(progressMs)
-                    binding.fullscreenCurrentTimeText.text = Song.formatTime(progressMs)
+                    val timeStr = if (isCancelled) getString(R.string.release_to_cancel) else Song.formatTime(progressMs)
+                    binding.currentTimeText.text = timeStr
+                    binding.fullscreenCurrentTimeText.text = timeStr
+                    val totalDur = playbackService?.getDuration()?.toLong() ?: 0L
+                    updateTotalTimeViews(progressMs, totalDur)
                 }
             }
 
@@ -952,6 +976,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.fullscreenPlaybackSlider.setProgress(currentPos)
                     binding.currentTimeText.text = Song.formatTime(currentPos)
                     binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPos)
+                    val totalDur = playbackService?.getDuration()?.toLong() ?: 0L
+                    updateTotalTimeViews(currentPos, totalDur)
                 } else {
                     playbackService?.seekTo(progressMs.toInt())
                 }
@@ -985,8 +1011,11 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             override fun onProgressChanged(progressMs: Long, fromUser: Boolean, isCancelled: Boolean) {
                 if (fromUser) {
-                    binding.fullscreenCurrentTimeText.text = Song.formatTime(progressMs)
-                    binding.currentTimeText.text = Song.formatTime(progressMs)
+                    val timeStr = if (isCancelled) getString(R.string.release_to_cancel) else Song.formatTime(progressMs)
+                    binding.fullscreenCurrentTimeText.text = timeStr
+                    binding.currentTimeText.text = timeStr
+                    val totalDur = playbackService?.getDuration()?.toLong() ?: 0L
+                    updateTotalTimeViews(progressMs, totalDur)
                 }
             }
 
@@ -998,11 +1027,28 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     binding.playbackSlider.setProgress(currentPos)
                     binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPos)
                     binding.currentTimeText.text = Song.formatTime(currentPos)
+                    val totalDur = playbackService?.getDuration()?.toLong() ?: 0L
+                    updateTotalTimeViews(currentPos, totalDur)
                 } else {
                     playbackService?.seekTo(progressMs.toInt())
                 }
             }
         }
+
+        val toggleCountdownAction = View.OnClickListener { v ->
+            isCountdownTimerEnabled = !isCountdownTimerEnabled
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_COUNTDOWN_TIMER_ENABLED, isCountdownTimerEnabled)
+                .apply()
+            try {
+                v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (ignored: Exception) {}
+            updateTotalTimeViews()
+        }
+
+        binding.totalTimeText.setOnClickListener(toggleCountdownAction)
+        binding.fullscreenTotalTimeText.setOnClickListener(toggleCountdownAction)
     }
 
     private fun bindPlaybackService() {
@@ -1608,7 +1654,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             binding.artistNameText.text = displayArtist
             binding.artistNameText.isSelected = true
             binding.albumNameText.text = displayAlbum
-            binding.totalTimeText.text = Song.formatTime(song.duration)
+            updateTotalTimeViews(0L, song.duration)
 
             updateAudioBadges(song, playbackService?.currentAudioInfo)
 
@@ -1619,7 +1665,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
 
             binding.fullscreenLyricsSongTitle.text = song.title
             binding.fullscreenLyricsArtistName.text = displayArtist
-            binding.fullscreenTotalTimeText.text = Song.formatTime(song.duration)
             binding.fullscreenCurrentTimeText.text = getString(R.string.default_time)
             binding.fullscreenPlaybackSlider.setDuration(song.duration)
             binding.fullscreenPlaybackSlider.setProgress(0L)
@@ -1685,10 +1730,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 OmniSyncManager.getInstance(this).currentRole != OmniSyncRole.LISTENER) {
                 binding.playbackSlider.setProgress(currentPositionMs.toLong())
                 binding.currentTimeText.text = Song.formatTime(currentPositionMs.toLong())
-                binding.totalTimeText.text = Song.formatTime(totalDurationMs.toLong())
                 binding.fullscreenPlaybackSlider.setProgress(currentPositionMs.toLong())
                 binding.fullscreenCurrentTimeText.text = Song.formatTime(currentPositionMs.toLong())
-                binding.fullscreenTotalTimeText.text = Song.formatTime(totalDurationMs.toLong())
+                updateTotalTimeViews(currentPositionMs.toLong(), totalDurationMs.toLong())
             }
             if (lyricsController.isLyricsShowing || lyricsController.isFullScreenLyricsShowing) {
                 lyricsController.updateLyricsProgress(currentPositionMs.toLong())
@@ -1867,9 +1911,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     val dur = sync.currentStreamDurationMs
                     if (dur > 0L) {
                         binding.playbackSlider.updateDuration(dur)
-                        binding.totalTimeText.text = Song.formatTime(dur)
                         binding.fullscreenPlaybackSlider.updateDuration(dur)
-                        binding.fullscreenTotalTimeText.text = Song.formatTime(dur)
+                        updateTotalTimeViews(totalDurationMs = dur)
                     }
                     updatePlayPauseButton(isPlaying = true)
                     val activeTitle = sync.currentTrackTitle
@@ -1928,9 +1971,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                         val dur = sync.currentStreamDurationMs
                         if (dur > 0L) {
                             binding.playbackSlider.updateDuration(dur)
-                            binding.totalTimeText.text = Song.formatTime(dur)
                             binding.fullscreenPlaybackSlider.updateDuration(dur)
-                            binding.fullscreenTotalTimeText.text = Song.formatTime(dur)
+                            updateTotalTimeViews(totalDurationMs = dur)
                         }
                         binding.fullscreenLyricsSongTitle.text = title
                         binding.fullscreenLyricsArtistName.text = if (artist.isNotEmpty()) artist else "OmniSync Stream"
@@ -2000,9 +2042,8 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 if (OmniSyncManager.getInstance(this@MainActivity).currentRole == OmniSyncRole.LISTENER) {
                     if (durationMs > 0L) {
                         binding.playbackSlider.updateDuration(durationMs)
-                        binding.totalTimeText.text = Song.formatTime(durationMs)
                         binding.fullscreenPlaybackSlider.updateDuration(durationMs)
-                        binding.fullscreenTotalTimeText.text = Song.formatTime(durationMs)
+                        updateTotalTimeViews(currentPositionMs, durationMs)
                     }
                     binding.playbackSlider.setProgress(currentPositionMs)
                     binding.currentTimeText.text = Song.formatTime(currentPositionMs)
