@@ -1,5 +1,6 @@
 ## What's Changed
-* **Material 3 Expressive dynamic themes**: Added complete, coordinated light and dark color palettes for Dynamic, Tonal Spot, Expressive, Fruit Salad, Monochrome, and Vibrant styles, including surfaces, containers, and component colors.
-* **Faster library browsing**: Added search access to the drawer's Browse By and All Tracks sections.
+* **Material 3 Expressive lyrics share**: Interactive lyric selection with connected rail indicators, dynamic card width and corner rounding sliders, and direct pixel font size adjustments.
+* **Redesigned lyrics share card**: Grouped Material 3 tonal cards, clean preview canvas, and aligned squiggly progress bar matching the player.
+* **Seamless selection controls**: Contextual play-to-share button transformation with automated secondary control disabling and smooth morph transitions.
 
-**Full Changelog**: https://github.com/mininxd/omniplay/compare/v0.14.3...v0.15
+**Full Changelog**: https://github.com/mininxd/omniplay/compare/v0.15...v0.16

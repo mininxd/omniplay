@@ -438,7 +438,7 @@ private object LyricsShareImageRenderer {
         canvas.restore()
 
         // Draw track and artist metadata
-        var metadataY = topPadding + quoteLayout.height + 64f
+        var metadataY = topPadding + quoteLayout.height + 72f
         if (metadata.isNotEmpty()) {
             val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.track
@@ -454,8 +454,8 @@ private object LyricsShareImageRenderer {
                     if (isTitle) Typeface.BOLD else Typeface.NORMAL,
                     Paint.Align.LEFT
                 )
-                canvas.drawText(value, horizontalInset, metadataY + (if (isTitle) 0f else 6f), metadataPaint)
-                metadataY += 48f
+                canvas.drawText(value, horizontalInset, metadataY + (if (isTitle) 6f else 12f), metadataPaint)
+                metadataY += 50f
             }
         }
 
