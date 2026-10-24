@@ -61,8 +61,8 @@ class LyricsController(
     private var currentLyrics: Lyrics? = null
     private var isLyricsShareSelectionMode = false
     private val lyricsShareSelectedLines = sortedSetOf<Int>()
-    private val lyricsShareSelectionOrder = mutableListOf<Int>()
     private var lyricsShareAnchorIndex = -1
+    private var lyricsShareActiveIndex = -1
     private var lyricsShareLastDragIndex = -1
     private var lyricsShareSelectionIsFullscreen = false
     private var lyricsShareSelectionAdapter: LyricAdapter? = null
@@ -340,6 +340,14 @@ class LyricsController(
             shareSelectedLyrics()
         }
 
+        binding.btnLyricsCardShareClose?.setOnClickListener {
+            finishLyricsShareSelectionMode()
+        }
+
+        binding.btnLyricsFullscreenShareClose?.setOnClickListener {
+            finishLyricsShareSelectionMode()
+        }
+
         binding.btnLyricsRetry.setOnClickListener {
             loadLyricsForCurrentSong(forceRefresh = true)
         }
@@ -490,9 +498,8 @@ class LyricsController(
         isLyricsShareSelectionMode = true
         lyricsShareSelectedLines.clear()
         lyricsShareSelectedLines.add(safeAnchor)
-        lyricsShareSelectionOrder.clear()
-        lyricsShareSelectionOrder.add(safeAnchor)
         lyricsShareAnchorIndex = safeAnchor
+        lyricsShareActiveIndex = safeAnchor
         lyricsShareLastDragIndex = safeAnchor
         lyricsShareSelectionFontScale = 1f
         lyricsShareSelectionIsFullscreen = isFullscreen
@@ -521,32 +528,64 @@ class LyricsController(
                 hide = true
             )
         }
+        updateLyricsShareSelection()
     }
 
     private fun toggleLyricsShareSelection(index: Int) {
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || index !in lines.indices) return
-        if (index in lyricsShareSelectedLines) {
-            if (index == lyricsShareAnchorIndex) {
-                lyricsShareSelectedLines.remove(index)
-                lyricsShareSelectionOrder.remove(index)
-                lyricsShareAnchorIndex = lyricsShareSelectionOrder.firstOrNull() ?: -1
-            } else {
-                val removeToward: (Int) -> Boolean = if (index > lyricsShareAnchorIndex) {
-                    { selectedIndex: Int -> selectedIndex >= index }
-                } else {
-                    { selectedIndex: Int -> selectedIndex <= index }
-                }
-                lyricsShareSelectedLines.removeAll(removeToward)
-                lyricsShareSelectionOrder.removeAll { it !in lyricsShareSelectedLines }
+
+        if (index !in lyricsShareSelectedLines) {
+            val anchor = if (lyricsShareAnchorIndex in lines.indices) lyricsShareAnchorIndex else index
+            lyricsShareAnchorIndex = anchor
+            val first = minOf(anchor, index)
+            val last = maxOf(anchor, index)
+            lyricsShareSelectedLines.clear()
+            for (i in first..last) {
+                lyricsShareSelectedLines.add(i)
             }
+            lyricsShareActiveIndex = index
+        } else {
+            if (lyricsShareSelectedLines.size <= 1) {
+                finishLyricsShareSelectionMode()
+                return
+            }
+
+            val minSelected = lyricsShareSelectedLines.first()
+            val maxSelected = lyricsShareSelectedLines.last()
+
+            if (lyricsShareAnchorIndex !in lyricsShareSelectedLines) {
+                lyricsShareAnchorIndex = minSelected
+            }
+
+            if (index == lyricsShareAnchorIndex) {
+                if (lyricsShareAnchorIndex == minSelected) {
+                    lyricsShareSelectedLines.remove(minSelected)
+                    lyricsShareAnchorIndex = minSelected + 1
+                    lyricsShareActiveIndex = maxSelected
+                } else if (lyricsShareAnchorIndex == maxSelected) {
+                    lyricsShareSelectedLines.remove(maxSelected)
+                    lyricsShareAnchorIndex = maxSelected - 1
+                    lyricsShareActiveIndex = minSelected
+                } else {
+                    lyricsShareSelectedLines.remove(index)
+                    lyricsShareAnchorIndex = minSelected
+                    lyricsShareActiveIndex = maxSelected
+                }
+            } else if (index > lyricsShareAnchorIndex) {
+                lyricsShareSelectedLines.removeAll { it >= index }
+                lyricsShareActiveIndex = lyricsShareSelectedLines.lastOrNull() ?: lyricsShareAnchorIndex
+            } else {
+                lyricsShareSelectedLines.removeAll { it <= index }
+                lyricsShareActiveIndex = lyricsShareSelectedLines.firstOrNull() ?: lyricsShareAnchorIndex
+            }
+
             if (lyricsShareSelectedLines.isEmpty()) {
                 finishLyricsShareSelectionMode()
                 return
             }
-        } else {
-            addLyricsShareRange(index)
         }
+
         lyricsShareLastDragIndex = index
         updateLyricsShareSelection()
     }
@@ -554,21 +593,17 @@ class LyricsController(
     private fun addLyricsShareSelection(index: Int) {
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || index !in lines.indices) return
-        if (addLyricsShareRange(index)) updateLyricsShareSelection()
-        lyricsShareLastDragIndex = index
-    }
-
-    private fun addLyricsShareRange(index: Int): Boolean {
-        val first = minOf(lyricsShareAnchorIndex, index)
-        val last = maxOf(lyricsShareAnchorIndex, index)
-        var changed = false
-        (first..last).forEach { lineIndex ->
-            if (lyricsShareSelectedLines.add(lineIndex)) {
-                lyricsShareSelectionOrder.add(lineIndex)
-                changed = true
-            }
+        val anchor = if (lyricsShareAnchorIndex in lines.indices) lyricsShareAnchorIndex else index
+        lyricsShareAnchorIndex = anchor
+        val first = minOf(anchor, index)
+        val last = maxOf(anchor, index)
+        lyricsShareSelectedLines.clear()
+        for (i in first..last) {
+            lyricsShareSelectedLines.add(i)
         }
-        return changed
+        lyricsShareActiveIndex = index
+        lyricsShareLastDragIndex = index
+        updateLyricsShareSelection()
     }
 
     private fun setLyricsShareSelectionDragAnchor(index: Int) {
@@ -580,23 +615,26 @@ class LyricsController(
     private fun extendLyricsShareSelection(index: Int) {
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || index !in lines.indices) return
-        val previous = lyricsShareLastDragIndex.takeIf { it in lines.indices } ?: index
-        val first = minOf(previous, index)
-        val last = maxOf(previous, index)
-        var changed = false
-        (first..last).forEach { lineIndex ->
-            if (lyricsShareSelectedLines.add(lineIndex)) {
-                lyricsShareSelectionOrder.add(lineIndex)
-                changed = true
-            }
+        val anchor = if (lyricsShareAnchorIndex in lines.indices) lyricsShareAnchorIndex else index
+        lyricsShareAnchorIndex = anchor
+        val first = minOf(anchor, index)
+        val last = maxOf(anchor, index)
+        lyricsShareSelectedLines.clear()
+        for (i in first..last) {
+            lyricsShareSelectedLines.add(i)
         }
+        lyricsShareActiveIndex = index
         lyricsShareLastDragIndex = index
-        if (changed) updateLyricsShareSelection()
+        updateLyricsShareSelection()
     }
 
     private fun updateLyricsShareSelection() {
         lyricsShareSelectionAdapter?.setShareSelectionLines(lyricsShareSelectedLines)
         lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
+        val count = lyricsShareSelectedLines.size
+        val countStr = activity.getString(R.string.lyrics_lines_selected, count)
+        binding.lyricsShareCount.text = countStr
+        binding.lyricsShareFullscreenCount.text = countStr
         binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
@@ -701,8 +739,8 @@ class LyricsController(
         }
         isLyricsShareSelectionMode = false
         lyricsShareSelectedLines.clear()
-        lyricsShareSelectionOrder.clear()
         lyricsShareAnchorIndex = -1
+        lyricsShareActiveIndex = -1
         lyricsShareLastDragIndex = -1
         lyricsShareSelectionAdapter = null
         lyricsShareSelectionTextView = null

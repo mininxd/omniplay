@@ -159,12 +159,13 @@ class LyricAdapter(
             gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
                     val pos = bindingAdapterPosition
-                    if (pos !in lines.indices || lines[pos].text.isBlank()) return super.onSingleTapUp(e)
-                    if (shareSelectionMode && selectionGestureState == SelectionGestureState.PRESSED) {
+                    if (pos !in lines.indices) return super.onSingleTapUp(e)
+                    if (shareSelectionMode) {
                         selectionTapHandled = true
                         onSelectionLineClick?.invoke(pos)
+                        return true
                     }
-                    else return super.onSingleTapUp(e)
+                    if (lines[pos].text.isBlank()) return super.onSingleTapUp(e)
                     return true
                 }
 
@@ -175,7 +176,9 @@ class LyricAdapter(
                     }
                     val pos = bindingAdapterPosition
                     if (pos in lines.indices) {
-                        if (!shareSelectionMode && pos != activeIndex) {
+                        if (shareSelectionMode) {
+                            onSelectionLineClick?.invoke(pos)
+                        } else if (pos != activeIndex && lines[pos].text.isNotBlank()) {
                             onLineClick?.invoke(lines[pos])
                         }
                     }
@@ -189,7 +192,7 @@ class LyricAdapter(
 
                 override fun onLongPress(e: MotionEvent) {
                     val pos = bindingAdapterPosition
-                    if (pos in lines.indices && lines[pos].text.isNotBlank()) {
+                    if (pos in lines.indices) {
                         selectionGestureState = SelectionGestureState.LONG_PRESSED
                         itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         onLineSelectionStart?.invoke(pos)
