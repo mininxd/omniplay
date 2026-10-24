@@ -739,13 +739,6 @@ class LyricsController(
             binding.fullscreenBtnPlayPauseIcon.animate().alpha(1f).setDuration(120L).start()
         }.start()
 
-        binding.btnPlayPauseCard.animate().scaleX(1.08f).scaleY(1.08f).setDuration(140L).withEndAction {
-            binding.btnPlayPauseCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140L).start()
-        }.start()
-        binding.fullscreenBtnPlayPauseCard.animate().scaleX(1.08f).scaleY(1.08f).setDuration(140L).withEndAction {
-            binding.fullscreenBtnPlayPauseCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140L).start()
-        }.start()
-
         val shareDesc = activity.getString(R.string.lyrics_share_chooser)
         binding.btnPlayPauseCard.contentDescription = shareDesc
         binding.fullscreenBtnPlayPauseCard.contentDescription = shareDesc

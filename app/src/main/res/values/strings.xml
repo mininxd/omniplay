@@ -198,6 +198,13 @@
     <string name="lyrics_image_saved">Saved to Pictures/OmniPlay</string>
     <string name="lyrics_image_save_failed">Could not save the image</string>
     <string name="lyrics_image_share_failed">Could not prepare the image for sharing</string>
+    <string name="lyrics_share_width">Card width</string>
+    <string name="lyrics_share_width_value">%1$d px</string>
+    <string name="lyrics_share_corners">Corner rounding</string>
+    <string name="lyrics_share_corners_value">%1$d px</string>
+    <string name="lyrics_share_section_style">Dimensions &amp; Typography</string>
+    <string name="lyrics_share_section_theme">Color Theme</string>
+    <string name="lyrics_share_section_content">Content Elements</string>
     <string name="lyrics_image_permission_denied">Storage permission is needed to save the image</string>
     <string name="lyrics_image_preview_description">Preview of the lyric share image</string>
 </resources>

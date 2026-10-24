@@ -10,14 +10,16 @@
     android:paddingEnd="20dp"
     android:paddingBottom="16dp">
 
+    <!-- Bottom Sheet Drag Handle -->
     <View
         android:layout_width="36dp"
         android:layout_height="4dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="2dp"
-        android:layout_marginBottom="14dp"
+        android:layout_marginBottom="12dp"
         android:background="@drawable/bg_sheet_drag_handle" />
 
+    <!-- Sheet Header -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -36,10 +38,11 @@
         android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="13sp" />
 
+    <!-- Scrollable Customizer Body -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="10dp"
         android:layout_weight="1"
         android:fillViewport="false"
         android:overScrollMode="ifContentScrolls">
@@ -50,256 +53,388 @@
             android:orientation="vertical"
             android:paddingBottom="16dp">
 
-            <!-- Card Preview Container: shrinked to 50%, no black background, no rounded corners -->
+            <!-- Card Preview Stage (centered, transparent, dynamic width & corners) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="10dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="12dp"
                 android:gravity="center"
                 android:orientation="horizontal">
 
                 <ImageView
                     android:id="@+id/lyrics_share_image_preview"
-                    android:layout_width="190dp"
+                    android:layout_width="200dp"
                     android:layout_height="wrap_content"
                     android:adjustViewBounds="true"
                     android:contentDescription="@string/lyrics_image_preview_description"
                     android:scaleType="fitCenter" />
             </LinearLayout>
 
-            <!-- Theme Picker -->
-            <TextView
+            <!-- Section 1: Dimensions & Typography Card -->
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:fontFamily="sans-serif-medium"
-                android:text="@string/lyrics_choose_theme"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="13sp" />
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:clipToPadding="false"
-                android:overScrollMode="never"
-                android:scrollbars="none">
-
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/lyrics_share_theme_group"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:selectionRequired="true"
-                    app:singleLine="true"
-                    app:singleSelection="true">
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/lyrics_theme_material"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/lyrics_theme_material"
-                        app:chipCornerRadius="14dp" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/lyrics_theme_midnight"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/lyrics_theme_midnight"
-                        app:chipCornerRadius="14dp" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/lyrics_theme_sunset"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/lyrics_theme_sunset"
-                        app:chipCornerRadius="14dp" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/lyrics_theme_forest"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/lyrics_theme_forest"
-                        app:chipCornerRadius="14dp" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/lyrics_theme_paper"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:checkable="true"
-                        android:text="@string/lyrics_theme_paper"
-                        app:chipCornerRadius="14dp" />
-                </com.google.android.material.chip.ChipGroup>
-            </HorizontalScrollView>
-
-            <!-- Font Size in PX -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="@string/lyrics_share_font_size"
-                    android:textColor="?attr/colorOnSurface"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/lyrics_share_font_size_value"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:textColor="?attr/colorPrimary"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <com.google.android.material.slider.Slider
-                android:id="@+id/lyrics_share_font_size"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:stepSize="4"
-                android:value="120"
-                android:valueFrom="60"
-                android:valueTo="200"
-                app:tickVisible="false" />
-
-            <!-- Card Elements (with tight top margin) -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:fontFamily="sans-serif-medium"
-                android:text="@string/lyrics_share_details"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="13sp" />
-
-            <com.google.android.material.chip.ChipGroup
-                android:id="@+id/lyrics_share_elements_group"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                app:chipSpacingHorizontal="6dp"
-                app:chipSpacingVertical="4dp"
-                app:singleSelection="false">
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/lyrics_share_include_title"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checkable="true"
-                    android:text="@string/lyrics_include_title"
-                    app:chipCornerRadius="14dp" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/lyrics_share_include_artist"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checkable="true"
-                    android:text="@string/lyrics_include_artist"
-                    app:chipCornerRadius="14dp" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/lyrics_share_include_progress"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checkable="true"
-                    android:checked="true"
-                    android:text="@string/lyrics_include_progress"
-                    app:chipCornerRadius="14dp" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/lyrics_share_include_badge"
-                    style="@style/Widget.Material3.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checkable="true"
-                    android:checked="true"
-                    android:text="@string/lyrics_include_badge"
-                    app:chipCornerRadius="14dp" />
-            </com.google.android.material.chip.ChipGroup>
-
-            <!-- Customizable Playback Progress Slider -->
-            <LinearLayout
-                android:id="@+id/lyrics_share_progress_layout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="vertical">
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
                     <TextView
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
                         android:fontFamily="sans-serif-medium"
-                        android:text="@string/lyrics_share_progress_time"
+                        android:text="@string/lyrics_share_section_style"
                         android:textColor="?attr/colorOnSurface"
-                        android:textSize="13sp" />
+                        android:textSize="14sp" />
 
-                    <TextView
-                        android:id="@+id/lyrics_share_progress_time_value"
-                        android:layout_width="wrap_content"
+                    <!-- Card Width Slider -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:textColor="?attr/colorPrimary"
-                        android:textSize="13sp" />
-                </LinearLayout>
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/lyrics_share_progress_slider"
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/lyrics_share_width"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/lyrics_share_width_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/lyrics_share_width_slider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="0dp"
+                        android:stepSize="20"
+                        android:value="1080"
+                        android:valueFrom="680"
+                        android:valueTo="1240"
+                        app:tickVisible="false" />
+
+                    <!-- Corner Radius Slider -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/lyrics_share_corners"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/lyrics_share_corners_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/lyrics_share_corners_slider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="0dp"
+                        android:stepSize="4"
+                        android:value="36"
+                        android:valueFrom="0"
+                        android:valueTo="72"
+                        app:tickVisible="false" />
+
+                    <!-- Lyrics Size in PX -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/lyrics_share_font_size"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/lyrics_share_font_size_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/lyrics_share_font_size"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="0dp"
+                        android:stepSize="4"
+                        android:value="120"
+                        android:valueFrom="60"
+                        android:valueTo="200"
+                        app:tickVisible="false" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Section 2: Color Theme Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="0dp"
-                    app:tickVisible="false" />
-            </LinearLayout>
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/lyrics_share_section_theme"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp" />
+
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:clipToPadding="false"
+                        android:overScrollMode="never"
+                        android:scrollbars="none">
+
+                        <com.google.android.material.chip.ChipGroup
+                            android:id="@+id/lyrics_share_theme_group"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:chipSpacingHorizontal="8dp"
+                            app:selectionRequired="true"
+                            app:singleLine="true"
+                            app:singleSelection="true">
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/lyrics_theme_material"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checkable="true"
+                                android:text="@string/lyrics_theme_material"
+                                app:chipCornerRadius="16dp" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/lyrics_theme_midnight"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checkable="true"
+                                android:text="@string/lyrics_theme_midnight"
+                                app:chipCornerRadius="16dp" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/lyrics_theme_sunset"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checkable="true"
+                                android:text="@string/lyrics_theme_sunset"
+                                app:chipCornerRadius="16dp" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/lyrics_theme_forest"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checkable="true"
+                                android:text="@string/lyrics_theme_forest"
+                                app:chipCornerRadius="16dp" />
+
+                            <com.google.android.material.chip.Chip
+                                android:id="@+id/lyrics_theme_paper"
+                                style="@style/Widget.Material3.Chip.Filter"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checkable="true"
+                                android:text="@string/lyrics_theme_paper"
+                                app:chipCornerRadius="16dp" />
+                        </com.google.android.material.chip.ChipGroup>
+                    </HorizontalScrollView>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Section 3: Content Elements Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="?attr/colorSurfaceContainer"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/lyrics_share_section_content"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/lyrics_share_elements_group"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        app:chipSpacingHorizontal="8dp"
+                        app:chipSpacingVertical="6dp"
+                        app:singleSelection="false">
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/lyrics_share_include_title"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/lyrics_include_title"
+                            app:chipCornerRadius="16dp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/lyrics_share_include_artist"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/lyrics_include_artist"
+                            app:chipCornerRadius="16dp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/lyrics_share_include_progress"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:checked="true"
+                            android:text="@string/lyrics_include_progress"
+                            app:chipCornerRadius="16dp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/lyrics_share_include_badge"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:checked="true"
+                            android:text="@string/lyrics_include_badge"
+                            app:chipCornerRadius="16dp" />
+                    </com.google.android.material.chip.ChipGroup>
+
+                    <!-- Playback Progress Position Adjustment -->
+                    <LinearLayout
+                        android:id="@+id/lyrics_share_progress_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/lyrics_share_progress_time"
+                                android:textColor="?attr/colorOnSurfaceVariant"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:id="@+id/lyrics_share_progress_time_value"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif-medium"
+                                android:textColor="?attr/colorPrimary"
+                                android:textSize="13sp" />
+                        </LinearLayout>
+
+                        <com.google.android.material.slider.Slider
+                            android:id="@+id/lyrics_share_progress_slider"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="0dp"
+                            app:tickVisible="false" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- Bottom Actions -->
+    <!-- Bottom Actions Bar (pinned) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="10dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/lyrics_share_copy"
             style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="10dp"
             android:contentDescription="@string/lyrics_share_copy_text"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
             android:padding="0dp"
-            app:cornerRadius="24dp"
+            app:cornerRadius="26dp"
             app:icon="@drawable/ic_content_copy"
             app:iconGravity="textStart"
             app:iconPadding="0dp" />
@@ -308,11 +443,11 @@
             android:id="@+id/lyrics_share_save"
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="1"
             android:text="@string/lyrics_save_image"
-            app:cornerRadius="24dp"
+            app:cornerRadius="26dp"
             app:icon="@drawable/ic_cloud_download"
             app:iconGravity="textStart" />
 
@@ -320,11 +455,12 @@
             android:id="@+id/lyrics_share_send"
             style="@style/Widget.Material3.Button"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="52dp"
             android:layout_weight="1"
             android:text="@string/lyrics_share_button"
-            app:cornerRadius="24dp"
+            app:cornerRadius="26dp"
             app:icon="@drawable/ic_share"
             app:iconGravity="textStart" />
     </LinearLayout>
+
 </LinearLayout>

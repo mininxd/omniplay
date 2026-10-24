@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.media.MediaScannerConnection
@@ -45,6 +46,8 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
     private val binding get() = _binding!!
     private var selectedTheme = LyricsShareImageRenderer.THEME_MATERIAL
     private var lyricsFontSizePx = DEFAULT_LYRICS_FONT_SIZE_PX
+    private var cardWidthPx = LyricsShareImageRenderer.DEFAULT_CARD_WIDTH_PX
+    private var cornerRadiusPx = LyricsShareImageRenderer.DEFAULT_CORNER_RADIUS_PX
     private var customPositionMs = -1L
     private var showTitle = true
     private var showArtist = true
@@ -90,14 +93,42 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             customPositionMs = requireArguments().getLong(ARG_POSITION_MS).coerceIn(0L, durationMs)
         }
 
-        val previewWidth = (resources.displayMetrics.widthPixels * 0.50f).toInt()
-        binding.lyricsShareImagePreview.layoutParams = binding.lyricsShareImagePreview.layoutParams.apply {
-            width = previewWidth
-        }
+        updatePreviewWidth()
 
         binding.lyricsShareTrack.text = listOf(title, artist)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
+
+        // Card Width Slider
+        binding.lyricsShareWidthSlider.valueFrom = LyricsShareImageRenderer.MIN_CARD_WIDTH_PX.toFloat()
+        binding.lyricsShareWidthSlider.valueTo = LyricsShareImageRenderer.MAX_CARD_WIDTH_PX.toFloat()
+        binding.lyricsShareWidthSlider.stepSize = 20f
+        binding.lyricsShareWidthSlider.value = cardWidthPx.toFloat().coerceIn(
+            LyricsShareImageRenderer.MIN_CARD_WIDTH_PX.toFloat(),
+            LyricsShareImageRenderer.MAX_CARD_WIDTH_PX.toFloat()
+        )
+        binding.lyricsShareWidthValue.text = getString(R.string.lyrics_share_width_value, cardWidthPx)
+        binding.lyricsShareWidthSlider.addOnChangeListener { _, value, _ ->
+            cardWidthPx = value.toInt()
+            binding.lyricsShareWidthValue.text = getString(R.string.lyrics_share_width_value, cardWidthPx)
+            updatePreviewWidth()
+            renderPreview()
+        }
+
+        // Corner Rounding Slider
+        binding.lyricsShareCornersSlider.valueFrom = LyricsShareImageRenderer.MIN_CORNER_RADIUS_PX
+        binding.lyricsShareCornersSlider.valueTo = LyricsShareImageRenderer.MAX_CORNER_RADIUS_PX
+        binding.lyricsShareCornersSlider.stepSize = 4f
+        binding.lyricsShareCornersSlider.value = cornerRadiusPx.coerceIn(
+            LyricsShareImageRenderer.MIN_CORNER_RADIUS_PX,
+            LyricsShareImageRenderer.MAX_CORNER_RADIUS_PX
+        )
+        binding.lyricsShareCornersValue.text = getString(R.string.lyrics_share_corners_value, cornerRadiusPx.toInt())
+        binding.lyricsShareCornersSlider.addOnChangeListener { _, value, _ ->
+            cornerRadiusPx = value
+            binding.lyricsShareCornersValue.text = getString(R.string.lyrics_share_corners_value, cornerRadiusPx.toInt())
+            renderPreview()
+        }
 
         binding.lyricsShareThemeGroup.check(R.id.lyrics_theme_material)
         binding.lyricsShareThemeGroup.setOnCheckedStateChangeListener { _, checkedIds ->
@@ -174,6 +205,18 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         super.onDestroyView()
     }
 
+    private fun updatePreviewWidth() {
+        val screenW = resources.displayMetrics.widthPixels
+        val ratio = cardWidthPx.toFloat() / LyricsShareImageRenderer.DEFAULT_CARD_WIDTH_PX.toFloat()
+        val targetWidth = (screenW * 0.54f * ratio).toInt().coerceIn(
+            (screenW * 0.36f).toInt(),
+            (screenW * 0.85f).toInt()
+        )
+        binding.lyricsShareImagePreview.layoutParams = binding.lyricsShareImagePreview.layoutParams.apply {
+            width = targetWidth
+        }
+    }
+
     private fun renderPreview() {
         val lines = requireArguments().getStringArrayList(ARG_LINES).orEmpty()
         val durationMs = requireArguments().getLong(ARG_DURATION_MS).coerceAtLeast(1000L)
@@ -188,7 +231,9 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             if (showTitle) requireArguments().getString(ARG_TITLE).orEmpty() else "",
             if (showArtist) requireArguments().getString(ARG_ARTIST).orEmpty() else "",
             showProgress,
-            showBadge
+            showBadge,
+            cardWidthPx,
+            cornerRadiusPx
         )
         binding.lyricsShareImagePreview.setImageBitmap(renderedBitmap)
     }
@@ -289,6 +334,14 @@ private object LyricsShareImageRenderer {
     const val THEME_FOREST = 3
     const val THEME_PAPER = 4
 
+    const val DEFAULT_CARD_WIDTH_PX = 1080
+    const val MIN_CARD_WIDTH_PX = 680
+    const val MAX_CARD_WIDTH_PX = 1240
+
+    const val DEFAULT_CORNER_RADIUS_PX = 36f
+    const val MIN_CORNER_RADIUS_PX = 0f
+    const val MAX_CORNER_RADIUS_PX = 72f
+
     fun render(
         context: Context,
         lines: List<String>,
@@ -299,12 +352,14 @@ private object LyricsShareImageRenderer {
         title: String,
         artist: String,
         showProgress: Boolean,
-        showBadge: Boolean = true
+        showBadge: Boolean = true,
+        cardWidthPx: Int = DEFAULT_CARD_WIDTH_PX,
+        cornerRadiusPx: Float = DEFAULT_CORNER_RADIUS_PX
     ): Bitmap {
         val palette = paletteFor(context, theme)
         val quote = lines.joinToString("\n").trim().ifBlank { "♪" }
-        val width = IMAGE_WIDTH
-        val horizontalInset = 84f
+        val width = cardWidthPx.coerceIn(500, 2000)
+        val horizontalInset = (width * 0.08f).coerceIn(48f, 100f)
         val bodyWidth = (width - horizontalInset * 2).toInt()
 
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -338,6 +393,18 @@ private object LyricsShareImageRenderer {
 
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+
+        if (cornerRadiusPx > 0f) {
+            val roundPath = Path().apply {
+                addRoundRect(
+                    RectF(0f, 0f, width.toFloat(), height.toFloat()),
+                    cornerRadiusPx,
+                    cornerRadiusPx,
+                    Path.Direction.CW
+                )
+            }
+            canvas.clipPath(roundPath)
+        }
 
         // Draw rich surface background
         canvas.drawColor(palette.background)
@@ -584,7 +651,6 @@ private object LyricsShareImageRenderer {
         val topGradientTint: Int
     )
 
-    private const val IMAGE_WIDTH = 1080
     private const val MIN_IMAGE_HEIGHT = 560
     private const val MAX_QUOTE_HEIGHT = 4000
     private const val MIN_QUOTE_TEXT_SIZE = 32f
