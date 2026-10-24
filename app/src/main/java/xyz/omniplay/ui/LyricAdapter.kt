@@ -304,11 +304,23 @@ class LyricAdapter(
                 itemView.background = normalBackground
                 lyricText.background = null
                 lyricText.setPadding(0, 0, 0, 0)
+                val shiftPx = if (isFullScreen && isSelected) {
+                    dpToPx(ctx, 14)
+                } else if (!isFullScreen && isSelected) {
+                    dpToPx(ctx, 10)
+                } else {
+                    0
+                }
                 val params = lyricText.layoutParams as? FrameLayout.LayoutParams
+                params?.marginStart = shiftPx
+                params?.leftMargin = shiftPx
+                params?.marginEnd = if (!isFullScreen && isSelected) shiftPx else 0
+                params?.rightMargin = if (!isFullScreen && isSelected) shiftPx else 0
                 params?.width = ViewGroup.LayoutParams.MATCH_PARENT
                 params?.gravity = if (isFullScreen) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
                 if (params != null) lyricText.layoutParams = params
                 lyricText.maxWidth = Int.MAX_VALUE
+                lyricText.translationX = 0f
 
                 if (isSelected) {
                     selectionIndicator?.visibility = View.VISIBLE
@@ -330,13 +342,11 @@ class LyricAdapter(
                     selectionIndicator?.background = indicatorDrawable
                     selectionIndicator?.alpha = 1.0f
 
-                    lyricText.translationX = if (isFullScreen) dpToPx(ctx, 12).toFloat() else 0f
                     lyricText.alpha = 1.0f
                     lyricText.setTextColor(ThemeColors.getPrimary(ctx))
                     lyricText.typeface = getBlackTypeface(ctx)
                 } else {
                     selectionIndicator?.visibility = View.GONE
-                    lyricText.translationX = 0f
                     lyricText.alpha = 0.28f
                     lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
                     lyricText.typeface = getMediumTypeface(ctx)
@@ -353,15 +363,19 @@ class LyricAdapter(
             }
 
             selectionIndicator?.visibility = View.GONE
-            lyricText.translationX = 0f
-            itemView.background = normalBackground
-            lyricText.background = normalTextBackground
             val params = lyricText.layoutParams as? FrameLayout.LayoutParams
+            params?.marginStart = 0
+            params?.leftMargin = 0
+            params?.marginEnd = 0
+            params?.rightMargin = 0
             params?.width = ViewGroup.LayoutParams.MATCH_PARENT
             params?.gravity = if (isFullScreen) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
             if (params != null) lyricText.layoutParams = params
             lyricText.maxWidth = Int.MAX_VALUE
+            lyricText.translationX = 0f
             lyricText.setPadding(0, 0, 0, 0)
+            itemView.background = normalBackground
+            lyricText.background = normalTextBackground
 
             if (isActive) {
                 lyricText.alpha = 1.0f
