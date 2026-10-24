@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -12,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.text.style.LineBackgroundSpan
 import android.text.style.StyleSpan
 import android.view.GestureDetector
@@ -99,9 +101,20 @@ class LyricsController(
         }
     }
 
+    var isPlaybackPlaying = false
+        private set
+
     fun onPlaybackStateChanged(isPlaying: Boolean) {
+        isPlaybackPlaying = isPlaying
+        if (!isLyricsShareSelectionMode) {
+            val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+            binding.btnPlayPauseIcon.setImageResource(iconRes)
+            binding.fullscreenBtnPlayPauseIcon.setImageResource(iconRes)
+        }
         updateKeepScreenOnState()
     }
+
+    fun isSelectionModeActive(): Boolean = isLyricsShareSelectionMode
 
     val isAnyLyricsShowing: Boolean
         get() = isLyricsShowing || isFullScreenLyricsShowing
@@ -514,20 +527,9 @@ class LyricsController(
         lyricsShareSelectionAdapter?.setShareSelectionMode(true, lyricsShareSelectedLines)
         if (plainTextView != null) renderPlainLyricsSelection(plainTextView)
 
-        if (isFullscreen) {
-            binding.lyricsShareCardFooter.visibility = View.GONE
-            binding.lyricsShareFullscreenFooter.visibility = View.VISIBLE
-            setLyricsContentBottomConstraint(R.id.lyrics_share_fullscreen_footer)
-            animateSelectionControls(listOf(binding.fullscreenLyricsControls), hide = true)
-        } else {
-            binding.lyricsShareFullscreenFooter.visibility = View.GONE
-            binding.lyricsShareCardFooter.visibility = View.VISIBLE
-            setLyricsCardContentBottomConstraint(showFooter = true)
-            animateSelectionControls(
-                listOf(binding.playbackSlider, binding.currentTimeText, binding.totalTimeText, binding.controlsLayout),
-                hide = true
-            )
-        }
+        binding.lyricsShareCardFooter.visibility = View.GONE
+        binding.lyricsShareFullscreenFooter.visibility = View.GONE
+        enterSelectionModeControlsUI(isFullscreen)
         updateLyricsShareSelection()
     }
 
@@ -665,6 +667,9 @@ class LyricsController(
         lyricsShareSelectionTextView?.let(::renderPlainLyricsSelection)
         val count = lyricsShareSelectedLines.size
         val countStr = activity.getString(R.string.lyrics_lines_selected, count)
+        binding.lyricsTitleLabel.text = countStr.uppercase()
+        binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
+        binding.fullscreenLyricsSourceBadge.text = "${count} SELECTED"
         binding.lyricsShareCount.text = countStr
         binding.lyricsShareFullscreenCount.text = countStr
         binding.root.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -673,18 +678,31 @@ class LyricsController(
     private fun renderPlainLyricsSelection(textView: TextView) {
         val plainLyrics = currentLyrics?.plainLyrics ?: return
         val annotatedLyrics = SpannableString(plainLyrics)
+        val selectedColor = ThemeColors.getPrimary(activity)
+        val unselectedColor = ThemeColors.getOnSurfaceVariant(activity)
+        val unselectedDimColor = Color.argb(
+            75,
+            Color.red(unselectedColor),
+            Color.green(unselectedColor),
+            Color.blue(unselectedColor)
+        )
+
+        annotatedLyrics.setSpan(
+            ForegroundColorSpan(unselectedDimColor),
+            0,
+            plainLyrics.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+
         lyricsShareSelectedLines.forEach { lineIndex ->
             val start = plainLineStartOffset(plainLyrics, lineIndex)
             if (start >= plainLyrics.length) return@forEach
             val newline = plainLyrics.indexOf('\n', start)
             val end = if (newline >= 0) newline + 1 else plainLyrics.length
             if (end <= start) return@forEach
+
             annotatedLyrics.setSpan(
-                RoundedLyricsSelectionSpan(
-                    ThemeColors.getPrimaryContainer(activity),
-                    dpToPx(12).toFloat(),
-                    dpToPx(10).toFloat()
-                ),
+                ForegroundColorSpan(selectedColor),
                 start,
                 end,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
@@ -710,52 +728,104 @@ class LyricsController(
         return offset
     }
 
-    private fun setLyricsContentBottomConstraint(targetId: Int) {
+    private fun enterSelectionModeControlsUI(isFullscreen: Boolean) {
+        val shareIcon = R.drawable.ic_share
+        binding.btnPlayPauseIcon.animate().alpha(0f).setDuration(120L).withEndAction {
+            binding.btnPlayPauseIcon.setImageResource(shareIcon)
+            binding.btnPlayPauseIcon.animate().alpha(1f).setDuration(120L).start()
+        }.start()
+        binding.fullscreenBtnPlayPauseIcon.animate().alpha(0f).setDuration(120L).withEndAction {
+            binding.fullscreenBtnPlayPauseIcon.setImageResource(shareIcon)
+            binding.fullscreenBtnPlayPauseIcon.animate().alpha(1f).setDuration(120L).start()
+        }.start()
+
+        binding.btnPlayPauseCard.animate().scaleX(1.08f).scaleY(1.08f).setDuration(140L).withEndAction {
+            binding.btnPlayPauseCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140L).start()
+        }.start()
+        binding.fullscreenBtnPlayPauseCard.animate().scaleX(1.08f).scaleY(1.08f).setDuration(140L).withEndAction {
+            binding.fullscreenBtnPlayPauseCard.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140L).start()
+        }.start()
+
+        val shareDesc = activity.getString(R.string.lyrics_share_chooser)
+        binding.btnPlayPauseCard.contentDescription = shareDesc
+        binding.fullscreenBtnPlayPauseCard.contentDescription = shareDesc
+
+        setOtherControlsEnabled(enabled = false)
+    }
+
+    private fun exitSelectionModeControlsUI(wasFullscreen: Boolean) {
+        val isPlaying = isMusicCurrentlyPlaying()
+        val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+
+        binding.btnPlayPauseIcon.animate().alpha(0f).setDuration(120L).withEndAction {
+            binding.btnPlayPauseIcon.setImageResource(iconRes)
+            binding.btnPlayPauseIcon.animate().alpha(1f).setDuration(120L).start()
+        }.start()
+        binding.fullscreenBtnPlayPauseIcon.animate().alpha(0f).setDuration(120L).withEndAction {
+            binding.fullscreenBtnPlayPauseIcon.setImageResource(iconRes)
+            binding.fullscreenBtnPlayPauseIcon.animate().alpha(1f).setDuration(120L).start()
+        }.start()
+
+        val playDesc = activity.getString(if (isPlaying) R.string.pause else R.string.play)
+        binding.btnPlayPauseCard.contentDescription = playDesc
+        binding.fullscreenBtnPlayPauseCard.contentDescription = playDesc
+
+        setOtherControlsEnabled(enabled = true)
+
+        binding.lyricsTitleLabel.text = "LYRICS"
+        restoreFullscreenSourceBadge()
+    }
+
+    private fun setOtherControlsEnabled(enabled: Boolean) {
+        val targetAlpha = if (enabled) 1.0f else 0.28f
+        val duration = 180L
+
         listOf(
-            binding.fullscreenLyricsRecyclerView,
-            binding.fullscreenLyricsPlainScroll,
-            binding.fullscreenLyricsStatusLayout
+            binding.btnShuffle,
+            binding.btnPrevious,
+            binding.btnNext,
+            binding.btnRepeat,
+            binding.playbackSlider
         ).forEach { view ->
-            val params = view.layoutParams as? ConstraintLayout.LayoutParams ?: return@forEach
-            params.bottomToTop = targetId
-            view.layoutParams = params
+            view.isEnabled = enabled
+            val finalAlpha = if (enabled && (view === binding.btnShuffle || view === binding.btnRepeat)) {
+                if (view === binding.btnShuffle) (if (getPlaybackService()?.isShuffleEnabled == true) 1.0f else 0.45f)
+                else (if (getPlaybackService()?.repeatMode != 0) 1.0f else 0.45f)
+            } else targetAlpha
+            view.animate().alpha(finalAlpha).setDuration(duration).start()
+        }
+
+        listOf(
+            binding.fullscreenBtnShuffle,
+            binding.fullscreenBtnPrevious,
+            binding.fullscreenBtnNext,
+            binding.fullscreenBtnRepeat,
+            binding.fullscreenPlaybackSlider
+        ).forEach { view ->
+            view.isEnabled = enabled
+            val finalAlpha = if (enabled && (view === binding.fullscreenBtnShuffle || view === binding.fullscreenBtnRepeat)) {
+                if (view === binding.fullscreenBtnShuffle) (if (getPlaybackService()?.isShuffleEnabled == true) 1.0f else 0.45f)
+                else (if (getPlaybackService()?.repeatMode != 0) 1.0f else 0.45f)
+            } else targetAlpha
+            view.animate().alpha(finalAlpha).setDuration(duration).start()
         }
     }
 
-    private fun setLyricsCardContentBottomConstraint(showFooter: Boolean) {
-        listOf(binding.lyricsRecyclerView, binding.lyricsPlainScroll, binding.lyricsStatusLayout).forEach { view ->
-            val params = view.layoutParams as? ConstraintLayout.LayoutParams ?: return@forEach
-            params.bottomToTop = if (showFooter) R.id.lyrics_share_card_footer else -1
-            params.bottomToBottom = if (showFooter) -1 else 0
-            view.layoutParams = params
+    private fun restoreFullscreenSourceBadge() {
+        val currLyrics = currentLyrics
+        val currentBadge = when {
+            currLyrics == null -> ""
+            currLyrics.source.startsWith("EMBEDDED") -> currLyrics.source.removePrefix("EMBEDDED (").removeSuffix(")")
+            currLyrics.source == "LOCAL FILE" -> "LOCAL"
+            currLyrics.isOffline -> "OFFLINE"
+            else -> "LRCLIB"
         }
-    }
-
-    private fun animateSelectionControls(views: List<View>, hide: Boolean) {
-        val sharedParent = views.firstOrNull()?.parent as? View
-        val sharedDistance = if (hide && views.all { it.parent === views.firstOrNull()?.parent } && sharedParent != null) {
-            (sharedParent.height - views.minOf { it.top } + dpToPx(24)).coerceAtLeast(dpToPx(96)).toFloat()
+        if (currLyrics?.isOffline == true || currentBadge.equals("OFFLINE", ignoreCase = true) || currentBadge.isBlank()) {
+            binding.fullscreenLyricsSourceBadge.visibility = View.GONE
+            binding.fullscreenLyricsSourceBadge.text = ""
         } else {
-            null
-        }
-        views.forEach { view ->
-            view.animate().cancel()
-            if (hide) {
-                val parentHeight = (view.parent as? View)?.height ?: binding.root.height
-                val distance = sharedDistance
-                    ?: (parentHeight - view.top + dpToPx(24)).coerceAtLeast(dpToPx(96)).toFloat()
-                view.animate()
-                    .translationY(distance)
-                    .alpha(0f)
-                    .setDuration(220L)
-                    .start()
-            } else {
-                view.animate()
-                    .translationY(0f)
-                    .alpha(1f)
-                    .setDuration(220L)
-                    .start()
-            }
+            binding.fullscreenLyricsSourceBadge.visibility = View.VISIBLE
+            binding.fullscreenLyricsSourceBadge.text = currentBadge
         }
     }
 
@@ -780,21 +850,12 @@ class LyricsController(
         lyricsShareSelectionIsFullscreen = false
         lyricsShareSelectionFontScale = 1f
 
-        if (wasFullscreen) {
-            binding.lyricsShareFullscreenFooter.visibility = View.GONE
-            setLyricsContentBottomConstraint(R.id.fullscreen_lyrics_controls)
-            animateSelectionControls(listOf(binding.fullscreenLyricsControls), hide = false)
-        } else {
-            binding.lyricsShareCardFooter.visibility = View.GONE
-            setLyricsCardContentBottomConstraint(showFooter = false)
-            animateSelectionControls(
-                listOf(binding.playbackSlider, binding.currentTimeText, binding.totalTimeText, binding.controlsLayout),
-                hide = false
-            )
-        }
+        binding.lyricsShareCardFooter.visibility = View.GONE
+        binding.lyricsShareFullscreenFooter.visibility = View.GONE
+        exitSelectionModeControlsUI(wasFullscreen)
     }
 
-    private fun shareSelectedLyrics() {
+    fun shareSelectedLyrics() {
         val lyrics = currentLyrics ?: return
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || lines.isEmpty()) return
@@ -1643,39 +1704,5 @@ class LyricsController(
         fullScreenScrollResetHandler.removeCallbacks(resetUserFullScreenScrollingRunnable)
         activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         binding.fullscreenLyricsContainer.keepScreenOn = false
-    }
-}
-
-private class RoundedLyricsSelectionSpan(
-    color: Int,
-    private val horizontalInset: Float,
-    private val cornerRadius: Float
-) : LineBackgroundSpan {
-    private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = color
-        style = Paint.Style.FILL
-    }
-
-    override fun drawBackground(
-        canvas: Canvas,
-        paint: Paint,
-        left: Int,
-        right: Int,
-        top: Int,
-        baseline: Int,
-        bottom: Int,
-        text: CharSequence,
-        start: Int,
-        end: Int,
-        lineNumber: Int
-    ) {
-        if (right <= left) return
-        val bounds = RectF(
-            left - horizontalInset,
-            top.toFloat(),
-            right + horizontalInset,
-            bottom.toFloat()
-        )
-        canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, backgroundPaint)
     }
 }

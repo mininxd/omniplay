@@ -8,6 +8,13 @@
     android:paddingEnd="16dp"
     android:paddingBottom="8dp">
 
+    <View
+        android:id="@+id/lyric_selection_indicator"
+        android:layout_width="4dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start|center_vertical"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/lyric_line_text"
         android:layout_width="match_parent"

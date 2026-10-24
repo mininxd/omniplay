@@ -861,6 +861,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.badgeBitPerfect.setOnClickListener(badgeClickListener)
 
         binding.btnPlayPauseCard.setOnClickListener {
+            if (::lyricsController.isInitialized && lyricsController.isSelectionModeActive()) {
+                lyricsController.shareSelectedLyrics()
+                return@setOnClickListener
+            }
             if (OmniSyncManager.getInstance(this).currentRole == OmniSyncRole.LISTENER) {
                 OmniSyncManager.getInstance(this).toggleListenerPlayback()
                 return@setOnClickListener
@@ -1705,6 +1709,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
+        if (::lyricsController.isInitialized && lyricsController.isSelectionModeActive()) {
+            return
+        }
         val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         binding.btnPlayPauseIcon.setImageResource(iconRes)
         binding.fullscreenBtnPlayPauseIcon.setImageResource(iconRes)

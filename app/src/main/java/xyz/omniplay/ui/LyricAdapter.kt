@@ -146,6 +146,7 @@ class LyricAdapter(
 
     inner class LyricViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val lyricText: TextView = itemView.findViewById(R.id.lyric_line_text)
+        private val selectionIndicator: View? = itemView.findViewById(R.id.lyric_selection_indicator)
         private val normalBackground = itemView.background
         private val normalTextBackground = lyricText.background
         private val gestureDetector: GestureDetector
@@ -256,7 +257,9 @@ class LyricAdapter(
             if (!isFullScreen) return
             val pos = bindingAdapterPosition
             if (shareSelectionMode) {
-                updateSelectionTextSize(shareSelectionFontScale)
+                val isSelected = pos in shareSelectionLines
+                val targetSp = if (isSelected) baseSp else (baseSp * 0.75f).coerceAtLeast(16f)
+                lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, targetSp)
                 return
             }
             val isActive = (pos == activeIndex)
@@ -265,10 +268,7 @@ class LyricAdapter(
         }
 
         fun updateSelectionTextSize(scale: Float) {
-            lyricText.setTextSize(
-                TypedValue.COMPLEX_UNIT_SP,
-                selectionFontSizeSp() * scale
-            )
+            // Keep stable without jarring resizing
         }
 
         fun bind(
@@ -286,7 +286,6 @@ class LyricAdapter(
             itemView.pivotX = 0f
             itemView.pivotY = 0f
 
-            // Keep row geometry fixed; selection padding belongs inside the text highlight.
             val rowHorizontalInset = if (isFullScreen) 24 else 16
             if (isFullScreen) {
                 lyricText.gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -302,47 +301,65 @@ class LyricAdapter(
             lyricText.letterSpacing = LETTER_SPACING
 
             if (selectionMode) {
+                itemView.background = normalBackground
+                lyricText.background = null
+                lyricText.setPadding(0, 0, 0, 0)
+                val params = lyricText.layoutParams as? FrameLayout.LayoutParams
+                params?.width = ViewGroup.LayoutParams.MATCH_PARENT
+                params?.gravity = if (isFullScreen) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
+                if (params != null) lyricText.layoutParams = params
+                lyricText.maxWidth = Int.MAX_VALUE
+
                 if (isSelected) {
-                    val highlight = GradientDrawable().apply {
-                        color = ColorStateList.valueOf(ThemeColors.getPrimaryContainer(ctx))
-                        cornerRadius = dpToPx(ctx, 20).toFloat()
+                    selectionIndicator?.visibility = View.VISIBLE
+                    val pos = bindingAdapterPosition
+                    val hasPrev = (pos - 1) in shareSelectionLines
+                    val hasNext = (pos + 1) in shareSelectionLines
+
+                    val r = dpToPx(ctx, 3).toFloat()
+                    val indicatorDrawable = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        setColor(ThemeColors.getPrimary(ctx))
+                        cornerRadii = when {
+                            !hasPrev && !hasNext -> floatArrayOf(r, r, r, r, r, r, r, r)
+                            !hasPrev && hasNext -> floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+                            hasPrev && hasNext -> floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+                            else -> floatArrayOf(0f, 0f, 0f, 0f, r, r, r, r)
+                        }
                     }
-                    val params = lyricText.layoutParams as? FrameLayout.LayoutParams
-                    params?.width = ViewGroup.LayoutParams.WRAP_CONTENT
-                    params?.gravity = if (isFullScreen) Gravity.START else Gravity.CENTER
-                    if (params != null) lyricText.layoutParams = params
-                    val availableWidth = (itemView.width.takeIf { it > 0 }
-                        ?: ctx.resources.displayMetrics.widthPixels) - dpToPx(ctx, rowHorizontalInset * 2)
-                    lyricText.maxWidth = availableWidth.coerceAtLeast(dpToPx(ctx, 120))
-                    lyricText.background = highlight
-                    val textInset = dpToPx(ctx, 16)
-                    lyricText.setPadding(textInset, dpToPx(ctx, 6), textInset, dpToPx(ctx, 6))
-                    lyricText.alpha = 1f
-                    lyricText.setTextColor(ThemeColors.getOnPrimaryContainer(ctx))
+                    selectionIndicator?.background = indicatorDrawable
+                    selectionIndicator?.alpha = 1.0f
+
+                    lyricText.translationX = if (isFullScreen) dpToPx(ctx, 12).toFloat() else 0f
+                    lyricText.alpha = 1.0f
+                    lyricText.setTextColor(ThemeColors.getPrimary(ctx))
+                    lyricText.typeface = getBlackTypeface(ctx)
                 } else {
-                    itemView.background = normalBackground
-                    lyricText.background = normalTextBackground
-                    lyricText.layoutParams = lyricText.layoutParams.apply {
-                        width = ViewGroup.LayoutParams.MATCH_PARENT
-                    }
-                    lyricText.maxWidth = Int.MAX_VALUE
-                    lyricText.setPadding(0, 0, 0, 0)
-                    lyricText.alpha = 0.42f
+                    selectionIndicator?.visibility = View.GONE
+                    lyricText.translationX = 0f
+                    lyricText.alpha = 0.28f
                     lyricText.setTextColor(ThemeColors.getOnSurfaceVariant(ctx))
+                    lyricText.typeface = getMediumTypeface(ctx)
                 }
-                lyricText.typeface = if (isSelected) getBlackTypeface(ctx) else getMediumTypeface(ctx)
-                lyricText.setTextSize(
-                    TypedValue.COMPLEX_UNIT_SP,
-                    selectionFontSizeSp() * shareSelectionFontScale
-                )
+
+                if (isFullScreen) {
+                    val activeSp = baseFontSizeSp
+                    val inactiveSp = (baseFontSizeSp * 0.75f).coerceAtLeast(16f)
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isSelected) activeSp else inactiveSp)
+                } else {
+                    lyricText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isSelected) 17f else 15f)
+                }
                 return
             }
 
+            selectionIndicator?.visibility = View.GONE
+            lyricText.translationX = 0f
             itemView.background = normalBackground
             lyricText.background = normalTextBackground
-            lyricText.layoutParams = lyricText.layoutParams.apply {
-                width = ViewGroup.LayoutParams.MATCH_PARENT
-            }
+            val params = lyricText.layoutParams as? FrameLayout.LayoutParams
+            params?.width = ViewGroup.LayoutParams.MATCH_PARENT
+            params?.gravity = if (isFullScreen) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
+            if (params != null) lyricText.layoutParams = params
             lyricText.maxWidth = Int.MAX_VALUE
             lyricText.setPadding(0, 0, 0, 0)
 
