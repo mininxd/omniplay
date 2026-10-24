@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -44,7 +45,7 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
 
     private var _binding: BottomSheetLyricsShareBinding? = null
     private val binding get() = _binding!!
-    private var selectedTheme = LyricsShareImageRenderer.THEME_MATERIAL
+    private var selectedLyricStyle = LyricsShareImageRenderer.STYLE_EDITORIAL
     private var lyricsFontSizePx = DEFAULT_LYRICS_FONT_SIZE_PX
     private var cardWidthPx = LyricsShareImageRenderer.DEFAULT_CARD_WIDTH_PX
     private var cornerRadiusPx = LyricsShareImageRenderer.DEFAULT_CORNER_RADIUS_PX
@@ -130,14 +131,14 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             renderPreview()
         }
 
-        binding.lyricsShareThemeGroup.check(R.id.lyrics_theme_material)
+        binding.lyricsShareThemeGroup.check(R.id.lyrics_style_editorial)
         binding.lyricsShareThemeGroup.setOnCheckedStateChangeListener { _, checkedIds ->
-            selectedTheme = when (checkedIds.firstOrNull()) {
-                R.id.lyrics_theme_midnight -> LyricsShareImageRenderer.THEME_MIDNIGHT
-                R.id.lyrics_theme_sunset -> LyricsShareImageRenderer.THEME_SUNSET
-                R.id.lyrics_theme_forest -> LyricsShareImageRenderer.THEME_FOREST
-                R.id.lyrics_theme_paper -> LyricsShareImageRenderer.THEME_PAPER
-                else -> LyricsShareImageRenderer.THEME_MATERIAL
+            selectedLyricStyle = when (checkedIds.firstOrNull()) {
+                R.id.lyrics_style_quote -> LyricsShareImageRenderer.STYLE_QUOTE
+                R.id.lyrics_style_studio -> LyricsShareImageRenderer.STYLE_STUDIO
+                R.id.lyrics_style_minimalist -> LyricsShareImageRenderer.STYLE_MINIMALIST
+                R.id.lyrics_style_atmospheric -> LyricsShareImageRenderer.STYLE_ATMOSPHERIC
+                else -> LyricsShareImageRenderer.STYLE_EDITORIAL
             }
             renderPreview()
         }
@@ -224,7 +225,7 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         renderedBitmap = LyricsShareImageRenderer.render(
             requireContext(),
             lines,
-            selectedTheme,
+            selectedLyricStyle,
             posMs,
             durationMs,
             lyricsFontSizePx,
@@ -328,11 +329,11 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
 }
 
 private object LyricsShareImageRenderer {
-    const val THEME_MATERIAL = 0
-    const val THEME_MIDNIGHT = 1
-    const val THEME_SUNSET = 2
-    const val THEME_FOREST = 3
-    const val THEME_PAPER = 4
+    const val STYLE_EDITORIAL = 0
+    const val STYLE_QUOTE = 1
+    const val STYLE_STUDIO = 2
+    const val STYLE_MINIMALIST = 3
+    const val STYLE_ATMOSPHERIC = 4
 
     const val DEFAULT_CARD_WIDTH_PX = 1080
     const val MIN_CARD_WIDTH_PX = 680
@@ -345,7 +346,7 @@ private object LyricsShareImageRenderer {
     fun render(
         context: Context,
         lines: List<String>,
-        theme: Int,
+        lyricStyle: Int,
         positionMs: Long,
         durationMs: Long,
         lyricsFontSizePx: Int,
@@ -356,7 +357,7 @@ private object LyricsShareImageRenderer {
         cardWidthPx: Int = DEFAULT_CARD_WIDTH_PX,
         cornerRadiusPx: Float = DEFAULT_CORNER_RADIUS_PX
     ): Bitmap {
-        val palette = paletteFor(context, theme)
+        val palette = getAppThemePalette(context)
         val quote = lines.joinToString("\n").trim().ifBlank { "♪" }
         val width = cardWidthPx.coerceIn(500, 2000)
         val horizontalInset = (width * 0.08f).coerceIn(48f, 100f)
@@ -365,18 +366,33 @@ private object LyricsShareImageRenderer {
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = palette.foreground
             textSize = lyricsFontSizePx.toFloat().coerceIn(40f, 240f)
-            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
-            letterSpacing = -0.02f
+            typeface = when (lyricStyle) {
+                STYLE_QUOTE -> Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                STYLE_MINIMALIST -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                STYLE_STUDIO -> Typeface.create("sans-serif-bold", Typeface.NORMAL)
+                else -> Typeface.create("sans-serif-black", Typeface.NORMAL)
+            }
+            letterSpacing = when (lyricStyle) {
+                STYLE_QUOTE -> 0.0f
+                STYLE_MINIMALIST -> 0.01f
+                else -> -0.02f
+            }
+        }
+
+        val alignment = if (lyricStyle == STYLE_STUDIO) {
+            Layout.Alignment.ALIGN_CENTER
+        } else {
+            Layout.Alignment.ALIGN_NORMAL
         }
 
         fun createQuoteLayout(): StaticLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(quote, 0, quote.length, quotePaint, bodyWidth)
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setAlignment(alignment)
                 .setLineSpacing(26f, 1f)
                 .setIncludePad(false)
                 .build()
         } else {
-            StaticLayout(quote, quotePaint, bodyWidth, Layout.Alignment.ALIGN_NORMAL, 1f, 26f, false)
+            StaticLayout(quote, quotePaint, bodyWidth, alignment, 1f, 26f, false)
         }
 
         var quoteLayout = createQuoteLayout()
@@ -387,9 +403,17 @@ private object LyricsShareImageRenderer {
 
         val topPadding = if (showBadge) 140f else 84f
         val metadata = listOf(title, artist).filter { it.isNotBlank() }
-        val metadataHeight = if (metadata.isEmpty()) 0f else 116f + (metadata.size - 1) * 48f
-        val progressCardHeight = if (showProgress) PROGRESS_CARD_HEIGHT else NO_PROGRESS_CARD_HEIGHT
-        val height = maxOf(MIN_IMAGE_HEIGHT, topPadding.toInt() + quoteLayout.height + metadataHeight.toInt() + progressCardHeight)
+        val metadataHeight = if (metadata.isEmpty()) {
+            0f
+        } else {
+            72f + metadata.size * 50f + 14f
+        }
+        val lastContentBottomY = topPadding + quoteLayout.height + metadataHeight
+        // Margin between artist/metadata and progress bar reduced by 40% (86f)
+        val progressY = lastContentBottomY + 86f
+        val durationLabelsY = progressY + 44f
+        val contentEndHeight = if (showProgress) (durationLabelsY + 48f).toInt() else (lastContentBottomY + 72f).toInt()
+        val height = maxOf(MIN_IMAGE_HEIGHT, contentEndHeight)
 
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -406,29 +430,147 @@ private object LyricsShareImageRenderer {
             canvas.clipPath(roundPath)
         }
 
-        // Draw rich surface background
+        // Draw rich surface background matching app theme
         canvas.drawColor(palette.background)
 
-        // Draw atmospheric ambient gradient glow
-        val gradient = LinearGradient(
-            0f, 0f, width.toFloat(), height.toFloat() * 0.7f,
-            palette.topGradientTint, Color.TRANSPARENT,
-            Shader.TileMode.CLAMP
-        )
-        val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = gradient
-        }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), gradientPaint)
+        // Draw style-specific visual treatment
+        when (lyricStyle) {
+            STYLE_QUOTE -> {
+                val quoteWatermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(26, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+                    textSize = 320f
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                }
+                canvas.drawText("“", horizontalInset - 16f, topPadding + 64f, quoteWatermarkPaint)
 
-        // Optional OmniPlay brand badge in header
-        if (showBadge) {
-            val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = palette.muted
-                textSize = 28f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                letterSpacing = 0.08f
+                val gradient = LinearGradient(
+                    0f, 0f, width.toFloat(), height.toFloat() * 0.6f,
+                    palette.topGradientTint, Color.TRANSPARENT,
+                    Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = gradient })
             }
-            canvas.drawText("♫  OMNIPLAY", horizontalInset, 76f, badgePaint)
+            STYLE_STUDIO -> {
+                val studioGlow = RadialGradient(
+                    width / 2f,
+                    topPadding + quoteLayout.height * 0.5f,
+                    width * 0.65f,
+                    Color.argb(45, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent)),
+                    Color.TRANSPARENT,
+                    Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = studioGlow })
+            }
+            STYLE_MINIMALIST -> {
+                val innerMargin = 20f
+                val innerRect = RectF(innerMargin, innerMargin, width - innerMargin, height - innerMargin)
+                val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(48, Color.red(palette.track), Color.green(palette.track), Color.blue(palette.track))
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2.5f
+                }
+                val innerRadius = (cornerRadiusPx - innerMargin * 0.5f).coerceAtLeast(0f)
+                canvas.drawRoundRect(innerRect, innerRadius, innerRadius, framePaint)
+            }
+            STYLE_ATMOSPHERIC -> {
+                val bloomPaintTop = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        width * 0.85f,
+                        height * 0.18f,
+                        width * 0.6f,
+                        Color.argb(55, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent)),
+                        Color.TRANSPARENT,
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bloomPaintTop)
+
+                val bloomPaintBottom = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = RadialGradient(
+                        width * 0.15f,
+                        height * 0.82f,
+                        width * 0.55f,
+                        Color.argb(35, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent)),
+                        Color.TRANSPARENT,
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bloomPaintBottom)
+
+                val accentBarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = palette.accent
+                    strokeWidth = 6f
+                    strokeCap = Paint.Cap.ROUND
+                }
+                canvas.drawLine(horizontalInset - 20f, topPadding + 6f, horizontalInset - 20f, topPadding + quoteLayout.height - 6f, accentBarPaint)
+            }
+            else -> {
+                // STYLE_EDITORIAL: Diagonal ambient gradient glow
+                val gradient = LinearGradient(
+                    0f, 0f, width.toFloat(), height.toFloat() * 0.7f,
+                    palette.topGradientTint, Color.TRANSPARENT,
+                    Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = gradient })
+            }
+        }
+
+        // Draw badge
+        if (showBadge) {
+            when (lyricStyle) {
+                STYLE_STUDIO -> {
+                    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = palette.muted
+                        textSize = 28f
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        letterSpacing = 0.14f
+                        textAlign = Paint.Align.CENTER
+                    }
+                    canvas.drawText("✦  OMNIPLAY  ✦", width / 2f, 76f, badgePaint)
+                }
+                STYLE_QUOTE -> {
+                    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = palette.muted
+                        textSize = 28f
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        letterSpacing = 0.10f
+                    }
+                    canvas.drawText("“ OMNIPLAY ”", horizontalInset, 76f, badgePaint)
+                }
+                STYLE_MINIMALIST -> {
+                    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = palette.muted
+                        textSize = 26f
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        letterSpacing = 0.16f
+                    }
+                    canvas.drawText("OMNIPLAY // LYRICS", horizontalInset, 76f, badgePaint)
+                }
+                STYLE_ATMOSPHERIC -> {
+                    val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.argb(36, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
+                    }
+                    val pillRect = RectF(horizontalInset, 46f, horizontalInset + 180f, 92f)
+                    canvas.drawRoundRect(pillRect, 23f, 23f, pillPaint)
+
+                    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = palette.accent
+                        textSize = 24f
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        letterSpacing = 0.08f
+                    }
+                    canvas.drawText("♫  OMNIPLAY", horizontalInset + 20f, 76f, badgePaint)
+                }
+                else -> {
+                    val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = palette.muted
+                        textSize = 28f
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        letterSpacing = 0.08f
+                    }
+                    canvas.drawText("♫  OMNIPLAY", horizontalInset, 76f, badgePaint)
+                }
+            }
         }
 
         // Draw lyrics text
@@ -438,32 +580,38 @@ private object LyricsShareImageRenderer {
         canvas.restore()
 
         // Draw track and artist metadata
-        var metadataY = topPadding + quoteLayout.height + 72f
         if (metadata.isNotEmpty()) {
+            val metaStartY = topPadding + quoteLayout.height + 72f
             val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.track
                 strokeWidth = 2f
             }
-            canvas.drawLine(horizontalInset, metadataY - 24f, horizontalInset + 120f, metadataY - 24f, dividerPaint)
+            if (lyricStyle == STYLE_STUDIO) {
+                canvas.drawLine(width / 2f - 60f, metaStartY - 24f, width / 2f + 60f, metaStartY - 24f, dividerPaint)
+            } else {
+                canvas.drawLine(horizontalInset, metaStartY - 24f, horizontalInset + 120f, metaStartY - 24f, dividerPaint)
+            }
 
+            var currentMetaY = metaStartY
             metadata.forEachIndexed { index, value ->
                 val isTitle = (index == 0 && title.isNotBlank())
                 val metadataPaint = textPaint(
                     if (isTitle) palette.foreground else palette.muted,
                     if (isTitle) 42f else 32f,
                     if (isTitle) Typeface.BOLD else Typeface.NORMAL,
-                    Paint.Align.LEFT
+                    if (lyricStyle == STYLE_STUDIO) Paint.Align.CENTER else Paint.Align.LEFT
                 )
-                canvas.drawText(value, horizontalInset, metadataY + (if (isTitle) 6f else 12f), metadataPaint)
-                metadataY += 50f
+                val textX = if (lyricStyle == STYLE_STUDIO) width / 2f else horizontalInset
+                val textToDraw = if (lyricStyle == STYLE_QUOTE && isTitle) "— $value" else value
+                canvas.drawText(textToDraw, textX, currentMetaY + (if (isTitle) 8f else 14f), metadataPaint)
+                currentMetaY += 50f
             }
         }
 
-        // Draw wave progress bar
+        // Draw wave progress bar (with 40% reduced top-margin between artist and progress bar)
         if (showProgress) {
             val progressStart = horizontalInset
             val progressEnd = width - horizontalInset
-            val progressY = height - 120f
             val safeDurationMs = durationMs.coerceAtLeast(0L)
             val safePositionMs = if (safeDurationMs > 0L) {
                 positionMs.coerceIn(0L, safeDurationMs)
@@ -477,7 +625,7 @@ private object LyricsShareImageRenderer {
             }
             val progressX = progressStart + (progressEnd - progressStart) * progress
 
-            // 1. Draw Inactive Track (straight line ONLY from progressX to progressEnd, like SquigglySeekBar)
+            // 1. Draw Inactive Track
             val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.track
                 strokeWidth = 10f
@@ -487,7 +635,7 @@ private object LyricsShareImageRenderer {
                 canvas.drawLine(progressX, progressY, progressEnd, progressY, trackPaint)
             }
 
-            // 2. Draw Active Track (Squiggly wave with smooth ramp-in/ramp-out from progressStart to progressX)
+            // 2. Draw Active Track (Squiggly wave with smooth ramp)
             val playedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.accent
                 style = Paint.Style.STROKE
@@ -518,7 +666,7 @@ private object LyricsShareImageRenderer {
                 canvas.drawPath(wavePath, playedPaint)
             }
 
-            // 3. Draw Thumb (glowing halo + solid thumb dot at progressX, progressY)
+            // 3. Draw Thumb (glowing halo + solid thumb dot)
             val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.argb(45, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
             }
@@ -528,10 +676,10 @@ private object LyricsShareImageRenderer {
             // 4. Duration labels
             val timePaint = textPaint(palette.muted, 32f, Typeface.NORMAL, Paint.Align.LEFT)
             val elapsed = Song.formatTime(safePositionMs)
-            canvas.drawText(elapsed, progressStart, height - 36f, timePaint)
+            canvas.drawText(elapsed, progressStart, durationLabelsY, timePaint)
             timePaint.textAlign = Paint.Align.RIGHT
             val total = Song.formatTime(safeDurationMs)
-            canvas.drawText(total, progressEnd, height - 36f, timePaint)
+            canvas.drawText(total, progressEnd, durationLabelsY, timePaint)
         }
 
         return bitmap
@@ -587,51 +735,16 @@ private object LyricsShareImageRenderer {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    private fun paletteFor(context: Context, theme: Int): Palette {
+    private fun getAppThemePalette(context: Context): Palette {
         val primaryColor = ThemeColors.getPrimary(context)
-
-        return when (theme) {
-            THEME_MIDNIGHT -> Palette(
-                background = Color.rgb(20, 22, 34),
-                foreground = Color.rgb(244, 244, 248),
-                muted = Color.rgb(157, 157, 174),
-                track = Color.rgb(46, 44, 70),
-                accent = Color.rgb(167, 139, 250), // Luminous Violet
-                topGradientTint = Color.argb(40, 167, 139, 250)
-            )
-            THEME_SUNSET -> Palette(
-                background = Color.rgb(36, 18, 26),
-                foreground = Color.rgb(255, 241, 242),
-                muted = Color.rgb(184, 156, 158),
-                track = Color.rgb(72, 38, 50),
-                accent = Color.rgb(251, 113, 133), // Coral Rose
-                topGradientTint = Color.argb(45, 251, 113, 133)
-            )
-            THEME_FOREST -> Palette(
-                background = Color.rgb(18, 32, 24),
-                foreground = Color.rgb(236, 253, 245),
-                muted = Color.rgb(148, 168, 157),
-                track = Color.rgb(36, 68, 50),
-                accent = Color.rgb(52, 211, 153), // Radiant Emerald Mint
-                topGradientTint = Color.argb(40, 52, 211, 153)
-            )
-            THEME_PAPER -> Palette(
-                background = Color.rgb(250, 247, 242),
-                foreground = Color.rgb(26, 28, 26),
-                muted = Color.rgb(92, 97, 93),
-                track = Color.rgb(221, 216, 206),
-                accent = Color.rgb(59, 94, 67), // Forest Olive
-                topGradientTint = Color.argb(20, 59, 94, 67)
-            )
-            else -> Palette(
-                background = ThemeColors.getSurfaceContainerHigh(context),
-                foreground = ThemeColors.getOnSurface(context),
-                muted = ThemeColors.getOnSurfaceVariant(context),
-                track = ThemeColors.getSurfaceContainerHighest(context),
-                accent = primaryColor,
-                topGradientTint = Color.argb(35, Color.red(primaryColor), Color.green(primaryColor), Color.blue(primaryColor))
-            )
-        }
+        return Palette(
+            background = ThemeColors.getSurfaceContainerHigh(context),
+            foreground = ThemeColors.getOnSurface(context),
+            muted = ThemeColors.getOnSurfaceVariant(context),
+            track = ThemeColors.getSurfaceContainerHighest(context),
+            accent = primaryColor,
+            topGradientTint = Color.argb(36, Color.red(primaryColor), Color.green(primaryColor), Color.blue(primaryColor))
+        )
     }
 
     private fun textPaint(color: Int, size: Float, style: Int, align: Paint.Align) =
@@ -651,12 +764,10 @@ private object LyricsShareImageRenderer {
         val topGradientTint: Int
     )
 
-    private const val MIN_IMAGE_HEIGHT = 560
+    private const val MIN_IMAGE_HEIGHT = 440
     private const val MAX_QUOTE_HEIGHT = 4000
     private const val MIN_QUOTE_TEXT_SIZE = 32f
     private const val WAVE_LENGTH = 64f
     private const val WAVE_AMPLITUDE = 12f
-    private const val PROGRESS_CARD_HEIGHT = 320
-    private const val NO_PROGRESS_CARD_HEIGHT = 110
     private const val CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000L
 }

@@ -62,8 +62,11 @@ import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaDescriptionCompat
 import androidx.media.MediaBrowserServiceCompat
 import xyz.omniplay.util.ReplayGainHelper
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
+import org.json.JSONArray
+import org.json.JSONObject
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaBrowserServiceCompat() {
@@ -85,6 +88,14 @@ class PlaybackService : MediaBrowserServiceCompat() {
         const val MEDIA_ROOT_ID = "omniplay_root"
         const val MEDIA_TRACKS_ID = "omniplay_tracks"
         const val MEDIA_QUEUE_ID = "omniplay_queue"
+
+        const val PREFS_RECENT_PLAYBACK = "recent_playback_prefs"
+        const val KEY_RECENT_SONG_JSON = "recent_song_json"
+        const val KEY_RECENT_POSITION_MS = "recent_position_ms"
+        const val KEY_RECENT_INDEX = "recent_index"
+        const val KEY_RECENT_SHUFFLE = "recent_shuffle"
+        const val KEY_RECENT_REPEAT = "recent_repeat"
+        const val RECENT_QUEUE_FILE_NAME = "recent_queue.json"
     }
 
     private val binder = LocalBinder()
@@ -387,6 +398,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
             }
         }
         sync.addListener(omniSyncListener)
+        restoreRecentPlaybackState()
     }
 
     private val omniSyncListener = object : xyz.omniplay.sync.OmniSyncManager.OmniSyncListener {
@@ -734,7 +746,12 @@ class PlaybackService : MediaBrowserServiceCompat() {
         if (!listeners.contains(listener)) {
             listeners.add(listener)
         }
-        currentSong?.let { listener.onTrackChanged(it) }
+        currentSong?.let {
+            listener.onTrackChanged(it)
+            val pos = getCurrentPosition()
+            val dur = getDuration()
+            listener.onProgressUpdate(pos, if (dur > 0) dur else it.duration.toInt())
+        }
         listener.onPlaybackStateChanged(isPlaying())
         listener.onShuffleModeChanged(isShuffleEnabled)
         listener.onRepeatModeChanged(repeatMode)
@@ -760,7 +777,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
             currentIndex = if (startIndex in queue.indices) startIndex else 0
         }
 
-        listeners.forEach { it.onQueueChanged(queue.toList()) }
+        notifyQueueChanged()
 
         if (startPlaying) {
             isExternalSongActive = false
@@ -803,14 +820,14 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 queue.add(0, selected)
                 currentIndex = 0
                 playSong(selected, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
             } else {
                 val matching = originalQueue.find { it.id == song.id } ?: song
                 val remaining = originalQueue.filter { it.id != matching.id }.shuffled()
                 queue = (listOf(matching) + remaining).toMutableList()
                 currentIndex = 0
                 playSong(matching, startPlaying = startPlaying, allowCrossfade = crossfadeOnNext)
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
             }
         } else {
             val targetIndex = if (index in queue.indices && queue[index].id == song.id) {
@@ -839,7 +856,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         } else if (!originalQueue.any { it.id == song.id }) {
             originalQueue = originalQueue + song
         }
-        listeners.forEach { it.onQueueChanged(queue.toList()) }
+        notifyQueueChanged()
     }
 
     fun playNext(song: Song) {
@@ -863,7 +880,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         } else if (!originalQueue.any { it.id == song.id }) {
             originalQueue = originalQueue + song
         }
-        listeners.forEach { it.onQueueChanged(queue.toList()) }
+        notifyQueueChanged()
     }
 
     fun removeSongAt(position: Int) {
@@ -895,10 +912,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
             listeners.forEach {
                 try {
                     it.onTrackChanged(null)
-                    it.onQueueChanged(emptyList())
                     it.onPlaybackStateChanged(false)
                 } catch (e: Exception) {}
             }
+            notifyQueueCleared()
             return
         }
 
@@ -911,7 +928,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
             currentIndex--
         }
 
-        listeners.forEach { it.onQueueChanged(queue.toList()) }
+        notifyQueueChanged()
     }
 
     fun removeSong(song: Song) {
@@ -937,7 +954,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         if (!isShuffleEnabled) {
             originalQueue = newOrder.toList()
         }
-        listeners.forEach { it.onQueueChanged(queue.toList()) }
+        notifyQueueChanged()
     }
 
     /**
@@ -963,18 +980,14 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 listeners.forEach {
                     try {
                         it.onTrackChanged(null)
-                        it.onQueueChanged(emptyList())
                         it.onPlaybackStateChanged(false)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
                 }
+                notifyQueueCleared()
             } else {
-                listeners.forEach {
-                    try {
-                        it.onQueueChanged(emptyList())
-                    } catch (e: Exception) {}
-                }
+                notifyQueueCleared()
             }
             return
         }
@@ -984,7 +997,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         if (isExternalSongActive) {
             originalQueue = newSongs.toList()
             queue = newSongs.toMutableList()
-            listeners.forEach { it.onQueueChanged(queue.toList()) }
+            notifyQueueChanged()
             return
         }
 
@@ -1016,13 +1029,13 @@ class PlaybackService : MediaBrowserServiceCompat() {
                         currentIndex = queue.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
                     }
                 }
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
             } else {
                 // Currently playing song was deleted/removed from folder
                 originalQueue = newSongs.toList()
                 queue = newSongs.toMutableList()
                 currentIndex = 0
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
                 val nextSong = queue.firstOrNull()
                 if (nextSong != null) {
                     prepareWithoutPlaying(nextSong)
@@ -1033,16 +1046,18 @@ class PlaybackService : MediaBrowserServiceCompat() {
             originalQueue = newSongs.toList()
             queue = newSongs.toMutableList()
             currentIndex = -1
-            listeners.forEach { it.onQueueChanged(queue.toList()) }
+            notifyQueueChanged()
         }
     }
 
-    private fun prepareWithoutPlaying(song: Song) {
+    private fun prepareWithoutPlaying(song: Song, startPositionMs: Long = 0L) {
         currentSong = song
         updateAudioInfoForSong(song)
         listeners.forEach { it.onTrackChanged(song) }
         serviceScope.launch {
-            currentAlbumArt = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            val art = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
+            currentAlbumArt = art
+            updateMediaMetadata(song, song.duration, art)
         }
         try {
             val p = player ?: return
@@ -1050,9 +1065,190 @@ class PlaybackService : MediaBrowserServiceCompat() {
             if (song.contentUri != Uri.EMPTY) {
                 val mediaItem = MediaItem.fromUri(song.contentUri)
                 p.setMediaItem(mediaItem)
+                if (startPositionMs > 0L) {
+                    p.seekTo(startPositionMs)
+                }
                 p.prepare()
-                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, 0L, isPlaying = false)
+                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, startPositionMs)
+                listeners.forEach {
+                    it.onProgressUpdate(startPositionMs.toInt(), song.duration.toInt())
+                    it.onPlaybackStateChanged(false)
+                }
+                xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext).broadcastPlay(song, startPositionMs, isPlaying = false)
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun notifyQueueChanged() {
+        val snapshot = queue.toList()
+        listeners.forEach { it.onQueueChanged(snapshot) }
+        saveRecentQueueAsync(snapshot)
+        saveRecentPlaybackState(savePosition = false)
+    }
+
+    private fun notifyQueueCleared() {
+        listeners.forEach { it.onQueueChanged(emptyList()) }
+        saveRecentQueueAsync(emptyList())
+        saveRecentPlaybackState(savePosition = false)
+    }
+
+    private fun songToJson(song: Song): JSONObject {
+        return JSONObject().apply {
+            put("id", song.id)
+            put("title", song.title)
+            put("artist", song.artist)
+            put("album", song.album)
+            put("duration", song.duration)
+            put("contentUri", song.contentUri.toString())
+            put("albumArtUri", song.albumArtUri?.toString() ?: "")
+            put("format", song.format)
+            put("filePath", song.filePath)
+            put("fileSize", song.fileSize)
+            put("audioQuality", song.audioQuality)
+            put("isHiRes", song.isHiRes)
+            put("dateModified", song.dateModified)
+            put("folderName", song.folderName)
+        }
+    }
+
+    private fun songFromJson(json: JSONObject): Song? {
+        return try {
+            val uriStr = json.optString("contentUri")
+            val artStr = json.optString("albumArtUri")
+            Song(
+                id = json.optLong("id"),
+                title = json.optString("title"),
+                artist = json.optString("artist"),
+                album = json.optString("album"),
+                duration = json.optLong("duration"),
+                contentUri = if (uriStr.isNotEmpty()) Uri.parse(uriStr) else Uri.EMPTY,
+                albumArtUri = if (artStr.isNotEmpty()) Uri.parse(artStr) else null,
+                format = json.optString("format", "MP3"),
+                filePath = json.optString("filePath"),
+                fileSize = json.optLong("fileSize"),
+                audioQuality = json.optString("audioQuality"),
+                isHiRes = json.optBoolean("isHiRes", false),
+                dateModified = json.optLong("dateModified"),
+                folderName = json.optString("folderName")
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun saveRecentQueueAsync(songsToSave: List<Song>) {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(filesDir, RECENT_QUEUE_FILE_NAME)
+                val tempFile = File(filesDir, "$RECENT_QUEUE_FILE_NAME.tmp")
+                val array = JSONArray()
+                songsToSave.forEach { song ->
+                    array.put(songToJson(song))
+                }
+                tempFile.writeText(array.toString())
+                if (tempFile.exists()) {
+                    tempFile.renameTo(file)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun saveRecentPlaybackState(savePosition: Boolean = true) {
+        val song = currentSong ?: return
+        val pos = if (savePosition) getCurrentPosition().toLong().coerceAtLeast(0L) else 0L
+        try {
+            val prefs = getSharedPreferences(PREFS_RECENT_PLAYBACK, Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putString(KEY_RECENT_SONG_JSON, songToJson(song).toString())
+                if (savePosition) {
+                    putLong(KEY_RECENT_POSITION_MS, pos)
+                }
+                putInt(KEY_RECENT_INDEX, currentIndex)
+                putBoolean(KEY_RECENT_SHUFFLE, isShuffleEnabled)
+                putInt(KEY_RECENT_REPEAT, repeatMode)
+                apply()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveRecentPlaybackStateSync() {
+        try {
+            val song = currentSong
+            if (song != null) {
+                val pos = getCurrentPosition().toLong().coerceAtLeast(0L)
+                val prefs = getSharedPreferences(PREFS_RECENT_PLAYBACK, Context.MODE_PRIVATE)
+                prefs.edit().apply {
+                    putString(KEY_RECENT_SONG_JSON, songToJson(song).toString())
+                    putLong(KEY_RECENT_POSITION_MS, pos)
+                    putInt(KEY_RECENT_INDEX, currentIndex)
+                    putBoolean(KEY_RECENT_SHUFFLE, isShuffleEnabled)
+                    putInt(KEY_RECENT_REPEAT, repeatMode)
+                    commit()
+                }
+            }
+            if (queue.isNotEmpty()) {
+                val file = File(filesDir, RECENT_QUEUE_FILE_NAME)
+                val tempFile = File(filesDir, "$RECENT_QUEUE_FILE_NAME.tmp")
+                val array = JSONArray()
+                queue.forEach { s -> array.put(songToJson(s)) }
+                tempFile.writeText(array.toString())
+                if (tempFile.exists()) {
+                    tempFile.renameTo(file)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun restoreRecentPlaybackState() {
+        if (queue.isNotEmpty() || currentSong != null) return
+        try {
+            val prefs = getSharedPreferences(PREFS_RECENT_PLAYBACK, Context.MODE_PRIVATE)
+            val songJsonStr = prefs.getString(KEY_RECENT_SONG_JSON, null) ?: return
+            val savedSong = songFromJson(JSONObject(songJsonStr)) ?: return
+            val savedPositionMs = prefs.getLong(KEY_RECENT_POSITION_MS, 0L).coerceAtLeast(0L)
+            val savedIndex = prefs.getInt(KEY_RECENT_INDEX, 0)
+            isShuffleEnabled = prefs.getBoolean(KEY_RECENT_SHUFFLE, false)
+            repeatMode = prefs.getInt(KEY_RECENT_REPEAT, REPEAT_ALL)
+
+            val queueFile = File(filesDir, RECENT_QUEUE_FILE_NAME)
+            val restoredQueue = if (queueFile.exists()) {
+                val text = queueFile.readText()
+                val array = JSONArray(text)
+                val list = mutableListOf<Song>()
+                for (i in 0 until array.length()) {
+                    val obj = array.optJSONObject(i) ?: continue
+                    songFromJson(obj)?.let { list.add(it) }
+                }
+                list
+            } else {
+                emptyList()
+            }
+
+            val finalQueue = if (restoredQueue.isNotEmpty()) {
+                restoredQueue
+            } else {
+                listOf(savedSong)
+            }
+
+            originalQueue = finalQueue.toList()
+            queue = finalQueue.toMutableList()
+            currentIndex = if (savedIndex in queue.indices && queue[savedIndex].id == savedSong.id) {
+                savedIndex
+            } else {
+                val idx = queue.indexOfFirst { it.id == savedSong.id }
+                if (idx != -1) idx else savedIndex.coerceIn(0, queue.size - 1)
+            }
+
+            val targetSong = if (currentIndex in queue.indices) queue[currentIndex] else savedSong
+            prepareWithoutPlaying(targetSong, savedPositionMs)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1076,6 +1272,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         updateAudioInfoForSong(song)
         listeners.forEach { it.onTrackChanged(song) }
         updateMediaMetadata(song)
+        saveRecentPlaybackState(savePosition = false)
 
         serviceScope.launch {
             val art = AlbumArtLoader.loadAlbumArt(this@PlaybackService, song)
@@ -1324,6 +1521,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 it.pause()
                 val pos = getCurrentPosition().toLong()
                 stopProgressTracker()
+                saveRecentPlaybackState(savePosition = true)
                 updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, pos)
                 updateNotification(isPlaying = false)
                 listeners.forEach { l -> l.onPlaybackStateChanged(false) }
@@ -1395,7 +1593,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 currentIndex = 0
                 val nextSong = queue[0]
                 playSong(nextSong, startPlaying = wasPlaying, allowCrossfade = allowCrossfade)
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
             } else {
                 currentSong?.let { playSong(it, startPlaying = wasPlaying, allowCrossfade = allowCrossfade) }
             }
@@ -1468,7 +1666,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 queue.add(0, prev)
                 currentIndex = 0
                 playSong(prev, startPlaying = wasPlaying, allowCrossfade = false)
-                listeners.forEach { it.onQueueChanged(queue.toList()) }
+                notifyQueueChanged()
             } else {
                 seekTo(0)
             }
@@ -1529,6 +1727,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
             cancelAndResetCrossfade()
             if (currentSong != null && currentSong?.contentUri != Uri.EMPTY) {
                 player?.seekTo(positionMs.toLong())
+                saveRecentPlaybackState(savePosition = true)
             }
             val state = if (isPlaying()) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             updatePlaybackState(state, positionMs.toLong())
@@ -1583,8 +1782,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
         }
         listeners.forEach {
             it.onShuffleModeChanged(isShuffleEnabled)
-            it.onQueueChanged(queue.toList())
         }
+        notifyQueueChanged()
     }
 
     fun cycleRepeatMode() {
@@ -1600,6 +1799,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         progressJob?.cancel()
         progressJob = serviceScope.launch {
             var lastStateSync = 0L
+            var lastPositionSave = 0L
             var crossfadeTriggered = false
             while (isActive) {
                 val current = getCurrentPosition()
@@ -1611,6 +1811,11 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 if (now - lastStateSync >= 1000L) {
                     lastStateSync = now
                     updatePlaybackState(PlaybackStateCompat.STATE_PLAYING, current.toLong())
+                }
+
+                if (now - lastPositionSave >= 2500L) {
+                    lastPositionSave = now
+                    saveRecentPlaybackState(savePosition = true)
                 }
 
                 val prefs = getSharedPreferences(xyz.omniplay.ui.MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
@@ -1791,7 +1996,13 @@ class PlaybackService : MediaBrowserServiceCompat() {
         return binder
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        saveRecentPlaybackStateSync()
+    }
+
     override fun onDestroy() {
+        saveRecentPlaybackStateSync()
         try {
             loudnessEnhancer?.release()
             loudnessEnhancer = null

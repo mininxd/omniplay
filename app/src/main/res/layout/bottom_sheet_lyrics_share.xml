@@ -59,6 +59,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:layout_marginBottom="12dp"
+                android:paddingBottom="2dp"
                 android:gravity="center"
                 android:orientation="horizontal">
 
@@ -66,6 +67,7 @@
                     android:id="@+id/lyrics_share_image_preview"
                     android:layout_width="200dp"
                     android:layout_height="wrap_content"
+                    android:paddingBottom="2dp"
                     android:adjustViewBounds="true"
                     android:contentDescription="@string/lyrics_image_preview_description"
                     android:scaleType="fitCenter" />
@@ -248,48 +250,48 @@
                             app:singleSelection="true">
 
                             <com.google.android.material.chip.Chip
-                                android:id="@+id/lyrics_theme_material"
+                                android:id="@+id/lyrics_style_editorial"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:checkable="true"
-                                android:text="@string/lyrics_theme_material"
+                                android:text="@string/lyrics_style_editorial"
                                 app:chipCornerRadius="16dp" />
 
                             <com.google.android.material.chip.Chip
-                                android:id="@+id/lyrics_theme_midnight"
+                                android:id="@+id/lyrics_style_quote"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:checkable="true"
-                                android:text="@string/lyrics_theme_midnight"
+                                android:text="@string/lyrics_style_quote"
                                 app:chipCornerRadius="16dp" />
 
                             <com.google.android.material.chip.Chip
-                                android:id="@+id/lyrics_theme_sunset"
+                                android:id="@+id/lyrics_style_studio"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:checkable="true"
-                                android:text="@string/lyrics_theme_sunset"
+                                android:text="@string/lyrics_style_studio"
                                 app:chipCornerRadius="16dp" />
 
                             <com.google.android.material.chip.Chip
-                                android:id="@+id/lyrics_theme_forest"
+                                android:id="@+id/lyrics_style_minimalist"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:checkable="true"
-                                android:text="@string/lyrics_theme_forest"
+                                android:text="@string/lyrics_style_minimalist"
                                 app:chipCornerRadius="16dp" />
 
                             <com.google.android.material.chip.Chip
-                                android:id="@+id/lyrics_theme_paper"
+                                android:id="@+id/lyrics_style_atmospheric"
                                 style="@style/Widget.Material3.Chip.Filter"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:checkable="true"
-                                android:text="@string/lyrics_theme_paper"
+                                android:text="@string/lyrics_style_atmospheric"
                                 app:chipCornerRadius="16dp" />
                         </com.google.android.material.chip.ChipGroup>
                     </HorizontalScrollView>

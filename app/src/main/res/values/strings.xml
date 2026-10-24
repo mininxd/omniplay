@@ -185,11 +185,11 @@
     <string name="lyrics_include_progress">Playback progress</string>
     <string name="lyrics_include_badge">OmniPlay badge</string>
     <string name="lyrics_theme_desc">Preview your lyric card</string>
-    <string name="lyrics_theme_material">Material You</string>
-    <string name="lyrics_theme_midnight">Midnight</string>
-    <string name="lyrics_theme_sunset">Sunset</string>
-    <string name="lyrics_theme_forest">Forest</string>
-    <string name="lyrics_theme_paper">Paper</string>
+    <string name="lyrics_style_editorial">Editorial</string>
+    <string name="lyrics_style_quote">Quote</string>
+    <string name="lyrics_style_studio">Studio</string>
+    <string name="lyrics_style_minimalist">Minimalist</string>
+    <string name="lyrics_style_atmospheric">Atmospheric</string>
     <string name="lyrics_save_image">Save image</string>
     <string name="lyrics_share_chooser">Share lyrics</string>
     <string name="lyrics_share_copy_text">Copy text</string>
@@ -203,7 +203,7 @@
     <string name="lyrics_share_corners">Corner rounding</string>
     <string name="lyrics_share_corners_value">%1$d px</string>
     <string name="lyrics_share_section_style">Dimensions &amp; Typography</string>
-    <string name="lyrics_share_section_theme">Color Theme</string>
+    <string name="lyrics_share_section_theme">Lyric Theme</string>
     <string name="lyrics_share_section_content">Content Elements</string>
     <string name="lyrics_image_permission_denied">Storage permission is needed to save the image</string>
     <string name="lyrics_image_preview_description">Preview of the lyric share image</string>

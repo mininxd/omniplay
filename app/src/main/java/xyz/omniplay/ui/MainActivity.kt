@@ -69,6 +69,9 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         const val KEY_UNIVERSAL_SEARCH = "key_universal_search"
         const val KEY_IGNORE_SHORT_AUDIO = "key_ignore_short_audio"
         const val KEY_VOLUME_NORMALIZATION = "key_volume_normalization"
+        const val KEY_ACTIVE_QUEUE_TITLE = "key_active_queue_title"
+        const val KEY_ACTIVE_FILTER_VALUE = "key_active_filter_value"
+        const val KEY_ACTIVE_FILTER_MODE = "key_active_filter_mode"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -194,6 +197,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 drawerFilterController.activeOngoingQueue = serviceQueue
                 songAdapter?.setSongs(serviceQueue)
                 binding.songCountText.text = "${serviceQueue.size} songs"
+                updateSheetTitle()
             } else {
                 val currentQueueList = displayedSongs.ifEmpty { scannedSongs }
                 if (currentQueueList.isNotEmpty()) {
@@ -206,7 +210,14 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             }
 
             if (playbackService?.currentSong != null) {
-                updateAudioBadges(playbackService?.currentSong, playbackService?.currentAudioInfo)
+                val s = playbackService!!.currentSong
+                updateAudioBadges(s, playbackService?.currentAudioInfo)
+                onTrackChanged(s)
+                val pos = playbackService?.getCurrentPosition() ?: 0
+                val dur = playbackService?.getDuration() ?: 0
+                if (pos > 0) {
+                    onProgressUpdate(pos, if (dur > 0) dur else (s?.duration?.toInt() ?: 0))
+                }
             }
         }
 
@@ -415,6 +426,20 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             onSkipPrevious = { playbackService?.skipPrevious(forcePrevious = true) },
             onAlbumArtTap = { playlistPanelController.expand() }
         )
+
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val savedQueueTitle = prefs.getString(KEY_ACTIVE_QUEUE_TITLE, null)
+        val savedFilterVal = prefs.getString(KEY_ACTIVE_FILTER_VALUE, null)
+        val savedFilterModeOrdinal = prefs.getInt(KEY_ACTIVE_FILTER_MODE, -1)
+        if (!savedQueueTitle.isNullOrEmpty()) {
+            drawerFilterController.activeOngoingQueueTitle = savedQueueTitle
+        }
+        if (!savedFilterVal.isNullOrEmpty()) {
+            drawerFilterController.selectedFilterValue = savedFilterVal
+        }
+        if (savedFilterModeOrdinal in LibraryFilterMode.values().indices) {
+            drawerFilterController.currentFilterMode = LibraryFilterMode.values()[savedFilterModeOrdinal]
+        }
     }
 
     private fun checkForUpdatesOnStart() {
@@ -1329,7 +1354,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         allScannedSongs = filtered
         scannedSongs = filtered
-        if (drawerFilterController.activeOngoingQueue.isEmpty() || drawerFilterController.activeOngoingQueueTitle == null) {
+        val serviceQueue = playbackService?.queue
+        if (serviceQueue?.isNotEmpty() == true) {
+            drawerFilterController.activeOngoingQueue = serviceQueue.toList()
+        } else if (drawerFilterController.activeOngoingQueue.isEmpty() || drawerFilterController.activeOngoingQueueTitle == null) {
             drawerFilterController.activeOngoingQueue = filtered
         } else {
             val validSongIds = filtered.map { it.id }.toSet()
@@ -2004,6 +2032,19 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         override fun onHostsDiscovered(hosts: List<xyz.omniplay.sync.OmniSyncHost>) {}
         override fun onPeersChanged(peers: List<xyz.omniplay.sync.OmniSyncPeer>) {}
         override fun onError(message: String) {}
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::drawerFilterController.isInitialized) {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putString(KEY_ACTIVE_QUEUE_TITLE, drawerFilterController.activeOngoingQueueTitle)
+                putString(KEY_ACTIVE_FILTER_VALUE, drawerFilterController.selectedFilterValue)
+                putInt(KEY_ACTIVE_FILTER_MODE, drawerFilterController.currentFilterMode.ordinal)
+                apply()
+            }
+        }
     }
 
     override fun onDestroy() {
