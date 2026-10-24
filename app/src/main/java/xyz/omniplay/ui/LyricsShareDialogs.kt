@@ -90,6 +90,11 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             customPositionMs = requireArguments().getLong(ARG_POSITION_MS).coerceIn(0L, durationMs)
         }
 
+        val previewWidth = (resources.displayMetrics.widthPixels * 0.50f).toInt()
+        binding.lyricsShareImagePreview.layoutParams = binding.lyricsShareImagePreview.layoutParams.apply {
+            width = previewWidth
+        }
+
         binding.lyricsShareTrack.text = listOf(title, artist)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
@@ -405,15 +410,17 @@ private object LyricsShareImageRenderer {
             }
             val progressX = progressStart + (progressEnd - progressStart) * progress
 
-            // Background inactive track
+            // 1. Draw Inactive Track (straight line ONLY from progressX to progressEnd, like SquigglySeekBar)
             val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.track
                 strokeWidth = 10f
                 strokeCap = Paint.Cap.ROUND
             }
-            canvas.drawLine(progressStart, progressY, progressEnd, progressY, trackPaint)
+            if (progressX < progressEnd) {
+                canvas.drawLine(progressX, progressY, progressEnd, progressY, trackPaint)
+            }
 
-            // Dynamic sine wave for played progress
+            // 2. Draw Active Track (Squiggly wave with smooth ramp-in/ramp-out from progressStart to progressX)
             val playedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = palette.accent
                 style = Paint.Style.STROKE
@@ -422,26 +429,36 @@ private object LyricsShareImageRenderer {
                 strokeJoin = Paint.Join.ROUND
             }
             if (progressX > progressStart + 2f) {
-                val wave = Path().apply {
+                val wavePath = Path().apply {
+                    moveTo(progressStart, progressY)
                     var x = progressStart
-                    moveTo(x, progressY)
-                    while (x < progressX) {
-                        x = (x + 3f).coerceAtMost(progressX)
-                        val angle = ((x - progressStart) / WAVE_LENGTH) * (Math.PI * 2.0).toFloat()
-                        lineTo(x, progressY + WAVE_AMPLITUDE * kotlin.math.sin(angle.toDouble()).toFloat())
+                    val step = 3f
+                    while (x <= progressX) {
+                        val relX = x - progressStart
+                        val rampIn = kotlin.math.min(1f, relX / (WAVE_LENGTH * 0.75f))
+                        val rampOut = kotlin.math.min(1f, (progressX - x) / (WAVE_LENGTH * 0.75f))
+                        val ramp = kotlin.math.min(rampIn, rampOut)
+
+                        val effectiveAmp = WAVE_AMPLITUDE * ramp
+                        val angle = (relX / WAVE_LENGTH) * (2.0 * Math.PI).toFloat()
+                        val y = progressY + effectiveAmp * kotlin.math.sin(angle.toDouble()).toFloat()
+
+                        lineTo(x, y)
+                        x += step
                     }
+                    lineTo(progressX, progressY)
                 }
-                canvas.drawPath(wave, playedPaint)
+                canvas.drawPath(wavePath, playedPaint)
             }
 
-            // Glow ring + thumb dot
-            val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            // 3. Draw Thumb (glowing halo + solid thumb dot at progressX, progressY)
+            val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.argb(45, Color.red(palette.accent), Color.green(palette.accent), Color.blue(palette.accent))
             }
-            canvas.drawCircle(progressX, progressY, 28f, glowPaint)
-            canvas.drawCircle(progressX, progressY, 16f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent })
+            canvas.drawCircle(progressX, progressY, 26f, haloPaint)
+            canvas.drawCircle(progressX, progressY, 15f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent })
 
-            // Duration labels
+            // 4. Duration labels
             val timePaint = textPaint(palette.muted, 32f, Typeface.NORMAL, Paint.Align.LEFT)
             val elapsed = Song.formatTime(safePositionMs)
             canvas.drawText(elapsed, progressStart, height - 36f, timePaint)
@@ -508,26 +525,26 @@ private object LyricsShareImageRenderer {
 
         return when (theme) {
             THEME_MIDNIGHT -> Palette(
-                background = Color.rgb(10, 10, 15),
+                background = Color.rgb(20, 22, 34),
                 foreground = Color.rgb(244, 244, 248),
                 muted = Color.rgb(157, 157, 174),
-                track = Color.rgb(36, 34, 54),
+                track = Color.rgb(46, 44, 70),
                 accent = Color.rgb(167, 139, 250), // Luminous Violet
                 topGradientTint = Color.argb(40, 167, 139, 250)
             )
             THEME_SUNSET -> Palette(
-                background = Color.rgb(18, 9, 12),
+                background = Color.rgb(36, 18, 26),
                 foreground = Color.rgb(255, 241, 242),
                 muted = Color.rgb(184, 156, 158),
-                track = Color.rgb(51, 27, 34),
+                track = Color.rgb(72, 38, 50),
                 accent = Color.rgb(251, 113, 133), // Coral Rose
                 topGradientTint = Color.argb(45, 251, 113, 133)
             )
             THEME_FOREST -> Palette(
-                background = Color.rgb(8, 18, 13),
+                background = Color.rgb(18, 32, 24),
                 foreground = Color.rgb(236, 253, 245),
                 muted = Color.rgb(148, 168, 157),
-                track = Color.rgb(23, 51, 37),
+                track = Color.rgb(36, 68, 50),
                 accent = Color.rgb(52, 211, 153), // Radiant Emerald Mint
                 topGradientTint = Color.argb(40, 52, 211, 153)
             )
@@ -540,12 +557,12 @@ private object LyricsShareImageRenderer {
                 topGradientTint = Color.argb(20, 59, 94, 67)
             )
             else -> Palette(
-                background = Color.rgb(14, 18, 16),
-                foreground = Color.rgb(241, 245, 242),
-                muted = Color.rgb(161, 171, 164),
-                track = Color.rgb(40, 51, 44),
+                background = ThemeColors.getSurfaceContainerHigh(context),
+                foreground = ThemeColors.getOnSurface(context),
+                muted = ThemeColors.getOnSurfaceVariant(context),
+                track = ThemeColors.getSurfaceContainerHighest(context),
                 accent = primaryColor,
-                topGradientTint = Color.argb(50, Color.red(primaryColor), Color.green(primaryColor), Color.blue(primaryColor))
+                topGradientTint = Color.argb(35, Color.red(primaryColor), Color.green(primaryColor), Color.blue(primaryColor))
             )
         }
     }
