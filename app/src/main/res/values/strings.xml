@@ -177,8 +177,9 @@
     <string name="lyrics_share_button">Share</string>
     <string name="lyrics_choose_theme">Choose a theme</string>
     <string name="lyrics_share_font_size">Lyrics size</string>
-    <string name="lyrics_share_font_size_value">%1$d%%</string>
+    <string name="lyrics_share_font_size_value">%1$d px</string>
     <string name="lyrics_share_details">Show on card</string>
+    <string name="lyrics_share_progress_time">Progress position</string>
     <string name="lyrics_include_title">Song title</string>
     <string name="lyrics_include_artist">Artist</string>
     <string name="lyrics_include_progress">Playback progress</string>

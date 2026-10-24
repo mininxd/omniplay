@@ -23,6 +23,7 @@ import android.os.Environment
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -43,7 +44,8 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
     private var _binding: BottomSheetLyricsShareBinding? = null
     private val binding get() = _binding!!
     private var selectedTheme = LyricsShareImageRenderer.THEME_MATERIAL
-    private var lyricsScalePercent = DEFAULT_LYRICS_SCALE_PERCENT
+    private var lyricsFontSizePx = DEFAULT_LYRICS_FONT_SIZE_PX
+    private var customPositionMs = -1L
     private var showTitle = true
     private var showArtist = true
     private var showProgress = true
@@ -74,15 +76,19 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         inflater: android.view.LayoutInflater,
         container: android.view.ViewGroup?,
         savedInstanceState: Bundle?
-    ): android.view.View {
+    ): View {
         _binding = BottomSheetLyricsShareBinding.inflate(inflater, container, false)
         return binding.root
     }
 
-    override fun onViewCreated(view: android.view.View, savedInstanceState: Bundle?) {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val title = requireArguments().getString(ARG_TITLE).orEmpty()
         val artist = requireArguments().getString(ARG_ARTIST).orEmpty()
+        val durationMs = requireArguments().getLong(ARG_DURATION_MS).coerceAtLeast(1000L)
+        if (customPositionMs < 0L) {
+            customPositionMs = requireArguments().getLong(ARG_POSITION_MS).coerceIn(0L, durationMs)
+        }
 
         binding.lyricsShareTrack.text = listOf(title, artist)
             .filter { it.isNotBlank() }
@@ -100,11 +106,17 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
             renderPreview()
         }
 
-        binding.lyricsShareFontSize.value = lyricsScalePercent.toFloat()
-        binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsScalePercent)
+        binding.lyricsShareFontSize.valueFrom = MIN_LYRICS_FONT_SIZE_PX.toFloat()
+        binding.lyricsShareFontSize.valueTo = MAX_LYRICS_FONT_SIZE_PX.toFloat()
+        binding.lyricsShareFontSize.stepSize = 4f
+        binding.lyricsShareFontSize.value = lyricsFontSizePx.toFloat().coerceIn(
+            MIN_LYRICS_FONT_SIZE_PX.toFloat(),
+            MAX_LYRICS_FONT_SIZE_PX.toFloat()
+        )
+        binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsFontSizePx)
         binding.lyricsShareFontSize.addOnChangeListener { _, value, _ ->
-            lyricsScalePercent = value.toInt().coerceIn(MIN_LYRICS_SCALE_PERCENT, MAX_LYRICS_SCALE_PERCENT)
-            binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsScalePercent)
+            lyricsFontSizePx = value.toInt().coerceIn(MIN_LYRICS_FONT_SIZE_PX, MAX_LYRICS_FONT_SIZE_PX)
+            binding.lyricsShareFontSizeValue.text = getString(R.string.lyrics_share_font_size_value, lyricsFontSizePx)
             renderPreview()
         }
 
@@ -123,12 +135,25 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         binding.lyricsShareIncludeProgress.isChecked = showProgress
         binding.lyricsShareIncludeProgress.setOnCheckedChangeListener { _, checked ->
             showProgress = checked
+            binding.lyricsShareProgressLayout.visibility = if (checked) View.VISIBLE else View.GONE
             renderPreview()
         }
 
         binding.lyricsShareIncludeBadge.isChecked = showBadge
         binding.lyricsShareIncludeBadge.setOnCheckedChangeListener { _, checked ->
             showBadge = checked
+            renderPreview()
+        }
+
+        // Progress customization slider
+        binding.lyricsShareProgressLayout.visibility = if (showProgress) View.VISIBLE else View.GONE
+        binding.lyricsShareProgressSlider.valueFrom = 0f
+        binding.lyricsShareProgressSlider.valueTo = durationMs.toFloat()
+        binding.lyricsShareProgressSlider.value = customPositionMs.toFloat().coerceIn(0f, durationMs.toFloat())
+        binding.lyricsShareProgressTimeValue.text = "${Song.formatTime(customPositionMs)} / ${Song.formatTime(durationMs)}"
+        binding.lyricsShareProgressSlider.addOnChangeListener { _, value, _ ->
+            customPositionMs = value.toLong()
+            binding.lyricsShareProgressTimeValue.text = "${Song.formatTime(customPositionMs)} / ${Song.formatTime(durationMs)}"
             renderPreview()
         }
 
@@ -146,13 +171,15 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
 
     private fun renderPreview() {
         val lines = requireArguments().getStringArrayList(ARG_LINES).orEmpty()
+        val durationMs = requireArguments().getLong(ARG_DURATION_MS).coerceAtLeast(1000L)
+        val posMs = if (customPositionMs >= 0L) customPositionMs else requireArguments().getLong(ARG_POSITION_MS)
         renderedBitmap = LyricsShareImageRenderer.render(
             requireContext(),
             lines,
             selectedTheme,
-            requireArguments().getLong(ARG_POSITION_MS),
-            requireArguments().getLong(ARG_DURATION_MS),
-            lyricsScalePercent,
+            posMs,
+            durationMs,
+            lyricsFontSizePx,
             if (showTitle) requireArguments().getString(ARG_TITLE).orEmpty() else "",
             if (showArtist) requireArguments().getString(ARG_ARTIST).orEmpty() else "",
             showProgress,
@@ -227,9 +254,9 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         private const val ARG_LINES = "lines"
         private const val ARG_POSITION_MS = "position_ms"
         private const val ARG_DURATION_MS = "duration_ms"
-        private const val DEFAULT_LYRICS_SCALE_PERCENT = 100
-        private const val MIN_LYRICS_SCALE_PERCENT = 80
-        private const val MAX_LYRICS_SCALE_PERCENT = 140
+        private const val DEFAULT_LYRICS_FONT_SIZE_PX = 120
+        private const val MIN_LYRICS_FONT_SIZE_PX = 60
+        private const val MAX_LYRICS_FONT_SIZE_PX = 200
 
         fun newInstance(
             title: String,
@@ -263,7 +290,7 @@ private object LyricsShareImageRenderer {
         theme: Int,
         positionMs: Long,
         durationMs: Long,
-        lyricsScalePercent: Int,
+        lyricsFontSizePx: Int,
         title: String,
         artist: String,
         showProgress: Boolean,
@@ -277,7 +304,7 @@ private object LyricsShareImageRenderer {
 
         val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = palette.foreground
-            textSize = 124f * lyricsScalePercent.coerceIn(80, 140) / 100f
+            textSize = lyricsFontSizePx.toFloat().coerceIn(40f, 240f)
             typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
             letterSpacing = -0.02f
         }

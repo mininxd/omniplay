@@ -50,17 +50,13 @@
             android:orientation="vertical"
             android:paddingBottom="16dp">
 
-            <!-- Expressive Card Preview Container -->
-            <com.google.android.material.card.MaterialCardView
+            <!-- Card Preview Container without rounded corners -->
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:layout_marginBottom="14dp"
-                app:cardBackgroundColor="?attr/colorSurfaceContainerLowest"
-                app:cardCornerRadius="24dp"
-                app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutlineVariant"
-                app:strokeWidth="1dp">
+                android:layout_marginBottom="12dp"
+                android:background="?attr/colorSurfaceContainerLowest">
 
                 <ImageView
                     android:id="@+id/lyrics_share_image_preview"
@@ -71,9 +67,8 @@
                     android:contentDescription="@string/lyrics_image_preview_description"
                     android:maxHeight="320dp"
                     android:minHeight="180dp"
-                    android:padding="8dp"
                     android:scaleType="fitCenter" />
-            </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <!-- Theme Picker -->
             <TextView
@@ -148,7 +143,7 @@
                 </com.google.android.material.chip.ChipGroup>
             </HorizontalScrollView>
 
-            <!-- Font Size -->
+            <!-- Font Size in PX -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -179,17 +174,17 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:stepSize="5"
-                android:value="100"
-                android:valueFrom="80"
-                android:valueTo="140"
+                android:stepSize="4"
+                android:value="120"
+                android:valueFrom="60"
+                android:valueTo="200"
                 app:tickVisible="false" />
 
-            <!-- Card Elements (Filter Chips instead of checkboxes) -->
+            <!-- Card Elements (with tight top margin) -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="2dp"
                 android:fontFamily="sans-serif-medium"
                 android:text="@string/lyrics_share_details"
                 android:textColor="?attr/colorOnSurface"
@@ -199,7 +194,9 @@
                 android:id="@+id/lyrics_share_elements_group"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
+                app:chipSpacingHorizontal="6dp"
+                app:chipSpacingVertical="4dp"
                 app:singleSelection="false">
 
                 <com.google.android.material.chip.Chip
@@ -240,6 +237,46 @@
                     android:text="@string/lyrics_include_badge"
                     app:chipCornerRadius="14dp" />
             </com.google.android.material.chip.ChipGroup>
+
+            <!-- Customizable Playback Progress Slider -->
+            <LinearLayout
+                android:id="@+id/lyrics_share_progress_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/lyrics_share_progress_time"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/lyrics_share_progress_time_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-medium"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/lyrics_share_progress_slider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    app:tickVisible="false" />
+            </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

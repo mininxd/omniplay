@@ -536,15 +536,31 @@ class LyricsController(
         if (!isLyricsShareSelectionMode || index !in lines.indices) return
 
         if (index !in lyricsShareSelectedLines) {
-            val anchor = if (lyricsShareAnchorIndex in lines.indices) lyricsShareAnchorIndex else index
-            lyricsShareAnchorIndex = anchor
-            val first = minOf(anchor, index)
-            val last = maxOf(anchor, index)
-            lyricsShareSelectedLines.clear()
-            for (i in first..last) {
-                lyricsShareSelectedLines.add(i)
+            if (lyricsShareSelectedLines.isEmpty()) {
+                lyricsShareAnchorIndex = index
+                lyricsShareActiveIndex = index
+                lyricsShareSelectedLines.add(index)
+            } else {
+                val minSelected = lyricsShareSelectedLines.first()
+                val maxSelected = lyricsShareSelectedLines.last()
+                val newStart = minOf(minSelected, index)
+                val newEnd = maxOf(maxSelected, index)
+
+                if (index < minSelected) {
+                    lyricsShareAnchorIndex = maxSelected
+                    lyricsShareActiveIndex = index
+                } else if (index > maxSelected) {
+                    lyricsShareAnchorIndex = minSelected
+                    lyricsShareActiveIndex = index
+                } else {
+                    lyricsShareActiveIndex = index
+                }
+
+                lyricsShareSelectedLines.clear()
+                for (i in newStart..newEnd) {
+                    lyricsShareSelectedLines.add(i)
+                }
             }
-            lyricsShareActiveIndex = index
         } else {
             if (lyricsShareSelectedLines.size <= 1) {
                 finishLyricsShareSelectionMode()
@@ -555,7 +571,7 @@ class LyricsController(
             val maxSelected = lyricsShareSelectedLines.last()
 
             if (lyricsShareAnchorIndex !in lyricsShareSelectedLines) {
-                lyricsShareAnchorIndex = minSelected
+                lyricsShareAnchorIndex = if (lyricsShareActiveIndex == maxSelected) minSelected else maxSelected
             }
 
             if (index == lyricsShareAnchorIndex) {
@@ -593,15 +609,31 @@ class LyricsController(
     private fun addLyricsShareSelection(index: Int) {
         val lines = getLyricsShareLines()
         if (!isLyricsShareSelectionMode || index !in lines.indices) return
-        val anchor = if (lyricsShareAnchorIndex in lines.indices) lyricsShareAnchorIndex else index
-        lyricsShareAnchorIndex = anchor
-        val first = minOf(anchor, index)
-        val last = maxOf(anchor, index)
-        lyricsShareSelectedLines.clear()
-        for (i in first..last) {
-            lyricsShareSelectedLines.add(i)
+        if (lyricsShareSelectedLines.isEmpty()) {
+            lyricsShareAnchorIndex = index
+            lyricsShareActiveIndex = index
+            lyricsShareSelectedLines.add(index)
+        } else {
+            val minSelected = lyricsShareSelectedLines.first()
+            val maxSelected = lyricsShareSelectedLines.last()
+            val newStart = minOf(minSelected, index)
+            val newEnd = maxOf(maxSelected, index)
+
+            if (index < minSelected) {
+                lyricsShareAnchorIndex = maxSelected
+                lyricsShareActiveIndex = index
+            } else if (index > maxSelected) {
+                lyricsShareAnchorIndex = minSelected
+                lyricsShareActiveIndex = index
+            } else {
+                lyricsShareActiveIndex = index
+            }
+
+            lyricsShareSelectedLines.clear()
+            for (i in newStart..newEnd) {
+                lyricsShareSelectedLines.add(i)
+            }
         }
-        lyricsShareActiveIndex = index
         lyricsShareLastDragIndex = index
         updateLyricsShareSelection()
     }
