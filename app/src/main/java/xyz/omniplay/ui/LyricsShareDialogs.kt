@@ -104,6 +104,7 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         binding.lyricsShareWidthSlider.valueFrom = LyricsShareImageRenderer.MIN_CARD_WIDTH_PX.toFloat()
         binding.lyricsShareWidthSlider.valueTo = LyricsShareImageRenderer.MAX_CARD_WIDTH_PX.toFloat()
         binding.lyricsShareWidthSlider.stepSize = 20f
+        binding.lyricsShareWidthSlider.setLabelFormatter { value -> "${value.toInt()} px" }
         binding.lyricsShareWidthSlider.value = cardWidthPx.toFloat().coerceIn(
             LyricsShareImageRenderer.MIN_CARD_WIDTH_PX.toFloat(),
             LyricsShareImageRenderer.MAX_CARD_WIDTH_PX.toFloat()
@@ -120,6 +121,7 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         binding.lyricsShareCornersSlider.valueFrom = LyricsShareImageRenderer.MIN_CORNER_RADIUS_PX
         binding.lyricsShareCornersSlider.valueTo = LyricsShareImageRenderer.MAX_CORNER_RADIUS_PX
         binding.lyricsShareCornersSlider.stepSize = 4f
+        binding.lyricsShareCornersSlider.setLabelFormatter { value -> "${value.toInt()} dp" }
         binding.lyricsShareCornersSlider.value = cornerRadiusPx.coerceIn(
             LyricsShareImageRenderer.MIN_CORNER_RADIUS_PX,
             LyricsShareImageRenderer.MAX_CORNER_RADIUS_PX
@@ -186,6 +188,9 @@ class LyricsShareThemeBottomSheet : BottomSheetDialogFragment() {
         binding.lyricsShareProgressLayout.visibility = if (showProgress) View.VISIBLE else View.GONE
         binding.lyricsShareProgressSlider.valueFrom = 0f
         binding.lyricsShareProgressSlider.valueTo = durationMs.toFloat()
+        binding.lyricsShareProgressSlider.setLabelFormatter { value ->
+            Song.formatTime(value.toLong())
+        }
         binding.lyricsShareProgressSlider.value = customPositionMs.toFloat().coerceIn(0f, durationMs.toFloat())
         binding.lyricsShareProgressTimeValue.text = "${Song.formatTime(customPositionMs)} / ${Song.formatTime(durationMs)}"
         binding.lyricsShareProgressSlider.addOnChangeListener { _, value, _ ->
@@ -411,7 +416,7 @@ private object LyricsShareImageRenderer {
         val lastContentBottomY = topPadding + quoteLayout.height + metadataHeight
         // Margin between artist/metadata and progress bar reduced by 40% (86f)
         val progressY = lastContentBottomY + 86f
-        val durationLabelsY = progressY + 44f
+        val durationLabelsY = progressY + 47f
         val contentEndHeight = if (showProgress) (durationLabelsY + 48f).toInt() else (lastContentBottomY + 72f).toInt()
         val height = maxOf(MIN_IMAGE_HEIGHT, contentEndHeight)
 

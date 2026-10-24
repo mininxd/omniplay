@@ -11,7 +11,7 @@
     <dimen name="album_name_text_size">13sp</dimen>
     <dimen name="playback_slider_height">38dp</dimen>
     <dimen name="playback_slider_margin_top">3dp</dimen>
-    <dimen name="time_margin_top">1dp</dimen>
+    <dimen name="time_margin_top">2dp</dimen>
     <dimen name="controls_margin_top">6dp</dimen>
     <dimen name="controls_margin_bottom">16dp</dimen>
 </resources>
