@@ -15,6 +15,7 @@ import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
+import android.view.HapticFeedbackConstants
 import android.view.Menu
 import android.view.View
 import android.view.inputmethod.EditorInfo
