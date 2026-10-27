@@ -56,3 +56,10 @@
 # Keep Media3 / ExoPlayer
 -keep class androidx.media3.** { *; }
 -dontwarn androidx.media3.**
+
+# Keep Rust Audio DSP Engine native methods and classes
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+-keep class xyz.omniplay.audio.RustAudioEngine { *; }
+

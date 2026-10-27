@@ -45,3 +45,10 @@
 # Strip debugging attributes
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
+
+# Keep Rust Audio DSP Engine native methods and classes
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+-keep class xyz.omniplay.equalizer.audio.RustAudioEngine { *; }
+
