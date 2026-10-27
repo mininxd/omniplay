@@ -1863,10 +1863,6 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         binding.btnEqualizer.setColorFilter(tint)
     }
 
-    private fun isOmniQualizerSupported(): Boolean {
-        return packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
-    }
-
     private val eqListener = object : xyz.omniplay.audio.EqualizerManager.EqualizerListener {
         override fun onEqualizerConfigChanged() {
             runOnUiThread {

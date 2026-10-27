@@ -157,7 +157,7 @@ class EqualizerManager private constructor(private val context: Context) {
         listeners.remove(listener)
     }
 
-    private fun notifyListeners() {
+    fun notifyListeners() {
         for (l in listeners) {
             try {
                 l.onEqualizerConfigChanged()

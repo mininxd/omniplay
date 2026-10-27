@@ -31,7 +31,7 @@ object ActiveSessionScanner {
     private var canUseDirectDumpsys: Boolean? = null
 
     @Volatile
-    private var canUseRootSu: Boolean? = null
+    internal var canUseRootSu: Boolean? = null
 
     /**
      * Extracts the real audio session ID from an AudioPlaybackConfiguration object.

@@ -17,6 +17,12 @@ class AudioSessionReceiver : BroadcastReceiver() {
         val action = intent?.action ?: return
         val eqManager = EqualizerManager.getInstance(context)
 
+        if (action == "xyz.omniplay.equalizer.action.REQUEST_SYNC") {
+            Log.d(TAG, "Received REQUEST_SYNC, broadcasting current OmniQualizer state")
+            eqManager.broadcastStereoEffects()
+            return
+        }
+
         if (action == "xyz.omniplay.equalizer.action.SYNC_EQ_STATE") {
             Log.d(TAG, "Received SYNC_EQ_STATE from OmniPlay")
             eqManager.isSyncingFromRemote = true
@@ -65,6 +71,7 @@ class AudioSessionReceiver : BroadcastReceiver() {
                 if (intent.hasExtra("le_gain_mb")) {
                     eqManager.setLoudnessEnhancerGainMb(intent.getIntExtra("le_gain_mb", 0))
                 }
+                eqManager.notifyListeners()
             } finally {
                 eqManager.isSyncingFromRemote = false
             }

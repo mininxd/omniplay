@@ -120,7 +120,70 @@ class EqualizerManager private constructor(private val context: Context) {
         } catch (_: Throwable) {}
     }
 
-    private fun notifyListeners() {
+    fun requestOmniQualizerSync() {
+        try {
+            val reqIntent = Intent("xyz.omniplay.equalizer.action.REQUEST_SYNC").apply {
+                setPackage("xyz.omniplay.equalizer")
+                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            }
+            context.sendBroadcast(reqIntent)
+        } catch (_: Throwable) {}
+    }
+
+    fun applySyncIntent(intent: Intent) {
+        isSyncingFromRemote = true
+        try {
+            if (intent.hasExtra("master_enabled")) {
+                val enabled = intent.getBooleanExtra("master_enabled", isEnabled())
+                if (isEnabled() != enabled) {
+                    setEnabled(enabled)
+                }
+            }
+            if (intent.hasExtra("preset_index")) {
+                applyPreset(intent.getIntExtra("preset_index", 0))
+            }
+            if (intent.hasExtra("dax_bands")) {
+                val bands = intent.getIntArrayExtra("dax_bands")
+                if (bands != null && bands.size == 10) {
+                    for (i in 0 until 10) {
+                        setDaxBandLevel(i, bands[i], fromUser = false)
+                    }
+                }
+            }
+            if (intent.hasExtra("clear_bass")) {
+                setClearBassLevel(intent.getIntExtra("clear_bass", 0))
+            }
+            if (intent.hasExtra("ieq_preset")) {
+                setIeqPreset(intent.getIntExtra("ieq_preset", 0))
+            }
+            if (intent.hasExtra("balance")) {
+                setStereoBalance(intent.getIntExtra("balance", 0))
+            }
+            if (intent.hasExtra("mono_audio")) {
+                setMonoAudioEnabled(intent.getBooleanExtra("mono_audio", false))
+            }
+            if (intent.hasExtra("crossfeed")) {
+                setCrossfeedAmount(intent.getIntExtra("crossfeed", 0))
+            }
+            if (intent.hasExtra("drc")) {
+                setDynamicRangeAmount(intent.getIntExtra("drc", 0))
+            }
+            if (intent.hasExtra("xloud")) {
+                setXLoudEnabled(intent.getBooleanExtra("xloud", false))
+            }
+            if (intent.hasExtra("le_enabled")) {
+                setLoudnessEnhancerEnabled(intent.getBooleanExtra("le_enabled", false))
+            }
+            if (intent.hasExtra("le_gain_mb")) {
+                setLoudnessEnhancerGainMb(intent.getIntExtra("le_gain_mb", 0))
+            }
+            notifyListeners()
+        } finally {
+            isSyncingFromRemote = false
+        }
+    }
+
+    fun notifyListeners() {
         for (l in listeners) {
             try {
                 l.onEqualizerConfigChanged()

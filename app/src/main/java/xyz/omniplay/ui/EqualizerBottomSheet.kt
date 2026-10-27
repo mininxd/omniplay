@@ -46,6 +46,7 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         setupButtons()
 
         refreshUI()
+        eqManager.requestOmniQualizerSync()
     }
 
     override fun onDestroyView() {

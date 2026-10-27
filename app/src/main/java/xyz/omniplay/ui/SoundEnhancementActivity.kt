@@ -1,5 +1,10 @@
 package xyz.omniplay.ui
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -45,6 +50,35 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         setupResetButton()
 
         refreshUI()
+    }
+
+    private val syncReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent != null) {
+                eqManager.applySyncIntent(intent)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction("xyz.omniplay.action.SYNC_EQ_STATE")
+            addAction("xyz.omniplay.action.SET_STEREO_EFFECTS")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(syncReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(syncReceiver, filter)
+        }
+        eqManager.requestOmniQualizerSync()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(syncReceiver)
+        } catch (_: Throwable) {}
     }
 
     override fun onDestroy() {
@@ -202,6 +236,42 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
             }
         }
         setupBalanceSliderResetGesture()
+        setupCrossfade()
+    }
+
+    private fun setupCrossfade() {
+        val prefs = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val crossfadeDuration = prefs.getInt(MainActivity.KEY_CROSSFADE_DURATION, 0)
+        binding.sliderCrossfade.value = crossfadeDuration.toFloat().coerceIn(0f, 10f)
+        binding.tvCrossfadeDuration.text = if (crossfadeDuration > 0) "${crossfadeDuration}s" else getString(R.string.effect_off)
+
+        val isCrossfadeOnNext = prefs.getBoolean(MainActivity.KEY_CROSSFADE_ON_NEXT, false)
+        binding.switchCrossfadeOnNext.isChecked = isCrossfadeOnNext
+        binding.rowCrossfadeOnNext.alpha = if (crossfadeDuration > 0) 1f else 0.5f
+        binding.switchCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+        binding.rowCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+
+        binding.switchCrossfadeOnNext.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(MainActivity.KEY_CROSSFADE_ON_NEXT, isChecked).apply()
+        }
+
+        binding.rowCrossfadeOnNext.setOnClickListener {
+            if (binding.switchCrossfadeOnNext.isEnabled) {
+                binding.switchCrossfadeOnNext.toggle()
+            }
+        }
+
+        binding.sliderCrossfade.addOnChangeListener { _, value, fromUser ->
+            val duration = value.toInt()
+            binding.tvCrossfadeDuration.text = if (duration > 0) "${duration}s" else getString(R.string.effect_off)
+            val isEnabled = duration > 0
+            binding.rowCrossfadeOnNext.alpha = if (isEnabled) 1f else 0.5f
+            binding.switchCrossfadeOnNext.isEnabled = isEnabled
+            binding.rowCrossfadeOnNext.isEnabled = isEnabled
+            if (fromUser) {
+                prefs.edit().putInt(MainActivity.KEY_CROSSFADE_DURATION, duration).apply()
+            }
+        }
     }
 
     private fun setupBalanceSliderResetGesture() {
@@ -357,6 +427,19 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         }
         binding.tvStereoBalanceValue.text = formatBalance(balance)
 
+        val prefs = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val crossfadeDuration = prefs.getInt(MainActivity.KEY_CROSSFADE_DURATION, 0)
+        if (!binding.sliderCrossfade.isPressed && binding.sliderCrossfade.value.toInt() != crossfadeDuration) {
+            binding.sliderCrossfade.value = crossfadeDuration.toFloat().coerceIn(0f, 10f)
+        }
+        binding.tvCrossfadeDuration.text = if (crossfadeDuration > 0) "${crossfadeDuration}s" else getString(R.string.effect_off)
+
+        val isCrossfadeOnNext = prefs.getBoolean(MainActivity.KEY_CROSSFADE_ON_NEXT, false)
+        binding.switchCrossfadeOnNext.isChecked = isCrossfadeOnNext
+        binding.rowCrossfadeOnNext.alpha = if (crossfadeDuration > 0) 1f else 0.5f
+        binding.switchCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+        binding.rowCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+
         // VPT
         updateVptChipSelection(eqManager.getVptMode())
 
@@ -376,7 +459,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.cardIeq.alpha = alpha
         binding.cardDialogueEnhancer.alpha = alpha
         binding.cardClearBass.alpha = alpha
-        binding.cardPlaybackEffects.alpha = alpha
+        binding.cardPlaybackEffects.alpha = 1.0f
         binding.cardVpt.alpha = alpha
         binding.cardSonySuite.alpha = alpha
 
@@ -385,10 +468,16 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         binding.sliderClearBass.isEnabled = enabled
         binding.sliderCrossfeed.isEnabled = enabled
         binding.sliderDynamicRange.isEnabled = enabled
-        binding.rowMonoAudio.isEnabled = enabled
-        binding.switchMonoAudio.isEnabled = enabled
-        binding.sliderStereoBalance.isEnabled = enabled
+        binding.rowMonoAudio.isEnabled = true
+        binding.switchMonoAudio.isEnabled = true
+        binding.sliderStereoBalance.isEnabled = true
         binding.btnResetDax.isEnabled = enabled
+
+        val prefs = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val crossfadeDuration = prefs.getInt(MainActivity.KEY_CROSSFADE_DURATION, 0)
+        binding.sliderCrossfade.isEnabled = true
+        binding.rowCrossfadeOnNext.isEnabled = crossfadeDuration > 0
+        binding.switchCrossfadeOnNext.isEnabled = crossfadeDuration > 0
 
         for (i in 0 until binding.chipGroupIeq.childCount) {
             binding.chipGroupIeq.getChildAt(i).isEnabled = enabled

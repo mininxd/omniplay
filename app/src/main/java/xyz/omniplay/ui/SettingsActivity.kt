@@ -274,19 +274,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updateEqualizerSubtitle() {
         val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
-        val isOmniQualizerInstalled = isOmniQualizerSupported() &&
-            packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
-        if (isOmniQualizerInstalled) {
-            binding.subtitleEqualizer.text = getString(R.string.equalizer_and_sound_enhancement) + " (Synced with OmniQualizer)"
-        } else if (eq.isEnabled()) {
+        if (eq.isEnabled()) {
             binding.subtitleEqualizer.setText(R.string.equalizer_active)
         } else {
             binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
         }
-    }
-
-    private fun isOmniQualizerSupported(): Boolean {
-        return xyz.omniplay.BuildConfig.VERSION_CODE >= 35
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
