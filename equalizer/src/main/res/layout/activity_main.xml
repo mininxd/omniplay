@@ -17,8 +17,10 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
+            app:contentInsetStart="20dp"
+            app:contentInsetStartWithNavigation="0dp"
             app:title="@string/app_name"
-            app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
+            app:titleTextAppearance="@style/TextAppearance.Equalizer.Toolbar.Title"
             app:titleTextColor="?attr/colorOnSurface"
             app:subtitleTextAppearance="@style/TextAppearance.Equalizer.Toolbar.Subtitle"
             app:subtitleTextColor="?attr/colorOnSurfaceVariant">

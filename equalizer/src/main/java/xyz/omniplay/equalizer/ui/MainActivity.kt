@@ -138,9 +138,22 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     }
 
     private fun setupToolbar() {
-        binding.toolbar.subtitle = eqManager.getHardwareDspStatus()
+        updateToolbarSubtitle()
         binding.btnSettings.setOnClickListener {
             settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+        }
+    }
+
+    private fun updateToolbarSubtitle() {
+        val status = eqManager.getHardwareDspStatus()
+        binding.toolbar.subtitle = status
+        binding.toolbar.post {
+            for (i in 0 until binding.toolbar.childCount) {
+                val child = binding.toolbar.getChildAt(i)
+                if (child is TextView && child.text == status) {
+                    child.alpha = 0.50f
+                }
+            }
         }
     }
 
@@ -440,7 +453,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private fun refreshUI() {
         isUpdatingUi = true
 
-        binding.toolbar.subtitle = eqManager.getHardwareDspStatus()
+        updateToolbarSubtitle()
 
         val enabled = eqManager.isEnabled()
         binding.switchMaster.isChecked = enabled

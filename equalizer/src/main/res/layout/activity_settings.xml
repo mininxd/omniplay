@@ -17,7 +17,7 @@
         app:navigationIcon="@drawable/ic_arrow_back"
         app:navigationIconTint="?attr/colorOnSurface"
         app:title="@string/settings_title"
-        app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
+        app:titleTextAppearance="@style/TextAppearance.Equalizer.Toolbar.Title"
         app:titleTextColor="?attr/colorOnSurface" />
 
     <androidx.core.widget.NestedScrollView
