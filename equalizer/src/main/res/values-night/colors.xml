@@ -29,4 +29,154 @@
     <!-- System -->
     <color name="status_bar_color">#12140E</color>
     <color name="navigation_bar_color">#12140E</color>
+
+    <!-- Theme palette fallbacks for devices that cannot load runtime dynamic color resources. -->
+    <!-- Neutral: soft sage, olive, and warm gray. -->
+    <color name="theme_neutral_primary">#C1D0A7</color>
+    <color name="theme_neutral_on_primary">#29341C</color>
+    <color name="theme_neutral_primary_container">#414C32</color>
+    <color name="theme_neutral_on_primary_container">#E1E9D3</color>
+    <color name="theme_neutral_secondary">#C9CBAF</color>
+    <color name="theme_neutral_on_secondary">#30331D</color>
+    <color name="theme_neutral_secondary_container">#484A32</color>
+    <color name="theme_neutral_on_secondary_container">#E5E8CC</color>
+    <color name="theme_neutral_tertiary">#BDD1C3</color>
+    <color name="theme_neutral_on_tertiary">#28352E</color>
+    <color name="theme_neutral_tertiary_container">#3F4C44</color>
+    <color name="theme_neutral_on_tertiary_container">#D8E9DE</color>
+
+    <!-- Monochrome: strictly grayscale, including accents and surfaces. -->
+    <color name="theme_monochrome_primary">#C7C7C7</color>
+    <color name="theme_monochrome_on_primary">#2F2F2F</color>
+    <color name="theme_monochrome_primary_container">#454545</color>
+    <color name="theme_monochrome_on_primary_container">#E3E4E3</color>
+    <color name="theme_monochrome_secondary">#C7C7C7</color>
+    <color name="theme_monochrome_on_secondary">#2F2F2F</color>
+    <color name="theme_monochrome_secondary_container">#454545</color>
+    <color name="theme_monochrome_on_secondary_container">#E3E4E3</color>
+    <color name="theme_monochrome_tertiary">#C7C7C7</color>
+    <color name="theme_monochrome_on_tertiary">#2F2F2F</color>
+    <color name="theme_monochrome_tertiary_container">#454545</color>
+    <color name="theme_monochrome_on_tertiary_container">#E3E4E3</color>
+
+    <!-- Tonal Spot: bright lime, muted teal, and olive-gray. -->
+    <color name="theme_tone_primary">#C5D887</color>
+    <color name="theme_tone_on_primary">#2A3410</color>
+    <color name="theme_tone_primary_container">#414C26</color>
+    <color name="theme_tone_on_primary_container">#DCEBA4</color>
+    <color name="theme_tone_secondary">#A0D5CA</color>
+    <color name="theme_tone_on_secondary">#003731</color>
+    <color name="theme_tone_secondary_container">#1B4F47</color>
+    <color name="theme_tone_on_secondary_container">#BEEBE2</color>
+    <color name="theme_tone_tertiary">#C5CAA1</color>
+    <color name="theme_tone_on_tertiary">#2D301A</color>
+    <color name="theme_tone_tertiary_container">#454832</color>
+    <color name="theme_tone_on_tertiary_container">#E2E5C6</color>
+
+    <!-- Vibrant: saturated lime with energetic green and golden contrast. -->
+    <color name="theme_vibrant_primary">#B2F259</color>
+    <color name="theme_vibrant_on_primary">#1F3500</color>
+    <color name="theme_vibrant_primary_container">#395B00</color>
+    <color name="theme_vibrant_on_primary_container">#D6F999</color>
+    <color name="theme_vibrant_secondary">#9CD996</color>
+    <color name="theme_vibrant_on_secondary">#193A0D</color>
+    <color name="theme_vibrant_secondary_container">#2E5123</color>
+    <color name="theme_vibrant_on_secondary_container">#BFF2B2</color>
+    <color name="theme_vibrant_tertiary">#E2D36F</color>
+    <color name="theme_vibrant_on_tertiary">#3B3200</color>
+    <color name="theme_vibrant_tertiary_container">#5B4F00</color>
+    <color name="theme_vibrant_on_tertiary_container">#F3E28A</color>
+
+    <!-- Rainbow: green, teal, and olive accents over neutral gray surfaces. -->
+    <color name="theme_rainbow_primary">#B6D397</color>
+    <color name="theme_rainbow_on_primary">#263714</color>
+    <color name="theme_rainbow_primary_container">#3A4D28</color>
+    <color name="theme_rainbow_on_primary_container">#D0E4B1</color>
+    <color name="theme_rainbow_secondary">#9BD4CD</color>
+    <color name="theme_rainbow_on_secondary">#003733</color>
+    <color name="theme_rainbow_secondary_container">#1C4E48</color>
+    <color name="theme_rainbow_on_secondary_container">#B8ECE6</color>
+    <color name="theme_rainbow_tertiary">#DED278</color>
+    <color name="theme_rainbow_on_tertiary">#393100</color>
+    <color name="theme_rainbow_tertiary_container">#574D00</color>
+    <color name="theme_rainbow_on_tertiary_container">#F2E58E</color>
+
+    <!-- Expressive: coral pink primary paired with cool teal and green. -->
+    <color name="theme_expressive_primary">#FFB1C0</color>
+    <color name="theme_expressive_on_primary">#5F1229</color>
+    <color name="theme_expressive_primary_container">#7F2B40</color>
+    <color name="theme_expressive_on_primary_container">#FFD9E1</color>
+    <color name="theme_expressive_secondary">#9DD4CD</color>
+    <color name="theme_expressive_on_secondary">#003735</color>
+    <color name="theme_expressive_secondary_container">#1B4E4B</color>
+    <color name="theme_expressive_on_secondary_container">#B8EEE9</color>
+    <color name="theme_expressive_tertiary">#B7D5B9</color>
+    <color name="theme_expressive_on_tertiary">#203622</color>
+    <color name="theme_expressive_tertiary_container">#374D39</color>
+    <color name="theme_expressive_on_tertiary_container">#CDE9CF</color>
+
+    <!-- Fruit Salad: amber-orange, olive green, and terracotta. -->
+    <color name="theme_salad_primary">#FFB951</color>
+    <color name="theme_salad_on_primary">#462C00</color>
+    <color name="theme_salad_primary_container">#654100</color>
+    <color name="theme_salad_on_primary_container">#FFDEA8</color>
+    <color name="theme_salad_secondary">#D0D979</color>
+    <color name="theme_salad_on_secondary">#313900</color>
+    <color name="theme_salad_secondary_container">#495200</color>
+    <color name="theme_salad_on_secondary_container">#E5ED9D</color>
+    <color name="theme_salad_tertiary">#FFB49A</color>
+    <color name="theme_salad_on_tertiary">#561D0B</color>
+    <color name="theme_salad_tertiary_container">#713520</color>
+    <color name="theme_salad_on_tertiary_container">#FFDCCF</color>
+
+    <!-- Low-chroma dark surfaces and outlines for each profile. -->
+    <color name="theme_neutral_surface">#12140E</color>
+    <color name="theme_neutral_surface_container">#1D2017</color>
+    <color name="theme_neutral_surface_container_high">#292D23</color>
+    <color name="theme_neutral_on_surface">#E5E7DB</color>
+    <color name="theme_neutral_on_surface_variant">#C4C7B9</color>
+    <color name="theme_neutral_outline">#8E9283</color>
+    <color name="theme_neutral_outline_variant">#44473C</color>
+    <color name="theme_monochrome_surface">#131313</color>
+    <color name="theme_monochrome_surface_container">#202020</color>
+    <color name="theme_monochrome_surface_container_high">#2C2C2C</color>
+    <color name="theme_monochrome_on_surface">#E3E3E3</color>
+    <color name="theme_monochrome_on_surface_variant">#C7C7C7</color>
+    <color name="theme_monochrome_outline">#909090</color>
+    <color name="theme_monochrome_outline_variant">#474747</color>
+    <color name="theme_tone_surface">#14160D</color>
+    <color name="theme_tone_surface_container">#202318</color>
+    <color name="theme_tone_surface_container_high">#2B2F22</color>
+    <color name="theme_tone_on_surface">#E4E6D7</color>
+    <color name="theme_tone_on_surface_variant">#C5C8B6</color>
+    <color name="theme_tone_outline">#8E927D</color>
+    <color name="theme_tone_outline_variant">#44483A</color>
+    <color name="theme_vibrant_surface">#11140C</color>
+    <color name="theme_vibrant_surface_container">#1E2216</color>
+    <color name="theme_vibrant_surface_container_high">#2A2E21</color>
+    <color name="theme_vibrant_on_surface">#E4E8D8</color>
+    <color name="theme_vibrant_on_surface_variant">#C4C8B6</color>
+    <color name="theme_vibrant_outline">#8D927F</color>
+    <color name="theme_vibrant_outline_variant">#43483A</color>
+    <color name="theme_rainbow_surface">#131311</color>
+    <color name="theme_rainbow_surface_container">#20201E</color>
+    <color name="theme_rainbow_surface_container_high">#2C2C29</color>
+    <color name="theme_rainbow_on_surface">#E5E5E1</color>
+    <color name="theme_rainbow_on_surface_variant">#C7C7C2</color>
+    <color name="theme_rainbow_outline">#90908B</color>
+    <color name="theme_rainbow_outline_variant">#484843</color>
+    <color name="theme_expressive_surface">#101513</color>
+    <color name="theme_expressive_surface_container">#1D2220</color>
+    <color name="theme_expressive_surface_container_high">#292E2B</color>
+    <color name="theme_expressive_on_surface">#E1E8E5</color>
+    <color name="theme_expressive_on_surface_variant">#C0C9C5</color>
+    <color name="theme_expressive_outline">#8A938F</color>
+    <color name="theme_expressive_outline_variant">#414A46</color>
+    <color name="theme_salad_surface">#19130B</color>
+    <color name="theme_salad_surface_container">#252015</color>
+    <color name="theme_salad_surface_container_high">#322A1C</color>
+    <color name="theme_salad_on_surface">#ECE1D1</color>
+    <color name="theme_salad_on_surface_variant">#D0C5B5</color>
+    <color name="theme_salad_outline">#9A8E7A</color>
+    <color name="theme_salad_outline_variant">#514638</color>
 </resources>

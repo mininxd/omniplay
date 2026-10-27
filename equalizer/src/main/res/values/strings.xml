@@ -52,4 +52,21 @@
     <string name="equalizer_active_title">OmniQualizer is Active</string>
     <string name="equalizer_active_desc">Current preset: %1$s</string>
     <string name="turn_off">Turn Off</string>
+
+    <!-- Settings & Themes (OmniPlay Parity) -->
+    <string name="settings_title">Settings</string>
+    <string name="close">Close</string>
+    <string name="theme_setting">Theme</string>
+    <string name="theme_mode_auto">Auto</string>
+    <string name="theme_mode_light">Light</string>
+    <string name="theme_mode_dark">Dark</string>
+    <string name="theme_style">Theme style</string>
+    <string name="theme_style_dynamic">Dynamic (System)</string>
+    <string name="theme_style_neutral">Neutral</string>
+    <string name="theme_style_tone">Tonal Spot</string>
+    <string name="theme_style_expressive">Expressive</string>
+    <string name="theme_style_salad">Fruit Salad</string>
+    <string name="theme_style_monochrome">Monochrome</string>
+    <string name="theme_style_vibrant">Vibrant</string>
+    <string name="theme_style_rainbow">Rainbow</string>
 </resources>

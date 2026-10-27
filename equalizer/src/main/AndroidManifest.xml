@@ -82,6 +82,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_title" />
+
         <!-- Broadcast receiver for system & media player audio sessions -->
         <receiver
             android:name=".receiver.AudioSessionReceiver"

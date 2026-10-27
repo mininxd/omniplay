@@ -4,11 +4,13 @@ import android.app.Application
 import com.google.android.material.color.DynamicColors
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.service.EqualizerService
+import xyz.omniplay.equalizer.util.ThemeHelper
 
 class EqualizerApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ThemeHelper.applyNightMode(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
 
         val eqManager = EqualizerManager.getInstance(this)

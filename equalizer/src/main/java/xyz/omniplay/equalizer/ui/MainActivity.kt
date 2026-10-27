@@ -1,5 +1,6 @@
 package xyz.omniplay.equalizer.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.media.audiofx.AudioEffect
 import android.os.Build
@@ -8,6 +9,7 @@ import android.util.Log
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.chip.Chip
 import xyz.omniplay.equalizer.R
@@ -18,6 +20,7 @@ import xyz.omniplay.equalizer.util.ThemeColors
 import xyz.omniplay.equalizer.util.ThemeHelper
 import java.util.Locale
 import kotlin.math.roundToInt
+
 /**
  * OmniQualizer: Material 3 Equalizer & Sound Enhancement Application.
  *
@@ -33,11 +36,23 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
     private var isUpdatingUi = false
 
+    private val settingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val themeChanged = result.data?.getBooleanExtra(SettingsActivity.EXTRA_THEME_CHANGED, false) == true
+            if (themeChanged) {
+                recreate()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        ThemeHelper.applySystemBars(this)
 
         eqManager = EqualizerManager.getInstance(this)
         eqManager.addListener(this)
@@ -119,6 +134,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
     private fun setupToolbar() {
         binding.toolbar.subtitle = eqManager.getHardwareDspStatus()
+        binding.btnSettings.setOnClickListener {
+            settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+        }
     }
 
     private fun setupMasterSwitch() {
@@ -432,6 +450,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             binding.tvMasterDesc.text = getString(R.string.equalizer_master_switch_desc)
             binding.tvMasterDesc.setTextColor(ThemeColors.getOnSurfaceVariant(this))
         }
+        binding.tvMasterDesc.alpha = 0.75f
 
         updatePresetSelection(eqManager.getCurrentPresetIndex())
 
