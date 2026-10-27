@@ -1991,24 +1991,61 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 }
                 return
             }
-            if (action == "xyz.omniplay.action.SET_STEREO_EFFECTS") {
+            if (action == "xyz.omniplay.action.SET_STEREO_EFFECTS" || action == "xyz.omniplay.action.SYNC_EQ_STATE") {
                 val ctx = context ?: applicationContext
                 val eq = xyz.omniplay.audio.EqualizerManager.getInstance(ctx)
-                if (intent.hasExtra("balance")) {
-                    val balance = intent.getIntExtra("balance", 0)
-                    eq.setStereoBalance(balance)
-                }
-                if (intent.hasExtra("mono_audio")) {
-                    val mono = intent.getBooleanExtra("mono_audio", false)
-                    eq.setMonoAudioEnabled(mono)
-                }
-                if (intent.hasExtra("crossfeed")) {
-                    val crossfeed = intent.getIntExtra("crossfeed", 0)
-                    eq.setCrossfeedAmount(crossfeed)
-                }
-                if (intent.hasExtra("drc")) {
-                    val drc = intent.getIntExtra("drc", 0)
-                    eq.setDynamicRangeAmount(drc)
+                eq.isSyncingFromRemote = true
+                try {
+                    if (intent.hasExtra("master_enabled")) {
+                        val enabled = intent.getBooleanExtra("master_enabled", eq.isEnabled())
+                        if (eq.isEnabled() != enabled) {
+                            eq.setEnabled(enabled)
+                        }
+                    }
+                    if (intent.hasExtra("balance")) {
+                        val balance = intent.getIntExtra("balance", 0)
+                        eq.setStereoBalance(balance)
+                    }
+                    if (intent.hasExtra("mono_audio")) {
+                        val mono = intent.getBooleanExtra("mono_audio", false)
+                        eq.setMonoAudioEnabled(mono)
+                    }
+                    if (intent.hasExtra("crossfeed")) {
+                        val crossfeed = intent.getIntExtra("crossfeed", 0)
+                        eq.setCrossfeedAmount(crossfeed)
+                    }
+                    if (intent.hasExtra("drc")) {
+                        val drc = intent.getIntExtra("drc", 0)
+                        eq.setDynamicRangeAmount(drc)
+                    }
+                    if (intent.hasExtra("preset_index")) {
+                        eq.applyPreset(intent.getIntExtra("preset_index", 0))
+                    }
+                    if (intent.hasExtra("clear_bass")) {
+                        eq.setClearBassLevel(intent.getIntExtra("clear_bass", 0))
+                    }
+                    if (intent.hasExtra("ieq_preset")) {
+                        eq.setIeqPreset(intent.getIntExtra("ieq_preset", 0))
+                    }
+                    if (intent.hasExtra("dax_bands")) {
+                        val bands = intent.getIntArrayExtra("dax_bands")
+                        if (bands != null && bands.size == 10) {
+                            for (i in 0 until 10) {
+                                eq.setDaxBandLevel(i, bands[i], fromUser = false)
+                            }
+                        }
+                    }
+                    if (intent.hasExtra("xloud")) {
+                        eq.setXLoudEnabled(intent.getBooleanExtra("xloud", false))
+                    }
+                    if (intent.hasExtra("le_enabled")) {
+                        eq.setLoudnessEnhancerEnabled(intent.getBooleanExtra("le_enabled", false))
+                    }
+                    if (intent.hasExtra("le_gain_mb")) {
+                        eq.setLoudnessEnhancerGainMb(intent.getIntExtra("le_gain_mb", 0))
+                    }
+                } finally {
+                    eq.isSyncingFromRemote = false
                 }
             }
         }
@@ -2017,6 +2054,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
     private fun registerStereoEffectsReceiver() {
         val filter = IntentFilter().apply {
             addAction("xyz.omniplay.action.SET_STEREO_EFFECTS")
+            addAction("xyz.omniplay.action.SYNC_EQ_STATE")
             addAction("xyz.omniplay.action.REQUEST_AUDIO_SESSION")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

@@ -442,6 +442,9 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    @Volatile
+    var isSyncingFromRemote: Boolean = false
+
     fun getStereoBalance(): Int = prefs.getInt(KEY_STEREO_BALANCE, 0).coerceIn(-100, 100)
 
     fun setStereoBalance(balance: Int) {
@@ -451,15 +454,36 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     fun broadcastStereoEffects() {
+        if (isSyncingFromRemote) return
         try {
-            val intent = Intent("xyz.omniplay.action.SET_STEREO_EFFECTS").apply {
+            val intent = Intent("xyz.omniplay.action.SYNC_EQ_STATE").apply {
                 setPackage("xyz.omniplay")
+                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                putExtra("master_enabled", isEnabled())
+                putExtra("preset_index", getCurrentPresetIndex())
+                putExtra("dax_bands", getAllDaxBandLevels())
+                putExtra("clear_bass", getClearBassLevel())
+                putExtra("ieq_preset", getIeqPreset())
+                putExtra("balance", getStereoBalance())
+                putExtra("mono_audio", isMonoAudioEnabled())
+                putExtra("crossfeed", getCrossfeedAmount())
+                putExtra("drc", getDynamicRangeAmount())
+                putExtra("xloud", isXLoudEnabled())
+                putExtra("le_enabled", isLoudnessEnhancerEnabled())
+                putExtra("le_gain_mb", getLoudnessEnhancerGainMb())
+            }
+            context.sendBroadcast(intent)
+
+            // Also send legacy action for backward compatibility
+            val legacyIntent = Intent("xyz.omniplay.action.SET_STEREO_EFFECTS").apply {
+                setPackage("xyz.omniplay")
+                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 putExtra("balance", getStereoBalance())
                 putExtra("mono_audio", isMonoAudioEnabled())
                 putExtra("crossfeed", getCrossfeedAmount())
                 putExtra("drc", getDynamicRangeAmount())
             }
-            context.sendBroadcast(intent)
+            context.sendBroadcast(legacyIntent)
         } catch (_: Throwable) {}
     }
 

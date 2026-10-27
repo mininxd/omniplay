@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.GestureDetector
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.View
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -65,6 +66,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         handleAudioSessionIntent(intent)
 
         setupToolbar()
+        setupNavbarScrollFade()
         setupMasterSwitch()
         setupPresets()
         setupDaxBands()
@@ -156,6 +158,47 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                 }
             }
         }
+    }
+
+    private var isNavbarVisible = true
+
+    private fun setupNavbarScrollFade() {
+        binding.scrollView.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
+            val dy = scrollY - oldScrollY
+            if (scrollY <= 12) {
+                if (!isNavbarVisible) {
+                    showNavbar()
+                }
+            } else if (dy > 10 && isNavbarVisible) {
+                hideNavbar()
+            } else if (dy < -10 && !isNavbarVisible) {
+                showNavbar()
+            }
+        }
+    }
+
+    private fun hideNavbar() {
+        isNavbarVisible = false
+        binding.appBar.animate()
+            .alpha(0f)
+            .setDuration(220)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .withEndAction {
+                if (!isNavbarVisible) {
+                    binding.appBar.visibility = View.INVISIBLE
+                }
+            }
+            .start()
+    }
+
+    private fun showNavbar() {
+        isNavbarVisible = true
+        binding.appBar.visibility = View.VISIBLE
+        binding.appBar.animate()
+            .alpha(1f)
+            .setDuration(220)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
     }
 
     private fun setupMasterSwitch() {

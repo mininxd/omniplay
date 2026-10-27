@@ -1,6 +1,7 @@
 package xyz.omniplay.audio
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
@@ -76,6 +77,32 @@ class EqualizerManager private constructor(private val context: Context) {
         listeners.remove(listener)
     }
 
+    @Volatile
+    var isSyncingFromRemote: Boolean = false
+
+    fun broadcastSyncState() {
+        if (isSyncingFromRemote) return
+        try {
+            val intent = Intent("xyz.omniplay.equalizer.action.SYNC_EQ_STATE").apply {
+                setPackage("xyz.omniplay.equalizer")
+                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                putExtra("master_enabled", isEnabled())
+                putExtra("preset_index", getCurrentPresetIndex())
+                putExtra("dax_bands", getAllDaxBandLevels())
+                putExtra("clear_bass", getClearBassLevel())
+                putExtra("ieq_preset", getIeqPreset())
+                putExtra("balance", getStereoBalance())
+                putExtra("mono_audio", isMonoAudioEnabled())
+                putExtra("crossfeed", getCrossfeedAmount())
+                putExtra("drc", getDynamicRangeAmount())
+                putExtra("xloud", isXLoudEnabled())
+                putExtra("le_enabled", isLoudnessEnhancerEnabled())
+                putExtra("le_gain_mb", getLoudnessEnhancerGainMb())
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Throwable) {}
+    }
+
     private fun notifyListeners() {
         for (l in listeners) {
             try {
@@ -84,6 +111,7 @@ class EqualizerManager private constructor(private val context: Context) {
                 Log.e(TAG, "Error notifying equalizer listener", e)
             }
         }
+        broadcastSyncState()
     }
 
     @Synchronized
