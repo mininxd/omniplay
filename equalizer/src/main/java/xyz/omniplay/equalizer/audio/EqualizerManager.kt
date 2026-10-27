@@ -1,11 +1,13 @@
 package xyz.omniplay.equalizer.audio
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
+import android.os.Build
 import android.util.Log
 import xyz.omniplay.equalizer.service.EqualizerService
 import java.util.concurrent.ConcurrentHashMap

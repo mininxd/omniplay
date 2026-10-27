@@ -67,25 +67,25 @@ class DynamicsProcessingHelper(val sessionId: Int) {
                 }
                 else -> 0f to 0f
             }
-            effect.setInputGainByChannelIndex(0, leftDb)
-            effect.setInputGainByChannelIndex(1, rightDb)
+            effect.setInputGainbyChannel(0, leftDb)
+            effect.setInputGainbyChannel(1, rightDb)
 
             if (drcAmount > 0) {
                 try {
-                    val limiter = effect.getLimiter()
+                    val limiter = effect.getLimiterByChannelIndex(0)
                     if (limiter != null) {
                         limiter.isEnabled = true
-                        limiter.threshold = -((drcAmount / 100f) * 18f)
-                        limiter.ratio = 1f + (drcAmount / 10f)
-                        effect.setLimiter(limiter)
+                        limiter.setThreshold(-((drcAmount / 100f) * 18f))
+                        limiter.setRatio(1f + (drcAmount / 10f))
+                        effect.setLimiterAllChannelsTo(limiter)
                     }
                 } catch (_: Throwable) {}
             } else {
                 try {
-                    val limiter = effect.getLimiter()
+                    val limiter = effect.getLimiterByChannelIndex(0)
                     if (limiter != null && limiter.isEnabled) {
                         limiter.isEnabled = false
-                        effect.setLimiter(limiter)
+                        effect.setLimiterAllChannelsTo(limiter)
                     }
                 } catch (_: Throwable) {}
             }
