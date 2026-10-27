@@ -91,11 +91,6 @@ class SettingsActivity : AppCompatActivity() {
         val primaryColor = ThemeColors.getPrimary(this)
 
         if (appSessions.isEmpty()) {
-            val emptyBinding = ItemActiveSessionBinding.inflate(layoutInflater, container, false)
-            emptyBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
-            emptyBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
-            emptyBinding.tvSessionAppName.setText(R.string.no_active_sessions)
-            container.addView(emptyBinding.root)
             return
         }
 

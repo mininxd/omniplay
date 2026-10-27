@@ -73,5 +73,4 @@
     <!-- Active Audio Sessions (Settings) -->
     <string name="active_sessions_title">Active Sessions</string>
     <string name="active_sessions_desc">Apps currently using the equalizer</string>
-    <string name="no_active_sessions">No apps currently using equalizer</string>
 </resources>

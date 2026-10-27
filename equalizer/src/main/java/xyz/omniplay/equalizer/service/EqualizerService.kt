@@ -350,8 +350,13 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
         val presetIndex = eqManager.getCurrentPresetIndex()
         val presetName = eqManager.presets.getOrNull(presetIndex)?.name ?: "Active"
-        val sessionCount = eqManager.getActiveSessionCount()
-        val subtitle = "$presetName · $sessionCount session${if (sessionCount != 1) "s" else ""}"
+        val activeApps = eqManager.getActiveSessionList().filter { !it.isGlobal }
+        val sessionCount = activeApps.size
+        val subtitle = if (sessionCount > 0) {
+            "$presetName · $sessionCount session${if (sessionCount != 1) "s" else ""}"
+        } else {
+            presetName
+        }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_equalizer)
