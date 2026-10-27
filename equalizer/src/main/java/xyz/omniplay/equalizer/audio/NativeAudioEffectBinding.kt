@@ -119,25 +119,45 @@ class NativeAudioEffectBinding {
         val ctor = audioEffectConstructor ?: return
 
         try {
-            sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE, 0, audioSessionId) as? AudioEffect)
+            sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE, 1000, audioSessionId) as? AudioEffect)
         } catch (_: Throwable) {
             try {
-                sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE_PROXY, 0, audioSessionId) as? AudioEffect)
+                sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE, 0, audioSessionId) as? AudioEffect)
             } catch (_: Throwable) {
-                sonyEffect = null
+                try {
+                    sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE_PROXY, 1000, audioSessionId) as? AudioEffect)
+                } catch (_: Throwable) {
+                    try {
+                        sonyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_SONY_AE_PROXY, 0, audioSessionId) as? AudioEffect)
+                    } catch (_: Throwable) {
+                        sonyEffect = null
+                    }
+                }
             }
         }
 
         try {
-            dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX, 0, audioSessionId) as? AudioEffect)
+            dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX, 1000, audioSessionId) as? AudioEffect)
         } catch (_: Throwable) {
             try {
-                dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX_MOD, 0, audioSessionId) as? AudioEffect)
+                dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX, 0, audioSessionId) as? AudioEffect)
             } catch (_: Throwable) {
                 try {
-                    dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAP, 0, audioSessionId) as? AudioEffect)
+                    dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX_MOD, 1000, audioSessionId) as? AudioEffect)
                 } catch (_: Throwable) {
-                    dolbyEffect = null
+                    try {
+                        dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAX_MOD, 0, audioSessionId) as? AudioEffect)
+                    } catch (_: Throwable) {
+                        try {
+                            dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAP, 1000, audioSessionId) as? AudioEffect)
+                        } catch (_: Throwable) {
+                            try {
+                                dolbyEffect = (ctor.newInstance(EFFECT_TYPE_NULL, UUID_DOLBY_DAP, 0, audioSessionId) as? AudioEffect)
+                            } catch (_: Throwable) {
+                                dolbyEffect = null
+                            }
+                        }
+                    }
                 }
             }
         }

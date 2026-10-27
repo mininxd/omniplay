@@ -2,7 +2,9 @@ package xyz.omniplay.equalizer.ui
 
 import android.content.Intent
 import android.media.audiofx.AudioEffect
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
@@ -10,6 +12,7 @@ import com.google.android.material.chip.Chip
 import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
+import xyz.omniplay.equalizer.service.EqualizerService
 import xyz.omniplay.equalizer.util.ThemeHelper
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -37,6 +40,10 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         eqManager = EqualizerManager.getInstance(this)
         eqManager.addListener(this)
 
+        if (eqManager.isEnabled()) {
+            EqualizerService.start(this)
+        }
+
         handleAudioSessionIntent(intent)
 
         setupToolbar()
@@ -51,19 +58,41 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         setupResetButton()
 
         refreshUI()
+        requestNotificationPermissionIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (eqManager.isEnabled()) {
+            EqualizerService.start(this)
+        }
+        refreshUI()
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAudioSessionIntent(intent)
+        refreshUI()
     }
 
     private fun handleAudioSessionIntent(intent: Intent?) {
         val sessionId = intent?.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, AudioEffect.ERROR) ?: AudioEffect.ERROR
         val packageName = intent?.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
-        if (sessionId != AudioEffect.ERROR && sessionId > 0) {
+        Log.i("MainActivity", "handleAudioSessionIntent action=${intent?.action}, sessionId=$sessionId, package=$packageName")
+        if (sessionId != AudioEffect.ERROR && sessionId >= 0) {
             eqManager.openAudioSession(sessionId, packageName)
+        }
+        if (intent?.action == AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL) {
+            setResult(RESULT_OK)
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
         }
     }
 
@@ -85,11 +114,16 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private fun setupMasterSwitch() {
         binding.switchMaster.isChecked = eqManager.isEnabled()
 
+        binding.switchMaster.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
+            if (isChecked != eqManager.isEnabled()) {
+                eqManager.setEnabled(isChecked)
+                updateEnabledState(isChecked)
+            }
+        }
+
         binding.rowMasterToggle.setOnClickListener {
-            val newState = !binding.switchMaster.isChecked
-            binding.switchMaster.isChecked = newState
-            eqManager.setEnabled(newState)
-            updateEnabledState(newState)
+            binding.switchMaster.toggle()
         }
     }
 
@@ -179,12 +213,17 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderLoudnessEnhancer.isEnabled = isLeEnabled && eqManager.isEnabled()
         binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeEnabled, currentDb)
 
+        binding.switchLoudnessEnhancer.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
+            if (isChecked != eqManager.isLoudnessEnhancerEnabled()) {
+                eqManager.setLoudnessEnhancerEnabled(isChecked)
+                binding.sliderLoudnessEnhancer.isEnabled = isChecked && eqManager.isEnabled()
+                binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isChecked, binding.sliderLoudnessEnhancer.value)
+            }
+        }
+
         binding.rowLoudnessEnhancer.setOnClickListener {
-            val newState = !binding.switchLoudnessEnhancer.isChecked
-            binding.switchLoudnessEnhancer.isChecked = newState
-            eqManager.setLoudnessEnhancerEnabled(newState)
-            binding.sliderLoudnessEnhancer.isEnabled = newState && eqManager.isEnabled()
-            binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(newState, binding.sliderLoudnessEnhancer.value)
+            binding.switchLoudnessEnhancer.toggle()
         }
 
         binding.sliderLoudnessEnhancer.addOnChangeListener { _, value, fromUser ->
@@ -198,10 +237,14 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
     private fun setupVolumeBoost() {
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
+        binding.switchXloud.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
+            if (isChecked != eqManager.isXLoudEnabled()) {
+                eqManager.setXLoudEnabled(isChecked)
+            }
+        }
         binding.rowXloud.setOnClickListener {
-            val newState = !binding.switchXloud.isChecked
-            binding.switchXloud.isChecked = newState
-            eqManager.setXLoudEnabled(newState)
+            binding.switchXloud.toggle()
         }
     }
 
@@ -239,10 +282,14 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
 
         binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
+        binding.switchMonoAudio.setOnCheckedChangeListener { _, isChecked ->
+            if (isUpdatingUi) return@setOnCheckedChangeListener
+            if (isChecked != eqManager.isMonoAudioEnabled()) {
+                eqManager.setMonoAudioEnabled(isChecked)
+            }
+        }
         binding.rowMonoAudio.setOnClickListener {
-            val enabled = !binding.switchMonoAudio.isChecked
-            binding.switchMonoAudio.isChecked = enabled
-            eqManager.setMonoAudioEnabled(enabled)
+            binding.switchMonoAudio.toggle()
         }
 
         binding.sliderStereoBalance.apply {

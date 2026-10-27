@@ -7,17 +7,22 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
+import xyz.omniplay.equalizer.receiver.AudioSessionReceiver
 import xyz.omniplay.equalizer.ui.MainActivity
 
 class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
     companion object {
+        private const val TAG = "EqualizerService"
         private const val CHANNEL_ID = "equalizer_channel"
         private const val NOTIFICATION_ID = 2001
 
@@ -29,10 +34,14 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
             val intent = Intent(context, EqualizerService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to start EqualizerService", e)
             }
         }
 
@@ -40,17 +49,56 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
             val intent = Intent(context, EqualizerService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to stop EqualizerService", e)
+            }
         }
     }
 
     private lateinit var eqManager: EqualizerManager
+    private val audioSessionReceiver = AudioSessionReceiver()
+    private var isReceiverRegistered = false
 
     override fun onCreate() {
         super.onCreate()
         eqManager = EqualizerManager.getInstance(this)
         eqManager.addListener(this)
         createNotificationChannel()
+        registerAudioSessionReceiver()
+    }
+
+    private fun registerAudioSessionReceiver() {
+        if (isReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+            addAction(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+            priority = 1000
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(audioSessionReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(audioSessionReceiver, filter)
+            }
+            isReceiverRegistered = true
+            Log.d(TAG, "Dynamically registered AudioSessionReceiver with priority 1000")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to register dynamic AudioSessionReceiver", e)
+        }
+    }
+
+    private fun unregisterAudioSessionReceiver() {
+        if (!isReceiverRegistered) return
+        try {
+            unregisterReceiver(audioSessionReceiver)
+            Log.d(TAG, "Unregistered dynamic AudioSessionReceiver")
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to unregister AudioSessionReceiver", e)
+        } finally {
+            isReceiverRegistered = false
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,15 +122,21 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
             }
         }
 
+        registerAudioSessionReceiver()
+
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to startForeground", e)
         }
 
         return START_STICKY
@@ -109,6 +163,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        unregisterAudioSessionReceiver()
         eqManager.removeListener(this)
     }
 

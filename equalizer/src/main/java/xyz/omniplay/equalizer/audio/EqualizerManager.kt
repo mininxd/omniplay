@@ -50,21 +50,33 @@ class EqualizerManager private constructor(private val context: Context) {
 
         init {
             try {
-                equalizer = Equalizer(0, sessionId)
+                equalizer = Equalizer(1000, sessionId)
             } catch (e: Throwable) {
-                Log.w(TAG, "Failed to instantiate Equalizer on session $sessionId", e)
+                try {
+                    equalizer = Equalizer(0, sessionId)
+                } catch (e2: Throwable) {
+                    Log.w(TAG, "Failed to instantiate Equalizer on session $sessionId", e2)
+                }
             }
 
             try {
-                bassBoost = BassBoost(0, sessionId)
+                bassBoost = BassBoost(1000, sessionId)
             } catch (e: Throwable) {
-                Log.w(TAG, "Failed to instantiate BassBoost on session $sessionId", e)
+                try {
+                    bassBoost = BassBoost(0, sessionId)
+                } catch (e2: Throwable) {
+                    Log.w(TAG, "Failed to instantiate BassBoost on session $sessionId", e2)
+                }
             }
 
             try {
-                virtualizer = Virtualizer(0, sessionId)
+                virtualizer = Virtualizer(1000, sessionId)
             } catch (e: Throwable) {
-                Log.w(TAG, "Failed to instantiate Virtualizer on session $sessionId", e)
+                try {
+                    virtualizer = Virtualizer(0, sessionId)
+                } catch (e2: Throwable) {
+                    Log.w(TAG, "Failed to instantiate Virtualizer on session $sessionId", e2)
+                }
             }
 
             try {
@@ -167,7 +179,20 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun bindSession(sessionId: Int) {
-        if (activeSessions.containsKey(sessionId)) return
+        if (activeSessions.containsKey(sessionId)) {
+            val existing = activeSessions[sessionId]
+            if (existing != null && (existing.equalizer != null || existing.bassBoost != null || existing.loudnessEnhancer != null)) {
+                return
+            }
+            existing?.release()
+            activeSessions.remove(sessionId)
+        }
+        if (activeSessions.size > 8) {
+            val oldestKey = activeSessions.keys.firstOrNull { it != 0 && it != sessionId }
+            if (oldestKey != null) {
+                activeSessions.remove(oldestKey)?.release()
+            }
+        }
         val effects = SessionAudioEffects(sessionId)
         activeSessions[sessionId] = effects
     }
@@ -377,32 +402,53 @@ class EqualizerManager private constructor(private val context: Context) {
                                 }
                             }
 
-                            var gainDb = daxLevels[closestDaxIndex]
+                            val freqRange = try { eq.getBandFreqRange(hwIndex.toShort()) } catch (_: Throwable) { null }
+                            val gainDb = if (freqRange != null && freqRange.size == 2 && freqRange[1] > freqRange[0]) {
+                                val lowHz = freqRange[0] / 1000
+                                val highHz = freqRange[1] / 1000
+                                var sumGain = 0
+                                var count = 0
+                                for (d in 0 until 10) {
+                                    if (daxFrequenciesHz[d] in lowHz..highHz) {
+                                        sumGain += daxLevels[d]
+                                        count++
+                                    }
+                                }
+                                if (count > 0) {
+                                    (sumGain.toFloat() / count).roundToInt()
+                                } else {
+                                    daxLevels[closestDaxIndex]
+                                }
+                            } else {
+                                daxLevels[closestDaxIndex]
+                            }
+
+                            var finalGainDb = gainDb
 
                             if (hwFreqHz <= 125) {
-                                gainDb += cbLevel
+                                finalGainDb += cbLevel
                             } else if (hwFreqHz <= 250) {
-                                gainDb += (cbLevel / 2)
+                                finalGainDb += (cbLevel / 2)
                             }
 
                             when (ieq) {
                                 IEQ_BALANCED -> {
-                                    if (hwFreqHz in 800..1500) gainDb += 1
-                                    if (hwFreqHz in 3500..5000) gainDb += 2
-                                    if (hwFreqHz >= 8000) gainDb += 1
+                                    if (hwFreqHz in 800..1500) finalGainDb += 1
+                                    if (hwFreqHz in 3500..5000) finalGainDb += 2
+                                    if (hwFreqHz >= 8000) finalGainDb += 1
                                 }
                                 IEQ_WARM -> {
-                                    if (hwFreqHz in 200..600) gainDb += 2
-                                    if (hwFreqHz >= 8000) gainDb -= 1
+                                    if (hwFreqHz in 200..600) finalGainDb += 2
+                                    if (hwFreqHz >= 8000) finalGainDb -= 1
                                 }
                                 IEQ_DETAILED -> {
-                                    if (hwFreqHz in 1500..3000) gainDb += 2
-                                    if (hwFreqHz in 3500..9000) gainDb += 3
-                                    if (hwFreqHz >= 14000) gainDb += 2
+                                    if (hwFreqHz in 1500..3000) finalGainDb += 2
+                                    if (hwFreqHz in 3500..9000) finalGainDb += 3
+                                    if (hwFreqHz >= 14000) finalGainDb += 2
                                 }
                             }
 
-                            val millibels = (gainDb * 100).coerceIn(minMb, maxMb).toShort()
+                            val millibels = (finalGainDb * 100).coerceIn(minMb, maxMb).toShort()
                             eq.setBandLevel(hwIndex.toShort(), millibels)
                         }
                     }

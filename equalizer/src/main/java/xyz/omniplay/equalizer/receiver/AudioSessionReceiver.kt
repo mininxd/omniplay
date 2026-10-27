@@ -28,6 +28,9 @@ class AudioSessionReceiver : BroadcastReceiver() {
             AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION -> {
                 Log.d(TAG, "Opening audio session $sessionId for $packageName")
                 eqManager.openAudioSession(sessionId, packageName)
+                if (eqManager.isEnabled()) {
+                    xyz.omniplay.equalizer.service.EqualizerService.start(context)
+                }
             }
             AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION -> {
                 Log.d(TAG, "Closing audio session $sessionId for $packageName")

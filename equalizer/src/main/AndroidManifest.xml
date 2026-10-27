@@ -12,6 +12,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <queries>
+        <intent>
+            <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+        </intent>
+    </queries>
+
     <application
         android:name=".EqualizerApplication"
         android:allowBackup="true"
@@ -24,6 +33,7 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
+            android:label="@string/app_name"
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity">
@@ -34,11 +44,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Android System Audio Effect Control Panel -->
-            <intent-filter>
+            <!-- Android System Audio Effect Control Panel (Generic) -->
+            <intent-filter android:priority="1000">
                 <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.CATEGORY_CAR_DOCK" />
+            </intent-filter>
+
+            <!-- Audio Effect Control Panel for Music (YouTube Music, Spotify, etc.) -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.CATEGORY_CONTENT_MUSIC" />
+            </intent-filter>
+
+            <!-- Audio Effect Control Panel for Video Players -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.CATEGORY_CONTENT_MOVIE" />
             </intent-filter>
         </activity>
 
@@ -46,9 +69,10 @@
         <receiver
             android:name=".receiver.AudioSessionReceiver"
             android:exported="true">
-            <intent-filter>
+            <intent-filter android:priority="1000">
                 <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
                 <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
 
