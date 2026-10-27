@@ -59,7 +59,10 @@ class StereoEffectsAudioProcessor(
         val frameSize = inputFormat.bytesPerFrame
         val frameCount = inputBuffer.remaining() / frameSize
         val processedBytes = frameCount * frameSize
-        if (processedBytes == 0) return
+        if (processedBytes == 0) {
+            inputBuffer.position(inputBuffer.limit())
+            return
+        }
 
         if (buffer.capacity() < processedBytes) {
             buffer = ByteBuffer.allocateDirect(processedBytes).order(ByteOrder.nativeOrder())
@@ -84,6 +87,23 @@ class StereoEffectsAudioProcessor(
             buffer.flip()
             outputBuffer = buffer
             return
+        }
+
+        if (samples.size < channelCount) {
+            samples = FloatArray(channelCount)
+        }
+        val sampleRate = inputFormat.sampleRate.coerceAtLeast(1)
+        if (attackCoefficient == 0f) {
+            attackCoefficient = exp((-1.0 / (sampleRate * COMPRESSOR_ATTACK_SECONDS)).toFloat())
+        }
+        if (releaseCoefficient == 0f) {
+            releaseCoefficient = exp((-1.0 / (sampleRate * COMPRESSOR_RELEASE_SECONDS)).toFloat())
+        }
+        if (crossfeedCoefficient == 0f) {
+            crossfeedCoefficient = 1f - exp((-2.0 * Math.PI * CROSSFEED_CUTOFF_HZ / sampleRate).toFloat())
+        }
+        if (compressorGain.isNaN() || compressorGain.isInfinite()) {
+            compressorGain = 1.0f
         }
 
         repeat(frameCount) {

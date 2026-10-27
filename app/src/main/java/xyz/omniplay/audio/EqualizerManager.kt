@@ -36,6 +36,23 @@ class EqualizerManager private constructor(private val context: Context) {
         fun onEqualizerConfigChanged()
     }
 
+    data class Preset(val name: String, val bands: IntArray, val clearBass: Int)
+
+    val presets = listOf(
+        Preset("Flat", intArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0),
+        Preset("Bass Boost", intArrayOf(6, 5, 4, 2, 0, 0, 0, 0, 0, 0), 4),
+        Preset("Treble Boost", intArrayOf(0, 0, 0, 0, 0, 1, 3, 5, 6, 7), 0),
+        Preset("Rock", intArrayOf(4, 3, 1, -1, -2, -1, 1, 3, 4, 5), 2),
+        Preset("Pop", intArrayOf(-1, 1, 3, 4, 3, 1, -1, -1, 1, 2), 1),
+        Preset("Jazz", intArrayOf(3, 2, 0, 1, -1, -1, 0, 1, 2, 3), 1),
+        Preset("Classical", intArrayOf(4, 3, 2, 1, -1, -1, 0, 2, 3, 4), 0),
+        Preset("Hip Hop", intArrayOf(5, 4, 1, 0, -1, -1, 1, 0, 2, 3), 3),
+        Preset("Electronic", intArrayOf(4, 3, 1, 0, -2, 1, 0, 2, 4, 4), 3),
+        Preset("Acoustic", intArrayOf(3, 2, 1, 1, 0, 1, 2, 3, 3, 2), 1),
+        Preset("Vocal", intArrayOf(-2, -2, -1, 2, 4, 4, 3, 1, 0, -1), -1),
+        Preset("Custom", IntArray(10) { 0 }, 0)
+    )
+
     private val listeners = CopyOnWriteArrayList<EqualizerListener>()
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val audioProcessorConfig = AtomicReference(StereoEffectsConfig())
@@ -253,6 +270,32 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Presets ---
+    fun getCurrentPresetIndex(): Int {
+        return prefs.getInt(KEY_PRESET_INDEX, 0).coerceIn(0, presets.size - 1)
+    }
+
+    fun applyPreset(presetIndex: Int) {
+        val index = presetIndex.coerceIn(0, presets.size - 1)
+        prefs.edit().putInt(KEY_PRESET_INDEX, index).apply()
+        val preset = presets[index]
+        if (index != presets.size - 1) { // Not "Custom"
+            for (i in 0 until 10) {
+                prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, preset.bands[i]).apply()
+            }
+            prefs.edit().putInt(KEY_CLEAR_BASS, preset.clearBass).apply()
+        }
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    private fun markCustomPreset() {
+        val customIndex = presets.size - 1
+        if (getCurrentPresetIndex() != customIndex) {
+            prefs.edit().putInt(KEY_PRESET_INDEX, customIndex).apply()
+        }
+    }
+
     // --- 10-Band Graphic Equalizer ---
     fun getDaxBandLevel(bandIndex: Int): Int {
         if (bandIndex !in 0 until 10) return 0
@@ -263,6 +306,9 @@ class EqualizerManager private constructor(private val context: Context) {
         if (bandIndex !in 0 until 10) return
         val clamped = levelDb.coerceIn(-12, 12)
         prefs.edit().putInt(KEY_DAX_BAND_PREFIX + bandIndex, clamped).apply()
+        if (fromUser) {
+            markCustomPreset()
+        }
         applyCurrentStateToEffects()
         if (fromUser) {
             notifyListeners()
@@ -274,11 +320,7 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     fun resetGeqBands() {
-        for (i in 0 until 10) {
-            prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, 0).apply()
-        }
-        applyCurrentStateToEffects()
-        notifyListeners()
+        applyPreset(0)
     }
 
     // --- Dolby Intelligent Equalizer (IEQ) ---
@@ -310,9 +352,12 @@ class EqualizerManager private constructor(private val context: Context) {
         return prefs.getInt(KEY_CLEAR_BASS, 0).coerceIn(-10, 10)
     }
 
-    fun setClearBassLevel(levelDb: Int) {
+    fun setClearBassLevel(levelDb: Int, fromUser: Boolean = true) {
         val clamped = levelDb.coerceIn(-10, 10)
         prefs.edit().putInt(KEY_CLEAR_BASS, clamped).apply()
+        if (fromUser) {
+            markCustomPreset()
+        }
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -405,12 +450,7 @@ class EqualizerManager private constructor(private val context: Context) {
      * Clear Phase, xLOUD, and S-Force untouched.
      */
     fun resetEqToFlat() {
-        for (i in 0 until 10) {
-            prefs.edit().putInt(KEY_DAX_BAND_PREFIX + i, 0).apply()
-        }
-        prefs.edit().putInt(KEY_IEQ_PRESET, IEQ_OFF).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
+        applyPreset(0)
     }
 
     fun resetAllToFlat() {
@@ -621,6 +661,7 @@ class EqualizerManager private constructor(private val context: Context) {
         private const val PREFS_NAME = "omniplay_sound_enhancement_prefs"
 
         const val KEY_MASTER_ENABLED = "key_master_enabled"
+        const val KEY_PRESET_INDEX = "key_preset_index"
         const val KEY_DAX_BAND_PREFIX = "key_dax_band_"
         const val KEY_IEQ_PRESET = "key_ieq_preset"
         const val KEY_DIALOG_ENHANCER = "key_dialog_enhancer"

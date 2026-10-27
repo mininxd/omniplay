@@ -325,26 +325,36 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
         // Dialogue Enhancer
         val de = eqManager.getDialogEnhancerAmount().toFloat()
-        binding.sliderDialogueEnhancer.value = de
+        if (!binding.sliderDialogueEnhancer.isPressed && binding.sliderDialogueEnhancer.value != de) {
+            binding.sliderDialogueEnhancer.value = de
+        }
         binding.tvDialogueEnhancerValue.text = if (de.toInt() == 0) "Off" else "Level ${de.toInt()}"
 
         // ClearBass
         val cb = eqManager.getClearBassLevel().toFloat()
-        binding.sliderClearBass.value = cb
+        if (!binding.sliderClearBass.isPressed && binding.sliderClearBass.value != cb) {
+            binding.sliderClearBass.value = cb
+        }
         binding.tvClearBassValue.text = formatDb(cb.toInt())
 
         val crossfeed = eqManager.getCrossfeedAmount()
-        binding.sliderCrossfeed.value = crossfeed.toFloat()
+        if (!binding.sliderCrossfeed.isPressed && binding.sliderCrossfeed.value.toInt() != crossfeed) {
+            binding.sliderCrossfeed.value = crossfeed.toFloat()
+        }
         binding.tvCrossfeedValue.text = formatEffectAmount(crossfeed)
 
         val dynamicRange = eqManager.getDynamicRangeAmount()
-        binding.sliderDynamicRange.value = dynamicRange.toFloat()
+        if (!binding.sliderDynamicRange.isPressed && binding.sliderDynamicRange.value.toInt() != dynamicRange) {
+            binding.sliderDynamicRange.value = dynamicRange.toFloat()
+        }
         binding.tvDynamicRangeValue.text = formatEffectAmount(dynamicRange)
 
         binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
 
         val balance = eqManager.getStereoBalance()
-        binding.sliderStereoBalance.value = balance.toFloat()
+        if (!binding.sliderStereoBalance.isPressed && binding.sliderStereoBalance.value.toInt() != balance) {
+            binding.sliderStereoBalance.value = balance.toFloat()
+        }
         binding.tvStereoBalanceValue.text = formatBalance(balance)
 
         // VPT
