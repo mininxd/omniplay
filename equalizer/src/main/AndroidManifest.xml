@@ -63,6 +63,20 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.CATEGORY_CONTENT_MOVIE" />
             </intent-filter>
+
+            <!-- Audio Effect Control Panel for Voice/Call apps -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.CATEGORY_CONTENT_VOICE" />
+            </intent-filter>
+
+            <!-- Audio Effect Control Panel for Games -->
+            <intent-filter android:priority="1000">
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.CATEGORY_CONTENT_GAME" />
+            </intent-filter>
         </activity>
 
         <!-- Broadcast receiver for system & media player audio sessions -->

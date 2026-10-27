@@ -77,14 +77,22 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     }
 
     private fun handleAudioSessionIntent(intent: Intent?) {
-        val sessionId = intent?.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, AudioEffect.ERROR) ?: AudioEffect.ERROR
-        val packageName = intent?.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
-        Log.i("MainActivity", "handleAudioSessionIntent action=${intent?.action}, sessionId=$sessionId, package=$packageName")
+        if (intent == null) return
+        val action = intent.action
+        val sessionId = intent.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, AudioEffect.ERROR)
+        val packageName = intent.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
+        val contentType = intent.getIntExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+        Log.i("MainActivity", "handleAudioSessionIntent action=$action, sessionId=$sessionId, package=$packageName, contentType=$contentType")
+
         if (sessionId != AudioEffect.ERROR && sessionId >= 0) {
             eqManager.openAudioSession(sessionId, packageName)
         }
-        if (intent?.action == AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL) {
+
+        if (action == AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL) {
             setResult(RESULT_OK)
+            if (eqManager.isEnabled()) {
+                EqualizerService.start(this)
+            }
         }
     }
 

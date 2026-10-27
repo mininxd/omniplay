@@ -11,7 +11,9 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.audiofx.AudioEffect
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import xyz.omniplay.equalizer.R
@@ -25,6 +27,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         private const val TAG = "EqualizerService"
         private const val CHANNEL_ID = "equalizer_channel"
         private const val NOTIFICATION_ID = 2001
+        private const val SESSION_KEEP_ALIVE_MS = 30_000L
 
         const val ACTION_START = "xyz.omniplay.equalizer.action.START"
         const val ACTION_STOP = "xyz.omniplay.equalizer.action.STOP"
@@ -60,6 +63,19 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     private lateinit var eqManager: EqualizerManager
     private val audioSessionReceiver = AudioSessionReceiver()
     private var isReceiverRegistered = false
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val sessionKeepAliveRunnable = object : Runnable {
+        override fun run() {
+            if (!eqManager.isEnabled()) return
+            try {
+                eqManager.ensureGlobalSession()
+            } catch (e: Throwable) {
+                Log.w(TAG, "Session keep-alive check failed", e)
+            }
+            handler.postDelayed(this, SESSION_KEEP_ALIVE_MS)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -67,6 +83,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         eqManager.addListener(this)
         createNotificationChannel()
         registerAudioSessionReceiver()
+        startSessionKeepAlive()
     }
 
     private fun registerAudioSessionReceiver() {
@@ -123,6 +140,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         }
 
         registerAudioSessionReceiver()
+        startSessionKeepAlive()
 
         val notification = buildNotification()
         try {
@@ -163,8 +181,18 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopSessionKeepAlive()
         unregisterAudioSessionReceiver()
         eqManager.removeListener(this)
+    }
+
+    private fun startSessionKeepAlive() {
+        handler.removeCallbacks(sessionKeepAliveRunnable)
+        handler.postDelayed(sessionKeepAliveRunnable, SESSION_KEEP_ALIVE_MS)
+    }
+
+    private fun stopSessionKeepAlive() {
+        handler.removeCallbacks(sessionKeepAliveRunnable)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -207,11 +235,13 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
         val presetIndex = eqManager.getCurrentPresetIndex()
         val presetName = eqManager.presets.getOrNull(presetIndex)?.name ?: "Active"
+        val sessionCount = eqManager.getActiveSessionCount()
+        val subtitle = "$presetName · $sessionCount session${if (sessionCount != 1) "s" else ""}"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_equalizer)
             .setContentTitle(getString(R.string.equalizer_active_title))
-            .setContentText(getString(R.string.equalizer_active_desc, presetName))
+            .setContentText(subtitle)
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

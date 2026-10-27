@@ -163,9 +163,13 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun openAudioSession(sessionId: Int, packageName: String? = null) {
-        Log.i(TAG, "Opening audio session: $sessionId from $packageName")
+        Log.i(TAG, "Opening audio session: $sessionId from $packageName (active sessions: ${activeSessions.size})")
         bindSession(sessionId)
         applyCurrentStateToEffects()
+
+        if (isEnabled()) {
+            EqualizerService.start(context)
+        }
         notifyListeners()
     }
 
@@ -204,6 +208,35 @@ class EqualizerManager private constructor(private val context: Context) {
         }
         activeSessions.clear()
     }
+
+    @Synchronized
+    fun ensureGlobalSession() {
+        val session0 = activeSessions[0]
+        if (session0 == null || (session0.equalizer == null && session0.bassBoost == null && session0.loudnessEnhancer == null)) {
+            Log.d(TAG, "Re-binding global session 0 (was lost or dead)")
+            activeSessions.remove(0)?.release()
+            val effects = SessionAudioEffects(0)
+            activeSessions[0] = effects
+            applyCurrentStateToEffects()
+        } else {
+            try {
+                val eq = session0.equalizer
+                if (eq != null && isEnabled()) {
+                    if (!eq.enabled) {
+                        eq.enabled = true
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Global session 0 equalizer is dead, rebinding", e)
+                activeSessions.remove(0)?.release()
+                val effects = SessionAudioEffects(0)
+                activeSessions[0] = effects
+                applyCurrentStateToEffects()
+            }
+        }
+    }
+
+    fun getActiveSessionCount(): Int = activeSessions.size
 
     // --- Master Toggle ---
     fun isEnabled(): Boolean {
