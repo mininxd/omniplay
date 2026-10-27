@@ -142,8 +142,8 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
     private fun setupResetButton() {
         binding.btnResetDax.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            eqManager.resetDaxBands()
-            binding.daxEqBarsView.animateReset()
+            eqManager.resetEqToFlat()
+            refreshUI()
         }
     }
 
