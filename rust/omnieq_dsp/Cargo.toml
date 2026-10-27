@@ -1,0 +1,21 @@
+[package]
+name = "omnieq_dsp"
+version = "0.1.0"
+edition = "2021"
+authors = ["OmniPlay Developers"]
+description = "High-performance Rust Audio DSP Core for OmniPlay & OmniQualizer"
+
+[lib]
+name = "omnieq_dsp"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+dasp = { path = "../dasp/dasp", default-features = false, features = ["std", "sample", "frame", "ring_buffer", "peak", "envelope", "signal", "slice"] }
+jni = "0.21"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

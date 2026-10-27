@@ -645,13 +645,17 @@ class EqualizerManager private constructor(private val context: Context) {
     }
 
     private fun updateAudioProcessorConfig() {
+        val bands = getAllDaxBandLevels()
+        val floatBands = FloatArray(10) { bands[it].toFloat() }
         audioProcessorConfig.set(
             StereoEffectsConfig(
                 enabled = isEnabled(),
                 crossfeedAmount = getCrossfeedAmount(),
                 dynamicRangeAmount = getDynamicRangeAmount(),
                 monoAudio = isMonoAudioEnabled(),
-                stereoBalance = getStereoBalance()
+                stereoBalance = getStereoBalance(),
+                daxBands = floatBands,
+                clearBass = getClearBassLevel().toFloat()
             )
         )
     }

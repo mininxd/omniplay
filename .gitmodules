@@ -1,0 +1,3 @@
+[submodule "rust/dasp"]
+	path = rust/dasp
+	url = https://github.com/rustaudio/dasp
