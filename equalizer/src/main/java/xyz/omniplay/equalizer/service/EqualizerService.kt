@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.Handler
@@ -63,6 +66,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     private lateinit var eqManager: EqualizerManager
     private val audioSessionReceiver = AudioSessionReceiver()
     private var isReceiverRegistered = false
+    private var audioDeviceCallback: Any? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val sessionKeepAliveRunnable = object : Runnable {
@@ -83,6 +87,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         eqManager.addListener(this)
         createNotificationChannel()
         registerAudioSessionReceiver()
+        registerAudioDeviceCallback()
         startSessionKeepAlive()
     }
 
@@ -182,8 +187,45 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     override fun onDestroy() {
         super.onDestroy()
         stopSessionKeepAlive()
+        unregisterAudioDeviceCallback()
         unregisterAudioSessionReceiver()
         eqManager.removeListener(this)
+    }
+
+    private fun registerAudioDeviceCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val audioManager = getSystemService(AudioManager::class.java) ?: return
+            val callback = object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                    Log.d(TAG, "Audio devices added, refreshing audio effects")
+                    handler.postDelayed({
+                        if (eqManager.isEnabled()) {
+                            eqManager.applyCurrentStateToEffects()
+                        }
+                    }, 500)
+                }
+
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                    Log.d(TAG, "Audio devices removed, refreshing audio effects")
+                    handler.postDelayed({
+                        if (eqManager.isEnabled()) {
+                            eqManager.applyCurrentStateToEffects()
+                        }
+                    }, 500)
+                }
+            }
+            audioDeviceCallback = callback
+            audioManager.registerAudioDeviceCallback(callback, handler)
+        }
+    }
+
+    private fun unregisterAudioDeviceCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val callback = audioDeviceCallback as? AudioDeviceCallback ?: return
+            val audioManager = getSystemService(AudioManager::class.java)
+            audioManager?.unregisterAudioDeviceCallback(callback)
+            audioDeviceCallback = null
+        }
     }
 
     private fun startSessionKeepAlive() {
