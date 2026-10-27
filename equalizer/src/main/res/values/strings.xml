@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Equalizer</string>
+    <string name="equalizer_master_switch">Enable Equalizer</string>
+    <string name="equalizer_master_switch_desc">High-precision DSP audio enhancement engine</string>
+    <string name="preset_title">Presets</string>
+    <string name="dax_equalizer_title">10-Band Equalizer</string>
+    <string name="dax_equalizer_desc">Precision frequency tuning (±12 dB)</string>
+    <string name="reset_to_flat">Reset to Flat</string>
+
+    <!-- Dolby Intelligent Equalizer -->
+    <string name="ieq_title">Intelligent Equalizer</string>
+    <string name="ieq_desc">Dynamic acoustic profiling</string>
+    <string name="ieq_off">Off</string>
+    <string name="ieq_balanced">Balanced</string>
+    <string name="ieq_warm">Warm</string>
+    <string name="ieq_detailed">Detailed</string>
+
+    <!-- Dialogue Enhancer -->
+    <string name="dialogue_enhancer_title">Dialogue Enhancer</string>
+    <string name="dialogue_enhancer_desc">Improves clarity of vocals and spoken dialogue</string>
+
+    <!-- ClearBass -->
+    <string name="clear_bass_title">Sub-Bass (ClearBass™)</string>
+    <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
+
+    <!-- VPT Surround -->
+    <string name="vpt_title">Virtualphones Technology (VPT)</string>
+    <string name="vpt_desc">Virtual spatial acoustics simulation</string>
+    <string name="vpt_off">Off</string>
+    <string name="vpt_studio">Studio</string>
+    <string name="vpt_club">Club</string>
+    <string name="vpt_concert_hall">Concert Hall</string>
+
+    <!-- Sony Suite -->
+    <string name="sony_enhancements_title">Sony Enhancement Suite</string>
+    <string name="automatic_optimization_title">Automatic optimisation</string>
+    <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
+    <string name="clear_phase_title">Clear Phase™</string>
+    <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
+    <string name="xloud_title">xLOUD™</string>
+    <string name="xloud_desc">Internal speaker volume &amp; dynamic loudness booster</string>
+    <string name="sforce_title">S-Force Front Surround 3D</string>
+    <string name="sforce_desc">Frontal 3D virtual surround soundstage expansion</string>
+
+    <!-- Playback Effects -->
+    <string name="playback_effects_title">Stereo &amp; Playback Effects</string>
+    <string name="crossfeed_title">Crossfeed</string>
+    <string name="crossfeed_desc">Blends stereo channels for natural headphone listening</string>
+    <string name="dynamic_range_control_title">Dynamic Range Control</string>
+    <string name="dynamic_range_control_desc">Compresses loud peaks to reduce volume swings</string>
+    <string name="mono_audio_title">Mono audio</string>
+    <string name="mono_audio_desc">Mixes left and right channels into both sides</string>
+    <string name="stereo_balance_title">Balance</string>
+    <string name="stereo_balance_desc">Shift playback left or right; double-tap to center</string>
+
+    <!-- Units & Formatters -->
+    <string name="effect_off">Off</string>
+    <string name="effect_percent">%1$d%%</string>
+    <string name="balance_center">Center</string>
+    <string name="balance_left">Left %1$d%%</string>
+    <string name="balance_right">Right %1$d%%</string>
+
+    <!-- Notification & Service -->
+    <string name="equalizer_service_channel_name">Equalizer Service</string>
+    <string name="equalizer_service_channel_desc">Shows persistent notification while equalizer is active</string>
+    <string name="equalizer_active_title">Equalizer is Active</string>
+    <string name="equalizer_active_desc">Current preset: %1$s</string>
+    <string name="turn_off">Turn Off</string>
+</resources>

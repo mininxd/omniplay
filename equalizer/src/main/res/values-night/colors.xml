@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Neutral baseline (Dark) -->
+    <color name="background_dark">#12140E</color>
+    <color name="surface_dark">#12140E</color>
+    <color name="surface_container">#1A1C15</color>
+    <color name="surface_container_high">#25271E</color>
+    <color name="surface_container_highest">#303228</color>
+
+    <!-- Material You reference palette -->
+    <color name="primary_accent">#C2E088</color>
+    <color name="primary_variant">#8C9579</color>
+    <color name="on_primary">#2C341C</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#E3E3DC</color>
+    <color name="text_secondary">#C5C8B8</color>
+    <color name="text_tertiary">#8F9283</color>
+
+    <!-- Controls & Sliders -->
+    <color name="control_tint">#C5C8B8</color>
+    <color name="control_tint_active">#C2E088</color>
+    <color name="control_tint_inactive">#44483D</color>
+    <color name="slider_track_inactive">#303228</color>
+    <color name="slider_track_active">#C2E088</color>
+    <color name="slider_thumb">#C2E088</color>
+    <color name="slider_halo">#33C2E088</color>
+
+    <!-- System -->
+    <color name="status_bar_color">#12140E</color>
+    <color name="navigation_bar_color">#12140E</color>
+</resources>

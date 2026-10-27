@@ -32,7 +32,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APKs
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew :app:assembleRelease --stacktrace
 
       - name: Prepare Release APKs
         run: |
