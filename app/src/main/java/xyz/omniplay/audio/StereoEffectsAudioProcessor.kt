@@ -7,7 +7,6 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.exp
-import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -25,11 +24,12 @@ class StereoEffectsAudioProcessor(
 ) : AudioProcessor {
 
     private var inputFormat = AudioProcessor.AudioFormat.NOT_SET
+    private var buffer = AudioProcessor.EMPTY_BUFFER
     private var outputBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
     private var crossfeedLeft = 0f
     private var crossfeedRight = 0f
-    private var compressorEnvelope = 0f
+    private var compressorGain = 1.0f
     private var crossfeedCoefficient = 0f
     private var attackCoefficient = 0f
     private var releaseCoefficient = 0f
@@ -61,10 +61,10 @@ class StereoEffectsAudioProcessor(
         val processedBytes = frameCount * frameSize
         if (processedBytes == 0) return
 
-        if (outputBuffer.capacity() < processedBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(processedBytes).order(ByteOrder.nativeOrder())
+        if (buffer.capacity() < processedBytes) {
+            buffer = ByteBuffer.allocateDirect(processedBytes).order(ByteOrder.nativeOrder())
         } else {
-            outputBuffer.clear()
+            buffer.clear()
         }
 
         val settings = configProvider()
@@ -76,13 +76,13 @@ class StereoEffectsAudioProcessor(
         val crossfeedMix = if (channelCount == 2 && !useMono) crossfeedAmount * MAX_CROSSFEED_MIX / 100f else 0f
         val leftGain = if (balance > 0) 1f - balance / 100f else 1f
         val rightGain = if (balance < 0) 1f + balance / 100f else 1f
-        val threshold = DRC_THRESHOLD
         val ratio = 1f + DYNAMIC_RANGE_MAX_RATIO_DELTA * dynamicRangeAmount / 100f
 
         val isPassthrough = !useMono && crossfeedMix == 0f && balance == 0 && dynamicRangeAmount == 0
         if (isPassthrough) {
-            outputBuffer.put(inputBuffer)
-            outputBuffer.flip()
+            buffer.put(inputBuffer)
+            buffer.flip()
+            outputBuffer = buffer
             return
         }
 
@@ -91,7 +91,8 @@ class StereoEffectsAudioProcessor(
             for (channel in 0 until channelCount) {
                 val sample = inputBuffer.short.toFloat() / PCM16_SCALE
                 samples[channel] = sample
-                peak = max(peak, abs(sample))
+                val a = abs(sample)
+                if (a > peak) peak = a
             }
 
             if (channelCount == 2) {
@@ -108,31 +109,36 @@ class StereoEffectsAudioProcessor(
 
                 samples[0] *= leftGain
                 samples[1] *= rightGain
-                peak = max(abs(samples[0]), abs(samples[1]))
+                val p0 = abs(samples[0])
+                val p1 = abs(samples[1])
+                peak = if (p0 > p1) p0 else p1
             }
 
             val compressionGain = if (dynamicRangeAmount > 0) {
-                val coefficient = if (peak > compressorEnvelope) attackCoefficient else releaseCoefficient
-                compressorEnvelope = coefficient * compressorEnvelope + (1f - coefficient) * peak
-                if (compressorEnvelope > threshold) {
-                    val envelopeDb = 20f * (ln(compressorEnvelope.coerceAtLeast(MIN_AMPLITUDE)) / LN_10)
-                    val gainDb = (THRESHOLD_DB - envelopeDb) * (1f - 1f / ratio)
-                    dbToLinear(gainDb)
+                val targetGain = if (peak > DRC_LINEAR_THRESHOLD) {
+                    val excess = peak - DRC_LINEAR_THRESHOLD
+                    val compressedPeak = DRC_LINEAR_THRESHOLD + (excess / ratio)
+                    (compressedPeak / peak).coerceIn(0.1f, 1.0f)
                 } else {
-                    1f
+                    1.0f
                 }
+                val coeff = if (targetGain < compressorGain) attackCoefficient else releaseCoefficient
+                compressorGain = coeff * compressorGain + (1f - coeff) * targetGain
+                compressorGain
             } else {
-                compressorEnvelope = 0f
-                1f
+                compressorGain = 1.0f
+                1.0f
             }
 
             for (channel in 0 until channelCount) {
                 val sample = (samples[channel] * compressionGain).coerceIn(-1f, MAX_PCM16_SAMPLE)
-                outputBuffer.putShort((sample * PCM16_SCALE).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort())
+                buffer.putShort((sample * PCM16_SCALE).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort())
             }
         }
 
-        outputBuffer.flip()
+        inputBuffer.position(inputBuffer.limit())
+        buffer.flip()
+        outputBuffer = buffer
     }
 
     override fun queueEndOfStream() {
@@ -148,11 +154,12 @@ class StereoEffectsAudioProcessor(
     override fun isEnded(): Boolean = inputEnded && !outputBuffer.hasRemaining()
 
     override fun flush() {
+        buffer = AudioProcessor.EMPTY_BUFFER
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
         crossfeedLeft = 0f
         crossfeedRight = 0f
-        compressorEnvelope = 0f
+        compressorGain = 1.0f
     }
 
     override fun reset() {
@@ -164,19 +171,14 @@ class StereoEffectsAudioProcessor(
         samples = FloatArray(0)
     }
 
-    private fun dbToLinear(db: Float): Float = Math.pow(10.0, db / 20.0).toFloat()
-
     private companion object {
         const val CROSSFEED_CUTOFF_HZ = 700.0
-        const val COMPRESSOR_ATTACK_SECONDS = 0.008
-        const val COMPRESSOR_RELEASE_SECONDS = 0.160
-        const val DRC_THRESHOLD = 0.12589254f
+        const val COMPRESSOR_ATTACK_SECONDS = 0.005
+        const val COMPRESSOR_RELEASE_SECONDS = 0.100
+        const val DRC_LINEAR_THRESHOLD = 0.25f // -12 dBFS
         const val DYNAMIC_RANGE_MAX_RATIO_DELTA = 3f
-        const val LN_10 = 2.302585093f
         const val MAX_CROSSFEED_MIX = 0.25f
         const val MAX_PCM16_SAMPLE = 0.9999695f
-        const val MIN_AMPLITUDE = 0.000001f
         const val PCM16_SCALE = 32768f
-        const val THRESHOLD_DB = -18f
     }
 }

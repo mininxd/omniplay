@@ -626,7 +626,6 @@ class EqualizerManager private constructor(private val context: Context) {
                 if (isMasterOn) {
                     if (hw.isSonyActive) {
                         hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_XLOUD_ON, if (isXloud) 1 else 0)
-                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_DN_ON, if (getDynamicRangeAmount() > 0) 1 else 0)
                         hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_CLEARSTEREO_ON, if (getCrossfeedAmount() > 0) 1 else 0)
                     }
 
@@ -640,7 +639,6 @@ class EqualizerManager private constructor(private val context: Context) {
                             else -> 0
                         }
                         hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_IEQ_PRESET, dolbyIeq)
-                        hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_VOLUME_LEVELER, if (getDynamicRangeAmount() > 0) 1 else 0)
                         hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_HEADPHONE_VIRTUALIZER, if (getCrossfeedAmount() > 0) 1 else 0)
                     }
                 }
