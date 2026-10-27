@@ -48,8 +48,24 @@ impl DynamicRangeCompressor {
         self.envelope = 1.0;
     }
 
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.is_active || (self.envelope - 1.0).abs() >= 0.001
+    }
+
     #[inline(always)]
     pub fn process_stereo(&mut self, left: f64, right: f64) -> (f64, f64) {
+        if !self.is_active {
+            if (self.envelope - 1.0).abs() < 0.001 {
+                self.envelope = 1.0;
+                return (left, right);
+            }
+        }
+
+        if self.envelope.is_nan() || self.envelope.is_infinite() || self.envelope < 0.01 {
+            self.envelope = 1.0;
+        }
+
         let peak = left.abs().max(right.abs());
 
         let target_gain = if self.is_active {

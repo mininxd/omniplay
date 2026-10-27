@@ -50,6 +50,11 @@ impl Crossfeed {
         self.is_active = self.amount > 0.01;
     }
 
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.is_active
+    }
+
     fn update_filters(&mut self) {
         // 700 Hz cutoff for binaural head-shadowing simulation
         self.lowpass_left.set_low_pass(700.0, self.sample_rate, 0.707);

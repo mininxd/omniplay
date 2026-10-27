@@ -46,6 +46,11 @@ impl ClearBass {
         self.filter_right.reset();
     }
 
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.is_active
+    }
+
     fn update_filter(&mut self) {
         if self.gain_level.abs() < 0.1 {
             self.is_active = false;

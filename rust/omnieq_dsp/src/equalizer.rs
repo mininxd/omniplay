@@ -86,6 +86,11 @@ impl GraphicEqualizer {
         }
     }
 
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        self.is_active
+    }
+
     fn check_active(&mut self) {
         self.is_active = self.bands_db.iter().any(|&g| g.abs() > 0.01);
     }

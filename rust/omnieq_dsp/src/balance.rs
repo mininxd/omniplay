@@ -46,6 +46,20 @@ impl StereoBalance {
         }
     }
 
+    #[inline]
+    pub fn is_active(&self) -> bool {
+        !self.is_centered
+            || (self.current_left_gain - 1.0).abs() >= 0.001
+            || (self.current_right_gain - 1.0).abs() >= 0.001
+    }
+
+    pub fn reset_state(&mut self) {
+        if self.is_centered {
+            self.current_left_gain = 1.0;
+            self.current_right_gain = 1.0;
+        }
+    }
+
     #[inline(always)]
     pub fn process_stereo(&mut self, left: f64, right: f64) -> (f64, f64) {
         if self.is_centered
