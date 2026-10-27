@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.GestureDetector
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.chip.Chip
@@ -13,6 +14,7 @@ import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
 import xyz.omniplay.equalizer.service.EqualizerService
+import xyz.omniplay.equalizer.util.ThemeColors
 import xyz.omniplay.equalizer.util.ThemeHelper
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -125,6 +127,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchMaster.setOnCheckedChangeListener { _, isChecked ->
             if (isUpdatingUi) return@setOnCheckedChangeListener
             if (isChecked != eqManager.isEnabled()) {
+                binding.switchMaster.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 eqManager.setEnabled(isChecked)
                 updateEnabledState(isChecked)
             }
@@ -138,12 +141,12 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private fun setupPresets() {
         binding.chipGroupPresets.removeAllViews()
         for ((index, preset) in eqManager.presets.withIndex()) {
-            val chip = Chip(this).apply {
+            val chip = (layoutInflater.inflate(R.layout.item_preset_chip, binding.chipGroupPresets, false) as Chip).apply {
                 id = index + 1000
                 text = preset.name
-                isCheckable = true
                 setOnClickListener {
                     if (isUpdatingUi) return@setOnClickListener
+                    it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     eqManager.applyPreset(index)
                 }
             }
@@ -155,6 +158,13 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private fun updatePresetSelection(index: Int) {
         val chipId = index + 1000
         binding.chipGroupPresets.check(chipId)
+        val selectedChip = binding.chipGroupPresets.findViewById<Chip>(chipId)
+        if (selectedChip != null) {
+            binding.scrollPresets.post {
+                val scrollX = selectedChip.left - (binding.scrollPresets.width - selectedChip.width) / 2
+                binding.scrollPresets.smoothScrollTo(scrollX.coerceAtLeast(0), 0)
+            }
+        }
     }
 
     private fun setupDaxBands() {
@@ -180,6 +190,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                 else -> EqualizerManager.IEQ_OFF
             }
             if (preset != eqManager.getIeqPreset()) {
+                binding.chipGroupIeq.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 eqManager.setIeqPreset(preset)
             }
         }
@@ -195,12 +206,40 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderClearBass.value = currentCb
         binding.tvClearBassValue.text = formatDb(currentCb.toInt())
 
-        binding.sliderClearBass.addOnChangeListener { _, value, fromUser ->
+        var previousDb = currentCb.toInt()
+        binding.sliderClearBass.addOnChangeListener { slider, value, fromUser ->
             if (fromUser) {
                 val db = value.toInt()
+                if (db != previousDb) {
+                    if (db == 0) {
+                        slider.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    } else {
+                        slider.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    }
+                    previousDb = db
+                }
                 binding.tvClearBassValue.text = formatDb(db)
                 eqManager.setClearBassLevel(db)
             }
+        }
+
+        val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean = true
+            override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+                if (e.actionMasked == MotionEvent.ACTION_UP) {
+                    binding.sliderClearBass.post {
+                        binding.sliderClearBass.value = 0f
+                        binding.tvClearBassValue.text = formatDb(0)
+                        binding.sliderClearBass.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        eqManager.setClearBassLevel(0)
+                    }
+                }
+                return true
+            }
+        })
+        binding.sliderClearBass.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            false
         }
     }
 
@@ -234,8 +273,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             binding.switchLoudnessEnhancer.toggle()
         }
 
-        binding.sliderLoudnessEnhancer.addOnChangeListener { _, value, fromUser ->
+        binding.sliderLoudnessEnhancer.addOnChangeListener { slider, value, fromUser ->
             if (fromUser) {
+                slider.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(binding.switchLoudnessEnhancer.isChecked, value)
                 val gainMb = (value * 100f).roundToInt().coerceIn(0, 1000)
                 eqManager.setLoudnessEnhancerGainMb(gainMb)
@@ -248,6 +288,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchXloud.setOnCheckedChangeListener { _, isChecked ->
             if (isUpdatingUi) return@setOnCheckedChangeListener
             if (isChecked != eqManager.isXLoudEnabled()) {
+                binding.switchXloud.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 eqManager.setXLoudEnabled(isChecked)
             }
         }
@@ -264,8 +305,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             stepSize = 5f
             value = eqManager.getCrossfeedAmount().toFloat()
             binding.tvCrossfeedValue.text = formatEffectAmount(value.toInt())
-            addOnChangeListener { _, value, fromUser ->
+            addOnChangeListener { slider, value, fromUser ->
                 if (fromUser) {
+                    slider.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     val amount = value.toInt()
                     binding.tvCrossfeedValue.text = formatEffectAmount(amount)
                     eqManager.setCrossfeedAmount(amount)
@@ -280,8 +322,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             stepSize = 5f
             value = eqManager.getDynamicRangeAmount().toFloat()
             binding.tvDynamicRangeValue.text = formatEffectAmount(value.toInt())
-            addOnChangeListener { _, value, fromUser ->
+            addOnChangeListener { slider, value, fromUser ->
                 if (fromUser) {
+                    slider.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     val amount = value.toInt()
                     binding.tvDynamicRangeValue.text = formatEffectAmount(amount)
                     eqManager.setDynamicRangeAmount(amount)
@@ -293,6 +336,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchMonoAudio.setOnCheckedChangeListener { _, isChecked ->
             if (isUpdatingUi) return@setOnCheckedChangeListener
             if (isChecked != eqManager.isMonoAudioEnabled()) {
+                binding.switchMonoAudio.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 eqManager.setMonoAudioEnabled(isChecked)
             }
         }
@@ -300,16 +344,25 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             binding.switchMonoAudio.toggle()
         }
 
+        var prevBalance = eqManager.getStereoBalance()
         binding.sliderStereoBalance.apply {
             isTickVisible = false
             valueFrom = -100f
             valueTo = 100f
             stepSize = 1f
-            value = eqManager.getStereoBalance().toFloat()
-            binding.tvStereoBalanceValue.text = formatBalance(value.toInt())
-            addOnChangeListener { _, value, fromUser ->
+            value = prevBalance.toFloat()
+            binding.tvStereoBalanceValue.text = formatBalance(prevBalance)
+            addOnChangeListener { slider, value, fromUser ->
                 if (fromUser) {
                     val balance = value.toInt()
+                    if (balance != prevBalance) {
+                        if (balance == 0) {
+                            slider.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                        } else {
+                            slider.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        }
+                        prevBalance = balance
+                    }
                     binding.tvStereoBalanceValue.text = formatBalance(balance)
                     eqManager.setStereoBalance(balance)
                 }
@@ -370,6 +423,16 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchMaster.isChecked = enabled
         updateEnabledState(enabled)
 
+        if (enabled) {
+            val sessionCount = eqManager.getActiveSessionCount()
+            val sessionText = if (sessionCount > 0) " · $sessionCount session${if (sessionCount != 1) "s" else ""} active" else ""
+            binding.tvMasterDesc.text = "High-Precision DSP Online$sessionText"
+            binding.tvMasterDesc.setTextColor(ThemeColors.getPrimary(this))
+        } else {
+            binding.tvMasterDesc.text = getString(R.string.equalizer_master_switch_desc)
+            binding.tvMasterDesc.setTextColor(ThemeColors.getOnSurfaceVariant(this))
+        }
+
         updatePresetSelection(eqManager.getCurrentPresetIndex())
 
         // Dax 10-Band Pillars Rack
@@ -412,15 +475,21 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     }
 
     private fun updateEnabledState(enabled: Boolean) {
-        val alpha = if (enabled) 1.0f else 0.45f
+        val targetAlpha = if (enabled) 1.0f else 0.40f
 
-        binding.cardPresets.alpha = alpha
-        binding.cardDaxEqualizer.alpha = alpha
-        binding.cardIeq.alpha = alpha
-        binding.cardClearBass.alpha = alpha
-        binding.cardLoudnessEnhancer.alpha = alpha
-        binding.cardVolumeBoost.alpha = alpha
-        binding.cardPlaybackEffects.alpha = alpha
+        val cards = listOf(
+            binding.cardPresets,
+            binding.cardDaxEqualizer,
+            binding.cardIeq,
+            binding.cardClearBass,
+            binding.cardLoudnessEnhancer,
+            binding.cardVolumeBoost,
+            binding.cardPlaybackEffects
+        )
+
+        for (card in cards) {
+            card.animate().alpha(targetAlpha).setDuration(200).start()
+        }
 
         binding.chipGroupPresets.isEnabled = enabled
         for (i in 0 until binding.chipGroupPresets.childCount) {

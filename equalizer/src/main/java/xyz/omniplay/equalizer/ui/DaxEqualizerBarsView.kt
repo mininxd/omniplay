@@ -281,9 +281,9 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
             (Color.alpha(outlineVariant) * 0.7f * alphaMultiplier).toInt()
         )
 
-        frequencyTextPaint.textSize = 10.5f.sp
-        gainTextPaint.textSize = 10f.sp
-        badgeTextPaint.textSize = 11f.sp
+        frequencyTextPaint.textSize = 11.5f.sp
+        gainTextPaint.textSize = 11f.sp
+        badgeTextPaint.textSize = 11.5f.sp
 
         val horizontalMargin = 2.dp
         val contentWidth = (w - paddingLeft - paddingRight - horizontalMargin * 2).toFloat()
@@ -296,7 +296,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
 
         val slotWidth = contentWidth / 10f
         val barWidth = (slotWidth * 0.76f).coerceIn(16.dp, 32.dp)
-        val cornerRadius = 6.dp
+        val cornerRadius = 8.dp
 
         // 1. Draw 0 dB Reference Guideline
         val lineLeft = paddingLeft + horizontalMargin + slotWidth * 0.1f
@@ -331,15 +331,15 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 canvas.drawRoundRect(tempRect, cornerRadius, cornerRadius, chosenBarPaint)
             }
 
-            val handleHeight = 4.dp
-            val handleWidth = barWidth + 2.dp
+            val handleHeight = 6.dp
+            val handleWidth = barWidth + 4.dp
             tempRect.set(
                 centerX - handleWidth / 2f,
                 fillTop - handleHeight / 2f,
                 centerX + handleWidth / 2f,
                 fillTop + handleHeight / 2f
             )
-            canvas.drawRoundRect(tempRect, 2.dp, 2.dp, handlePaint)
+            canvas.drawRoundRect(tempRect, 3.dp, 3.dp, handlePaint)
 
             if (isActive) {
                 val badgeText = if (gain > 0) "+$gain dB" else if (gain == 0) "0 dB" else "$gain dB"
