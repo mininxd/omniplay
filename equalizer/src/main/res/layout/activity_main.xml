@@ -247,65 +247,7 @@
                 </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
 
-            <!-- SECTION 3: Dialogue Enhancer -->
-            <LinearLayout
-                android:id="@+id/card_dialogue_enhancer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:orientation="vertical">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/dialogue_enhancer_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="18sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/dialogue_enhancer_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/tv_dialogue_enhancer_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-medium"
-                        android:text="Off"
-                        android:textColor="?attr/colorPrimary"
-                        android:textSize="15sp" />
-                </LinearLayout>
-
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/slider_dialogue_enhancer"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:stepSize="1"
-                    android:value="0"
-                    android:valueFrom="0"
-                    android:valueTo="10" />
-            </LinearLayout>
-
-            <!-- SECTION 4: Sub-Bass -->
+            <!-- SECTION 3: Sub-Bass -->
             <LinearLayout
                 android:id="@+id/card_clear_bass"
                 android:layout_width="match_parent"
@@ -428,180 +370,20 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:stepSize="50"
+                    android:stepSize="10"
                     android:value="0"
                     android:valueFrom="0"
                     android:valueTo="1000" />
             </LinearLayout>
 
-            <!-- SECTION 5: Virtualphones Technology (VPT) -->
+            <!-- SECTION 5: Volume Boost -->
             <LinearLayout
-                android:id="@+id/card_vpt"
+                android:id="@+id/card_volume_boost"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="@string/vpt_title"
-                    android:textColor="?attr/colorOnSurface"
-                    android:textSize="18sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/vpt_desc"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="13sp" />
-
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/chip_group_vpt"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    app:singleSelection="true">
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_vpt_off"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/vpt_off" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_vpt_studio"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/vpt_studio" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_vpt_club"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/vpt_club" />
-
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_vpt_concert_hall"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/vpt_concert_hall" />
-                </com.google.android.material.chip.ChipGroup>
-            </LinearLayout>
-
-            <!-- SECTION 6: Sound Enhancement Suite -->
-            <LinearLayout
-                android:id="@+id/card_sony_suite"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif-medium"
-                    android:text="@string/sony_enhancements_title"
-                    android:textColor="?attr/colorOnSurface"
-                    android:textSize="18sp" />
-
-                <!-- Automatic Optimisation -->
-                <LinearLayout
-                    android:id="@+id/row_automatic_optimization"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/automatic_optimization_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="16sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/automatic_optimization_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_automatic_optimization"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:clickable="false"
-                        android:focusable="false"
-                        app:thumbIcon="@drawable/asl_switch_thumb" />
-                </LinearLayout>
-
-                <!-- Clear Phase -->
-                <LinearLayout
-                    android:id="@+id/row_clear_phase"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/clear_phase_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="16sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/clear_phase_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_clear_phase"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:clickable="false"
-                        android:focusable="false"
-                        app:thumbIcon="@drawable/asl_switch_thumb" />
-                </LinearLayout>
-
-                <!-- xLOUD -->
                 <LinearLayout
                     android:id="@+id/row_xloud"
                     android:layout_width="match_parent"
@@ -611,8 +393,8 @@
                     android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp">
 
                     <LinearLayout
                         android:layout_width="0dp"
@@ -626,7 +408,7 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/xloud_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="16sp" />
+                            android:textSize="18sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -639,51 +421,6 @@
 
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_xloud"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:clickable="false"
-                        android:focusable="false"
-                        app:thumbIcon="@drawable/asl_switch_thumb" />
-                </LinearLayout>
-
-                <!-- S-Force Front Surround -->
-                <LinearLayout
-                    android:id="@+id/row_sforce"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/sforce_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="16sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="@string/sforce_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="13sp" />
-                    </LinearLayout>
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_sforce"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:clickable="false"

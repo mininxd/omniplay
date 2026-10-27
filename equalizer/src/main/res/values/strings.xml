@@ -16,10 +16,6 @@
     <string name="ieq_warm">Warm</string>
     <string name="ieq_detailed">Detailed</string>
 
-    <!-- Dialogue Enhancer -->
-    <string name="dialogue_enhancer_title">Dialogue Enhancer</string>
-    <string name="dialogue_enhancer_desc">Improves clarity of vocals and spoken dialogue</string>
-
     <!-- Sub-Bass -->
     <string name="clear_bass_title">Sub-Bass</string>
     <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
@@ -28,24 +24,9 @@
     <string name="loudness_enhancer_title">Loudness Enhancer</string>
     <string name="loudness_enhancer_desc">Increases audio loudness and dynamic gain without acoustic distortion</string>
 
-    <!-- VPT Surround -->
-    <string name="vpt_title">Virtualphones Technology (VPT)</string>
-    <string name="vpt_desc">Virtual spatial acoustics simulation</string>
-    <string name="vpt_off">Off</string>
-    <string name="vpt_studio">Studio</string>
-    <string name="vpt_club">Club</string>
-    <string name="vpt_concert_hall">Concert Hall</string>
-
-    <!-- Sound Enhancement -->
-    <string name="sony_enhancements_title">Sound Enhancement</string>
-    <string name="automatic_optimization_title">Automatic optimisation</string>
-    <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
-    <string name="clear_phase_title">Clear Phase</string>
-    <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
+    <!-- Volume Boost -->
     <string name="xloud_title">Volume Boost</string>
-    <string name="xloud_desc">Internal speaker volume &amp; dynamic loudness booster</string>
-    <string name="sforce_title">Front Surround 3D</string>
-    <string name="sforce_desc">Frontal 3D virtual surround soundstage expansion</string>
+    <string name="xloud_desc">Dynamic speaker and headphone loudness booster</string>
 
     <!-- Playback Effects -->
     <string name="playback_effects_title">Stereo &amp; Playback Effects</string>

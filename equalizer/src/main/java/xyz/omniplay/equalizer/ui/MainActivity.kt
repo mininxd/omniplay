@@ -11,15 +11,12 @@ import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
 import xyz.omniplay.equalizer.util.ThemeHelper
-import java.util.Locale
-
 /**
  * OmniQualizer: Material 3 Equalizer & Sound Enhancement Application.
  *
  * Audio DSP features:
- * - 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
- * - Sub-Bass, Loudness Enhancer, Virtual Surround Sound (VPT).
- * - Automatic Optimisation, Clear Phase, Volume Boost, and Front Surround 3D.
+ * - 10-band Graphic Equalizer, Intelligent Equalizer (IEQ).
+ * - Sub-Bass, Loudness Enhancer, Volume Boost.
  * - Multi-session routing: Global session 0 and external player audio session binding.
  */
 class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
@@ -45,11 +42,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         setupPresets()
         setupDaxBands()
         setupIeq()
-        setupDialogueEnhancer()
         setupClearBass()
         setupLoudnessEnhancer()
-        setupVptSurround()
-        setupEnhancementSuite()
+        setupVolumeBoost()
         setupPlaybackEffects()
         setupResetButton()
 
@@ -146,25 +141,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
     }
 
-    private fun setupDialogueEnhancer() {
-        binding.sliderDialogueEnhancer.isTickVisible = true
-        binding.sliderDialogueEnhancer.valueFrom = 0f
-        binding.sliderDialogueEnhancer.valueTo = 10f
-        binding.sliderDialogueEnhancer.stepSize = 1f
-
-        val currentDe = eqManager.getDialogEnhancerAmount().toFloat()
-        binding.sliderDialogueEnhancer.value = currentDe
-        binding.tvDialogueEnhancerValue.text = if (currentDe.toInt() == 0) "Off" else "Level ${currentDe.toInt()}"
-
-        binding.sliderDialogueEnhancer.addOnChangeListener { _, value, fromUser ->
-            if (fromUser) {
-                val amount = value.toInt()
-                binding.tvDialogueEnhancerValue.text = if (amount == 0) "Off" else "Level $amount"
-                eqManager.setDialogEnhancerAmount(amount)
-            }
-        }
-    }
-
     private fun setupClearBass() {
         binding.sliderClearBass.isTickVisible = false
         binding.sliderClearBass.valueFrom = -10f
@@ -188,7 +164,10 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderLoudnessEnhancer.isTickVisible = false
         binding.sliderLoudnessEnhancer.valueFrom = 0f
         binding.sliderLoudnessEnhancer.valueTo = 1000f
-        binding.sliderLoudnessEnhancer.stepSize = 50f
+        binding.sliderLoudnessEnhancer.stepSize = 10f
+        binding.sliderLoudnessEnhancer.setLabelFormatter { value ->
+            value.toInt().toString()
+        }
 
         val isLeEnabled = eqManager.isLoudnessEnhancerEnabled()
         val currentMb = eqManager.getLoudnessEnhancerGainMb().toFloat()
@@ -215,50 +194,12 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
     }
 
-    private fun setupVptSurround() {
-        updateVptChipSelection(eqManager.getVptMode())
-
-        binding.chipGroupVpt.setOnCheckedStateChangeListener { _, checkedIds ->
-            if (isUpdatingUi) return@setOnCheckedStateChangeListener
-            val mode = when (checkedIds.firstOrNull()) {
-                R.id.chip_vpt_studio -> EqualizerManager.VPT_STUDIO
-                R.id.chip_vpt_club -> EqualizerManager.VPT_CLUB
-                R.id.chip_vpt_concert_hall -> EqualizerManager.VPT_CONCERT_HALL
-                else -> EqualizerManager.VPT_OFF
-            }
-            if (mode != eqManager.getVptMode()) {
-                eqManager.setVptMode(mode)
-            }
-        }
-    }
-
-    private fun setupEnhancementSuite() {
-        binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
-        binding.rowAutomaticOptimization.setOnClickListener {
-            val newState = !binding.switchAutomaticOptimization.isChecked
-            binding.switchAutomaticOptimization.isChecked = newState
-            eqManager.setAutomaticOptimizationEnabled(newState)
-        }
-
-        binding.switchClearPhase.isChecked = eqManager.isClearPhaseEnabled()
-        binding.rowClearPhase.setOnClickListener {
-            val newState = !binding.switchClearPhase.isChecked
-            binding.switchClearPhase.isChecked = newState
-            eqManager.setClearPhaseEnabled(newState)
-        }
-
+    private fun setupVolumeBoost() {
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
         binding.rowXloud.setOnClickListener {
             val newState = !binding.switchXloud.isChecked
             binding.switchXloud.isChecked = newState
             eqManager.setXLoudEnabled(newState)
-        }
-
-        binding.switchSforce.isChecked = eqManager.isSForceEnabled()
-        binding.rowSforce.setOnClickListener {
-            val newState = !binding.switchSforce.isChecked
-            binding.switchSforce.isChecked = newState
-            eqManager.setSForceEnabled(newState)
         }
     }
 
@@ -363,16 +304,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.chipGroupIeq.check(targetId)
     }
 
-    private fun updateVptChipSelection(vptMode: Int) {
-        val targetId = when (vptMode) {
-            EqualizerManager.VPT_STUDIO -> R.id.chip_vpt_studio
-            EqualizerManager.VPT_CLUB -> R.id.chip_vpt_club
-            EqualizerManager.VPT_CONCERT_HALL -> R.id.chip_vpt_concert_hall
-            else -> R.id.chip_vpt_off
-        }
-        binding.chipGroupVpt.check(targetId)
-    }
-
     private fun refreshUI() {
         isUpdatingUi = true
 
@@ -390,11 +321,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         // IEQ
         updateIeqChipSelection(eqManager.getIeqPreset())
 
-        // Dialogue Enhancer
-        val de = eqManager.getDialogEnhancerAmount().toFloat()
-        binding.sliderDialogueEnhancer.value = de
-        binding.tvDialogueEnhancerValue.text = if (de.toInt() == 0) "Off" else "Level ${de.toInt()}"
-
         // ClearBass
         val cb = eqManager.getClearBassLevel().toFloat()
         binding.sliderClearBass.value = cb
@@ -407,6 +333,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderLoudnessEnhancer.value = leGain
         binding.sliderLoudnessEnhancer.isEnabled = isLeOn && enabled
         binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeOn, leGain.toInt())
+
+        // Volume Boost
+        binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
 
         val crossfeed = eqManager.getCrossfeedAmount()
         binding.sliderCrossfeed.value = crossfeed.toFloat()
@@ -422,15 +351,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderStereoBalance.value = balance.toFloat()
         binding.tvStereoBalanceValue.text = formatBalance(balance)
 
-        // VPT
-        updateVptChipSelection(eqManager.getVptMode())
-
-        // Sound Enhancement Suite
-        binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
-        binding.switchClearPhase.isChecked = eqManager.isClearPhaseEnabled()
-        binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
-        binding.switchSforce.isChecked = eqManager.isSForceEnabled()
-
         isUpdatingUi = false
     }
 
@@ -440,11 +360,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.cardPresets.alpha = alpha
         binding.cardDaxEqualizer.alpha = alpha
         binding.cardIeq.alpha = alpha
-        binding.cardDialogueEnhancer.alpha = alpha
         binding.cardClearBass.alpha = alpha
         binding.cardLoudnessEnhancer.alpha = alpha
-        binding.cardVpt.alpha = alpha
-        binding.cardSonySuite.alpha = alpha
+        binding.cardVolumeBoost.alpha = alpha
         binding.cardPlaybackEffects.alpha = alpha
 
         binding.chipGroupPresets.isEnabled = enabled
@@ -453,11 +371,13 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
 
         binding.daxEqBarsView.isEnabled = enabled
-        binding.sliderDialogueEnhancer.isEnabled = enabled
         binding.sliderClearBass.isEnabled = enabled
         binding.rowLoudnessEnhancer.isEnabled = enabled
         binding.switchLoudnessEnhancer.isEnabled = enabled
         binding.sliderLoudnessEnhancer.isEnabled = enabled && eqManager.isLoudnessEnhancerEnabled()
+        binding.cardVolumeBoost.isEnabled = enabled
+        binding.rowXloud.isEnabled = enabled
+        binding.switchXloud.isEnabled = enabled
         binding.sliderCrossfeed.isEnabled = enabled
         binding.sliderDynamicRange.isEnabled = enabled
         binding.rowMonoAudio.isEnabled = enabled
@@ -468,21 +388,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         for (i in 0 until binding.chipGroupIeq.childCount) {
             binding.chipGroupIeq.getChildAt(i).isEnabled = enabled
         }
-        for (i in 0 until binding.chipGroupVpt.childCount) {
-            binding.chipGroupVpt.getChildAt(i).isEnabled = enabled
-        }
-
-        binding.rowAutomaticOptimization.isEnabled = enabled
-        binding.switchAutomaticOptimization.isEnabled = enabled
-
-        binding.rowClearPhase.isEnabled = enabled
-        binding.switchClearPhase.isEnabled = enabled
-
-        binding.rowXloud.isEnabled = enabled
-        binding.switchXloud.isEnabled = enabled
-
-        binding.rowSforce.isEnabled = enabled
-        binding.switchSforce.isEnabled = enabled
     }
 
     private fun formatDb(db: Int): String {
@@ -497,8 +402,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         return if (!enabled) {
             getString(R.string.effect_off)
         } else {
-            val db = gainMb / 100.0
-            String.format(Locale.US, if (gainMb > 0) "+%.1f dB" else "%.1f dB", db)
+            gainMb.toString()
         }
     }
 

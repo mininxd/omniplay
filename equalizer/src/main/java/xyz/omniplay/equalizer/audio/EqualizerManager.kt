@@ -264,18 +264,6 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Dialogue Enhancer ---
-    fun getDialogEnhancerAmount(): Int {
-        return prefs.getInt(KEY_DIALOG_ENHANCER, 0).coerceIn(0, 10)
-    }
-
-    fun setDialogEnhancerAmount(amount: Int) {
-        val clamped = amount.coerceIn(0, 10)
-        prefs.edit().putInt(KEY_DIALOG_ENHANCER, clamped).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
     // --- Sub-Bass ---
     fun getClearBassLevel(): Int {
         return prefs.getInt(KEY_CLEAR_BASS, 0).coerceIn(-10, 10)
@@ -310,57 +298,13 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Automatic Optimisation ---
-    fun isAutomaticOptimizationEnabled(): Boolean {
-        return prefs.getBoolean(KEY_AUTOMATIC_OPTIMIZATION, false)
-    }
-
-    fun setAutomaticOptimizationEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTOMATIC_OPTIMIZATION, enabled).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
-    // --- Clear Phase ---
-    fun isClearPhaseEnabled(): Boolean {
-        return prefs.getBoolean(KEY_CLEAR_PHASE, false)
-    }
-
-    fun setClearPhaseEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_CLEAR_PHASE, enabled).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
-    // --- xLOUD (Volume Boost) ---
+    // --- Volume Boost ---
     fun isXLoudEnabled(): Boolean {
         return prefs.getBoolean(KEY_XLOUD, false)
     }
 
     fun setXLoudEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_XLOUD, enabled).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
-    // --- S-Force Front Surround 3D ---
-    fun isSForceEnabled(): Boolean {
-        return prefs.getBoolean(KEY_SFORCE, false)
-    }
-
-    fun setSForceEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_SFORCE, enabled).apply()
-        applyCurrentStateToEffects()
-        notifyListeners()
-    }
-
-    // --- Surround Modes (VPT) ---
-    fun getVptMode(): Int {
-        return prefs.getInt(KEY_VPT_MODE, VPT_OFF)
-    }
-
-    fun setVptMode(mode: Int) {
-        prefs.edit().putInt(KEY_VPT_MODE, mode).apply()
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -405,12 +349,7 @@ class EqualizerManager private constructor(private val context: Context) {
         val isLeEnabled = isLoudnessEnhancerEnabled()
         val leGainMb = getLoudnessEnhancerGainMb()
         val ieq = getIeqPreset()
-        val deAmount = getDialogEnhancerAmount()
-        val isAhc = isAutomaticOptimizationEnabled()
-        val isCp = isClearPhaseEnabled()
         val isXloud = isXLoudEnabled()
-        val isSforce = isSForceEnabled()
-        val vptMode = getVptMode()
 
         val daxLevels = getAllDaxBandLevels()
 
@@ -463,19 +402,6 @@ class EqualizerManager private constructor(private val context: Context) {
                                 }
                             }
 
-                            if (deAmount > 0 && hwFreqHz in 800..3500) {
-                                val vocalBoost = (deAmount * 0.4).roundToInt()
-                                gainDb += vocalBoost
-                            }
-
-                            if (isAhc && hwFreqHz in 2500..6000) {
-                                gainDb += 1
-                            }
-
-                            if (isCp && hwFreqHz >= 10000) {
-                                gainDb += 1
-                            }
-
                             val millibels = (gainDb * 100).coerceIn(minMb, maxMb).toShort()
                             eq.setBandLevel(hwIndex.toShort(), millibels)
                         }
@@ -506,36 +432,25 @@ class EqualizerManager private constructor(private val context: Context) {
             val virt = sessionEffects.virtualizer
             if (virt != null) {
                 try {
-                    val shouldEnable = isMasterOn && (vptMode != VPT_OFF || isSforce)
-                    virt.enabled = shouldEnable
-                    if (shouldEnable) {
-                        val strength = when {
-                            isSforce -> 900
-                            vptMode == VPT_CONCERT_HALL -> 800
-                            vptMode == VPT_CLUB -> 600
-                            vptMode == VPT_STUDIO -> 350
-                            else -> 0
-                        }.toShort()
-                        if (virt.strengthSupported) {
-                            virt.setStrength(strength)
-                        }
-                    }
+                    virt.enabled = false
                 } catch (e: Throwable) {
-                    Log.w(TAG, "Failed to apply Virtualizer to session ${sessionEffects.sessionId}", e)
+                    Log.w(TAG, "Failed to disable Virtualizer for session ${sessionEffects.sessionId}", e)
                 }
             }
 
-            // LoudnessEnhancer (Standalone + xLOUD integration)
+            // LoudnessEnhancer (Standalone + Volume Boost integration)
             val le = sessionEffects.loudnessEnhancer
             if (le != null) {
                 try {
                     val shouldEnable = isMasterOn && (isLeEnabled || isXloud)
                     le.enabled = shouldEnable
                     if (shouldEnable) {
-                        val targetGain = if (isLeEnabled) {
-                            leGainMb
-                        } else {
-                            300 // +3.0 dB clean lift for xLOUD
+                        var targetGain = 0
+                        if (isLeEnabled) {
+                            targetGain += leGainMb
+                        }
+                        if (isXloud) {
+                            targetGain += 300 // +300 mB (+3 dB) volume boost
                         }
                         le.setTargetGain(targetGain)
                     }
@@ -550,17 +465,7 @@ class EqualizerManager private constructor(private val context: Context) {
                 hw.setEnabled(isMasterOn)
                 if (isMasterOn) {
                     if (hw.isSonyActive) {
-                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_SFORCE_ON, if (isSforce) 1 else 0)
-                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_CP_HP_ON, if (isAhc) 1 else 0)
-                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_CLEARPHASE_ON, if (isCp) 1 else 0)
                         hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_XLOUD_ON, if (isXloud) 1 else 0)
-                        val vptVal = when (vptMode) {
-                            VPT_STUDIO -> 1
-                            VPT_CLUB -> 2
-                            VPT_CONCERT_HALL -> 3
-                            else -> 0
-                        }
-                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_VPT_CUR_MODE, vptVal)
                     }
 
                     if (hw.isDolbyActive) {
@@ -573,8 +478,6 @@ class EqualizerManager private constructor(private val context: Context) {
                             else -> 0
                         }
                         hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_IEQ_PRESET, dolbyIeq)
-                        hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_DIALOG_ENHANCE_ENABLE, if (deAmount > 0) 1 else 0)
-                        hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_DIALOG_ENHANCE_AMOUNT, deAmount)
                     }
                 }
             }
@@ -589,15 +492,10 @@ class EqualizerManager private constructor(private val context: Context) {
         const val KEY_PRESET_INDEX = "preset_index"
         const val KEY_DAX_BAND_PREFIX = "dax_band_"
         const val KEY_IEQ_PRESET = "ieq_preset"
-        const val KEY_DIALOG_ENHANCER = "dialog_enhancer"
         const val KEY_CLEAR_BASS = "clear_bass"
         const val KEY_LOUDNESS_ENHANCER_ENABLED = "loudness_enhancer_enabled"
         const val KEY_LOUDNESS_ENHANCER_GAIN_MB = "loudness_enhancer_gain_mb"
-        const val KEY_AUTOMATIC_OPTIMIZATION = "automatic_optimization"
-        const val KEY_CLEAR_PHASE = "clear_phase"
         const val KEY_XLOUD = "xloud"
-        const val KEY_SFORCE = "sforce"
-        const val KEY_VPT_MODE = "vpt_mode"
         const val KEY_CROSSFEED_AMOUNT = "crossfeed_amount"
         const val KEY_DYNAMIC_RANGE_AMOUNT = "dynamic_range_amount"
         const val KEY_MONO_AUDIO = "mono_audio"
@@ -607,11 +505,6 @@ class EqualizerManager private constructor(private val context: Context) {
         const val IEQ_BALANCED = 1
         const val IEQ_WARM = 2
         const val IEQ_DETAILED = 3
-
-        const val VPT_OFF = 0
-        const val VPT_STUDIO = 1
-        const val VPT_CLUB = 2
-        const val VPT_CONCERT_HALL = 3
 
         @Volatile
         private var INSTANCE: EqualizerManager? = null
