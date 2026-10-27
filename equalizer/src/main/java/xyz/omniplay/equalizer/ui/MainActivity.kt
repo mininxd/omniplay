@@ -11,6 +11,8 @@ import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
 import xyz.omniplay.equalizer.util.ThemeHelper
+import java.util.Locale
+import kotlin.math.roundToInt
 /**
  * OmniQualizer: Material 3 Equalizer & Sound Enhancement Application.
  *
@@ -162,34 +164,34 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
     private fun setupLoudnessEnhancer() {
         binding.sliderLoudnessEnhancer.isTickVisible = false
-        binding.sliderLoudnessEnhancer.valueFrom = 0f
-        binding.sliderLoudnessEnhancer.valueTo = 1000f
-        binding.sliderLoudnessEnhancer.stepSize = 10f
+        binding.sliderLoudnessEnhancer.valueFrom = 0.0f
+        binding.sliderLoudnessEnhancer.valueTo = 10.0f
+        binding.sliderLoudnessEnhancer.stepSize = 0.1f
         binding.sliderLoudnessEnhancer.setLabelFormatter { value ->
-            value.toInt().toString()
+            String.format(Locale.US, "%.1f dB", value)
         }
 
         val isLeEnabled = eqManager.isLoudnessEnhancerEnabled()
-        val currentMb = eqManager.getLoudnessEnhancerGainMb().toFloat()
+        val currentDb = (eqManager.getLoudnessEnhancerGainMb() / 100.0f).coerceIn(0.0f, 10.0f)
 
         binding.switchLoudnessEnhancer.isChecked = isLeEnabled
-        binding.sliderLoudnessEnhancer.value = currentMb
+        binding.sliderLoudnessEnhancer.value = currentDb
         binding.sliderLoudnessEnhancer.isEnabled = isLeEnabled && eqManager.isEnabled()
-        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeEnabled, currentMb.toInt())
+        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeEnabled, currentDb)
 
         binding.rowLoudnessEnhancer.setOnClickListener {
             val newState = !binding.switchLoudnessEnhancer.isChecked
             binding.switchLoudnessEnhancer.isChecked = newState
             eqManager.setLoudnessEnhancerEnabled(newState)
             binding.sliderLoudnessEnhancer.isEnabled = newState && eqManager.isEnabled()
-            binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(newState, eqManager.getLoudnessEnhancerGainMb())
+            binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(newState, binding.sliderLoudnessEnhancer.value)
         }
 
         binding.sliderLoudnessEnhancer.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
-                val mb = value.toInt()
-                binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(binding.switchLoudnessEnhancer.isChecked, mb)
-                eqManager.setLoudnessEnhancerGainMb(mb)
+                binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(binding.switchLoudnessEnhancer.isChecked, value)
+                val gainMb = (value * 100f).roundToInt().coerceIn(0, 1000)
+                eqManager.setLoudnessEnhancerGainMb(gainMb)
             }
         }
     }
@@ -328,11 +330,11 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 
         // Loudness Enhancer
         val isLeOn = eqManager.isLoudnessEnhancerEnabled()
-        val leGain = eqManager.getLoudnessEnhancerGainMb().toFloat()
+        val leGainDb = (eqManager.getLoudnessEnhancerGainMb() / 100.0f).coerceIn(0.0f, 10.0f)
         binding.switchLoudnessEnhancer.isChecked = isLeOn
-        binding.sliderLoudnessEnhancer.value = leGain
+        binding.sliderLoudnessEnhancer.value = leGainDb
         binding.sliderLoudnessEnhancer.isEnabled = isLeOn && enabled
-        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeOn, leGain.toInt())
+        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeOn, leGainDb)
 
         // Volume Boost
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()
@@ -398,11 +400,11 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
     }
 
-    private fun formatLoudnessGain(enabled: Boolean, gainMb: Int): String {
+    private fun formatLoudnessGain(enabled: Boolean, gainDb: Float): String {
         return if (!enabled) {
             getString(R.string.effect_off)
         } else {
-            gainMb.toString()
+            String.format(Locale.US, "%.1f dB", gainDb)
         }
     }
 
