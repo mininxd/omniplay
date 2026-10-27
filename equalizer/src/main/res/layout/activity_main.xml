@@ -54,7 +54,7 @@
             android:paddingEnd="20dp"
             android:paddingBottom="48dp">
 
-            <!-- Master Toggle (Cardless Plain Background) -->
+            <!-- Master Toggle (OmniPlay Style) -->
             <LinearLayout
                 android:id="@+id/card_master_switch"
                 android:layout_width="match_parent"
@@ -70,26 +70,12 @@
                     android:focusable="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp">
-
-                    <FrameLayout
-                        android:layout_width="34dp"
-                        android:layout_height="34dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_equalizer"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp">
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
@@ -106,7 +92,7 @@
                             android:id="@+id/tv_master_desc"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/equalizer_master_switch_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
@@ -146,23 +132,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_equalizer"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
@@ -172,16 +144,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/dax_equalizer_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/dax_equalizer_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <com.google.android.material.button.MaterialButton
@@ -211,56 +183,28 @@
                 android:paddingTop="6dp"
                 android:paddingBottom="4dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/preset_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="16sp" />
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_tune"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/preset_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:alpha="0.75"
-                            android:text="Select or fine-tune audio curve"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:alpha="0.75"
+                    android:text="Select or fine-tune audio curve"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="12.5sp" />
 
                 <HorizontalScrollView
                     android:id="@+id/scroll_presets"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:scrollbars="none">
 
                     <com.google.android.material.chip.ChipGroup
@@ -280,7 +224,7 @@
                 android:alpha="0.12"
                 android:background="?attr/colorOutlineVariant" />
 
-            <!-- SECTION 2: Intelligent Equalizer (IEQ) -->
+            <!-- SECTION 2: Intelligent Equalizer (IEQ - OmniPlay style without overflow) -->
             <LinearLayout
                 android:id="@+id/card_ieq"
                 android:layout_width="match_parent"
@@ -289,86 +233,78 @@
                 android:paddingTop="4dp"
                 android:paddingBottom="4dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/ieq_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="16sp" />
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:alpha="0.75"
+                    android:text="@string/ieq_desc"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="12.5sp" />
 
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_sparkle"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/ieq_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:alpha="0.75"
-                            android:text="@string/ieq_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <com.google.android.material.chip.ChipGroup
-                    android:id="@+id/chip_group_ieq"
+                <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    app:singleSelection="true">
+                    android:scrollbars="none">
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_ieq_off"
-                        style="@style/Widget.Material3.Chip.Filter"
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chip_group_ieq"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/ieq_off" />
+                        app:chipSpacingHorizontal="6dp"
+                        app:singleLine="true"
+                        app:singleSelection="true">
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_ieq_balanced"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/ieq_balanced" />
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_ieq_off"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/ieq_off"
+                            app:chipEndPadding="6dp"
+                            app:chipStartPadding="6dp" />
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_ieq_warm"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/ieq_warm" />
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_ieq_balanced"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/ieq_balanced"
+                            app:chipEndPadding="6dp"
+                            app:chipStartPadding="6dp" />
 
-                    <com.google.android.material.chip.Chip
-                        android:id="@+id/chip_ieq_detailed"
-                        style="@style/Widget.Material3.Chip.Filter"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/ieq_detailed" />
-                </com.google.android.material.chip.ChipGroup>
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_ieq_warm"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/ieq_warm"
+                            app:chipEndPadding="6dp"
+                            app:chipStartPadding="6dp" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chip_ieq_detailed"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checkable="true"
+                            android:text="@string/ieq_detailed"
+                            app:chipEndPadding="6dp"
+                            app:chipStartPadding="6dp" />
+                    </com.google.android.material.chip.ChipGroup>
+                </HorizontalScrollView>
             </LinearLayout>
 
             <View
@@ -394,23 +330,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_bass"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
@@ -420,16 +342,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/clear_bass_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/clear_bass_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <TextView
@@ -451,7 +373,8 @@
                     android:stepSize="1"
                     android:value="0"
                     android:valueFrom="-10"
-                    android:valueTo="10" />
+                    android:valueTo="10"
+                    app:tickVisible="false" />
             </LinearLayout>
 
             <View
@@ -481,23 +404,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_volume_up"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
@@ -507,16 +416,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/loudness_enhancer_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/loudness_enhancer_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <TextView
@@ -547,7 +456,8 @@
                     android:stepSize="0.1"
                     android:value="0.0"
                     android:valueFrom="0.0"
-                    android:valueTo="10.0" />
+                    android:valueTo="10.0"
+                    app:tickVisible="false" />
             </LinearLayout>
 
             <View
@@ -579,23 +489,9 @@
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp">
 
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_bolt"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
                         android:orientation="vertical">
 
@@ -605,16 +501,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/xloud_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
+                            android:textSize="16sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/xloud_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <com.google.android.material.materialswitch.MaterialSwitch
@@ -635,7 +531,7 @@
                 android:alpha="0.12"
                 android:background="?attr/colorOutlineVariant" />
 
-            <!-- SECTION 6: Spatial & Playback Controls -->
+            <!-- SECTION 6: Spatial & Playback Controls (Clean cardless controls without placeholder text) -->
             <LinearLayout
                 android:id="@+id/card_playback_effects"
                 android:layout_width="match_parent"
@@ -644,56 +540,10 @@
                 android:paddingTop="4dp"
                 android:paddingBottom="8dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <FrameLayout
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:background="@drawable/bg_icon_container">
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:layout_gravity="center"
-                            android:src="@drawable/ic_headphones"
-                            app:tint="?attr/colorPrimary" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/playback_effects_title"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="15.5sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:alpha="0.75"
-                            android:text="Spatial imaging and acoustic optimization"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-                </LinearLayout>
-
                 <!-- Crossfeed -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -709,16 +559,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/crossfeed_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="14.5sp" />
+                            android:textSize="15sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/crossfeed_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <TextView
@@ -740,13 +590,14 @@
                     android:stepSize="5"
                     android:value="0"
                     android:valueFrom="0"
-                    android:valueTo="100" />
+                    android:valueTo="100"
+                    app:tickVisible="false" />
 
                 <!-- Dynamic Range Control -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -762,16 +613,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/dynamic_range_control_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="14.5sp" />
+                            android:textSize="15sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/dynamic_range_control_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <TextView
@@ -793,18 +644,20 @@
                     android:stepSize="5"
                     android:value="0"
                     android:valueFrom="0"
-                    android:valueTo="100" />
+                    android:valueTo="100"
+                    app:tickVisible="false" />
 
                 <!-- Mono Audio -->
                 <LinearLayout
                     android:id="@+id/row_mono_audio"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:background="?attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center_vertical"
+                    android:minHeight="56dp"
                     android:orientation="horizontal"
                     android:paddingTop="4dp"
                     android:paddingBottom="4dp">
@@ -821,16 +674,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/mono_audio_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="14.5sp" />
+                            android:textSize="15sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
                             android:text="@string/mono_audio_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <com.google.android.material.materialswitch.MaterialSwitch
@@ -846,7 +699,7 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="8dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -862,16 +715,16 @@
                             android:fontFamily="sans-serif-medium"
                             android:text="@string/stereo_balance_title"
                             android:textColor="?attr/colorOnSurface"
-                            android:textSize="14.5sp" />
+                            android:textSize="15sp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
+                            android:layout_marginTop="2dp"
                             android:alpha="0.75"
-                            android:text="L/R output balance (double tap to center)"
+                            android:text="@string/stereo_balance_desc"
                             android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12sp" />
+                            android:textSize="12.5sp" />
                     </LinearLayout>
 
                     <TextView
@@ -893,7 +746,8 @@
                     android:stepSize="1"
                     android:value="0"
                     android:valueFrom="-100"
-                    android:valueTo="100" />
+                    android:valueTo="100"
+                    app:tickVisible="false" />
             </LinearLayout>
 
         </LinearLayout>

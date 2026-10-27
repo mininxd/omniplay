@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Neutral baseline (Light) -->
+    <!-- Neutral fallback baseline (Light), aligned with the sage reference palette. -->
     <color name="background_dark">#F7F8F2</color>
     <color name="surface_dark">#F7F8F2</color>
     <color name="surface_container">#EFF1E8</color>
     <color name="surface_container_high">#E7EBDD</color>
     <color name="surface_container_highest">#E1E5D8</color>
 
-    <!-- Material You reference palette -->
-    <color name="primary_accent">#5B6849</color>
+    <!-- Material You reference palette fallback - Light -->
+    <color name="primary_accent">#D8F79A</color>
     <color name="primary_variant">#A6AF91</color>
-    <color name="on_primary">#FFFFFF</color>
+    <color name="on_primary">#1A1C15</color>
 
-    <!-- Text colors -->
+    <!-- Text colors (Light) -->
     <color name="text_primary">#1A1C15</color>
     <color name="text_secondary">#44483D</color>
     <color name="text_tertiary">#74786B</color>
 
-    <!-- Controls & Sliders -->
+    <!-- Controls & Material You Slider (Light) -->
     <color name="control_tint">#44483D</color>
     <color name="control_tint_active">#5B6849</color>
     <color name="control_tint_inactive">#C5C8B8</color>
@@ -26,9 +26,16 @@
     <color name="slider_thumb">#5B6849</color>
     <color name="slider_halo">#335B6849</color>
 
-    <!-- System -->
+    <!-- System & Window -->
     <color name="status_bar_color">#F7F8F2</color>
     <color name="navigation_bar_color">#F7F8F2</color>
+
+    <!-- Seek cancel indicator -->
+    <color name="slider_cancel_accent">#B3261E</color>
+
+    <!-- Badges & Popup borders -->
+    <color name="badge_stroke">#C5C8B8</color>
+    <color name="badge_cancel_stroke">#B3261E</color>
 
     <!-- Theme palette fallbacks for devices that cannot load runtime dynamic color resources. -->
     <!-- Neutral: soft sage, olive, and warm gray. -->

@@ -41,7 +41,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     data class Preset(val name: String, val bands: IntArray, val clearBass: Int)
 
-    private class SessionAudioEffects(val sessionId: Int) {
+    private class SessionAudioEffects(val sessionId: Int, var packageName: String? = null) {
         var equalizer: Equalizer? = null
         var bassBoost: BassBoost? = null
         var virtualizer: Virtualizer? = null
@@ -166,7 +166,7 @@ class EqualizerManager private constructor(private val context: Context) {
     @Synchronized
     fun openAudioSession(sessionId: Int, packageName: String? = null) {
         Log.i(TAG, "Opening audio session: $sessionId from $packageName (active sessions: ${activeSessions.size})")
-        bindSession(sessionId)
+        bindSession(sessionId, packageName)
         applyCurrentStateToEffects()
 
         if (isEnabled()) {
@@ -181,12 +181,18 @@ class EqualizerManager private constructor(private val context: Context) {
         Log.i(TAG, "Closing audio session: $sessionId")
         val effects = activeSessions.remove(sessionId)
         effects?.release()
+        if (effects != null) {
+            notifyListeners()
+        }
     }
 
     @Synchronized
-    fun bindSession(sessionId: Int) {
+    fun bindSession(sessionId: Int, packageName: String? = null) {
         if (activeSessions.containsKey(sessionId)) {
             val existing = activeSessions[sessionId]
+            if (packageName != null) {
+                existing?.packageName = packageName
+            }
             if (existing != null && (existing.equalizer != null || existing.bassBoost != null || existing.loudnessEnhancer != null)) {
                 return
             }
@@ -199,8 +205,43 @@ class EqualizerManager private constructor(private val context: Context) {
                 activeSessions.remove(oldestKey)?.release()
             }
         }
-        val effects = SessionAudioEffects(sessionId)
+        val effects = SessionAudioEffects(sessionId, packageName)
         activeSessions[sessionId] = effects
+    }
+
+    data class ActiveSessionInfo(
+        val sessionId: Int,
+        val packageName: String?,
+        val displayName: String,
+        val isGlobal: Boolean
+    )
+
+    fun getActiveSessionList(): List<ActiveSessionInfo> {
+        val pm = context.packageManager
+        return activeSessions.entries.map { (sessionId, effects) ->
+            val pkg = effects.packageName
+            val isGlobal = (sessionId == 0)
+            val name = when {
+                isGlobal -> "Global Audio Mix"
+                pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan" -> {
+                    try {
+                        val appInfo = pm.getApplicationInfo(pkg, 0)
+                        pm.getApplicationLabel(appInfo).toString()
+                    } catch (_: Exception) {
+                        pkg
+                    }
+                }
+                pkg == "playback_callback" -> "Media Stream (Browser / Player)"
+                pkg == "dumpsys_scan" -> "Detected Audio Session"
+                else -> "Media Player Session"
+            }
+            ActiveSessionInfo(
+                sessionId = sessionId,
+                packageName = pkg,
+                displayName = name,
+                isGlobal = isGlobal
+            )
+        }.sortedBy { if (it.isGlobal) 0 else 1 }
     }
 
     @Synchronized

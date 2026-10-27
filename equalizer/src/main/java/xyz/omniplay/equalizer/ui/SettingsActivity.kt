@@ -2,11 +2,16 @@ package xyz.omniplay.equalizer.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import xyz.omniplay.equalizer.R
+import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivitySettingsBinding
+import xyz.omniplay.equalizer.databinding.ItemActiveSessionBinding
+import xyz.omniplay.equalizer.util.ThemeColors
 import xyz.omniplay.equalizer.util.ThemeHelper
 import xyz.omniplay.equalizer.util.ThemeMode
 import xyz.omniplay.equalizer.util.ThemeStyle
@@ -18,7 +23,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivitySettingsBinding
+    private lateinit var eqManager: EqualizerManager
     private var isThemeChanged = false
+
+    private val eqListener = object : EqualizerManager.EqualizerListener {
+        override fun onEqualizerConfigChanged() {
+            runOnUiThread {
+                updateActiveSessions()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeHelper.applyTheme(this)
@@ -26,6 +40,8 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         ThemeHelper.applySystemBars(this)
+
+        eqManager = EqualizerManager.getInstance(this)
 
         if (savedInstanceState != null) {
             isThemeChanged = savedInstanceState.getBoolean(EXTRA_THEME_CHANGED, false)
@@ -44,11 +60,82 @@ class SettingsActivity : AppCompatActivity() {
         binding.settingTheme.setOnClickListener {
             showThemeStyleDialog()
         }
+
+        eqManager.addListener(eqListener)
+        updateActiveSessions()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateActiveSessions()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        eqManager.removeListener(eqListener)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(EXTRA_THEME_CHANGED, isThemeChanged)
+    }
+
+    private fun updateActiveSessions() {
+        val container = binding.containerActiveSessions
+        container.removeAllViews()
+
+        val sessions = eqManager.getActiveSessionList()
+        val primaryColor = ThemeColors.getPrimary(this)
+
+        if (sessions.isEmpty()) {
+            val emptyBinding = ItemActiveSessionBinding.inflate(layoutInflater, container, false)
+            emptyBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
+            emptyBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
+            emptyBinding.tvSessionAppName.setText(R.string.no_active_sessions)
+            emptyBinding.tvSessionSub.setText(R.string.no_active_sessions_desc)
+            emptyBinding.tvSessionBadge.visibility = View.GONE
+            container.addView(emptyBinding.root)
+            return
+        }
+
+        for (session in sessions) {
+            val itemBinding = ItemActiveSessionBinding.inflate(layoutInflater, container, false)
+            if (session.isGlobal) {
+                itemBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
+                itemBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
+                itemBinding.tvSessionAppName.setText(R.string.session_global_mix)
+                itemBinding.tvSessionSub.setText(R.string.session_global_desc)
+                itemBinding.tvSessionBadge.setText(R.string.session_active_status)
+            } else {
+                itemBinding.tvSessionAppName.text = session.displayName
+                val subText = if (!session.packageName.isNullOrBlank() &&
+                    session.packageName != "playback_callback" &&
+                    session.packageName != "dumpsys_scan" &&
+                    session.packageName != "keep_alive_scan") {
+                    "Session ${session.sessionId} · ${session.packageName}"
+                } else {
+                    "Session ${session.sessionId} · Active media stream"
+                }
+                itemBinding.tvSessionSub.text = subText
+                itemBinding.tvSessionBadge.setText(R.string.session_active_status)
+
+                var appIconLoaded = false
+                val pkg = session.packageName
+                if (pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan") {
+                    try {
+                        val icon = packageManager.getApplicationIcon(pkg)
+                        itemBinding.ivSessionIcon.setImageDrawable(icon)
+                        itemBinding.ivSessionIcon.imageTintList = null
+                        appIconLoaded = true
+                    } catch (_: Exception) {}
+                }
+                if (!appIconLoaded) {
+                    itemBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
+                    itemBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
+                }
+            }
+            container.addView(itemBinding.root)
+        }
     }
 
     private fun updateThemeModeSubtitle() {

@@ -37,7 +37,7 @@
     <string name="mono_audio_title">Mono audio</string>
     <string name="mono_audio_desc">Mixes left and right channels into both sides</string>
     <string name="stereo_balance_title">Balance</string>
-    <string name="stereo_balance_desc">Shift playback left or right; double-tap to center</string>
+    <string name="stereo_balance_desc">Shift playback left or right</string>
 
     <!-- Units & Formatters -->
     <string name="effect_off">Off</string>
@@ -69,4 +69,13 @@
     <string name="theme_style_monochrome">Monochrome</string>
     <string name="theme_style_vibrant">Vibrant</string>
     <string name="theme_style_rainbow">Rainbow</string>
+
+    <!-- Active Audio Sessions (Settings) -->
+    <string name="active_sessions_title">Active Audio Sessions</string>
+    <string name="active_sessions_desc">Connected media apps and system audio streams routed through OmniQualizer DSP</string>
+    <string name="session_global_mix">Global Audio Mix</string>
+    <string name="session_global_desc">Session 0 · Primary system audio engine</string>
+    <string name="session_active_status">Active · DSP Connected</string>
+    <string name="no_active_sessions">No active audio sessions</string>
+    <string name="no_active_sessions_desc">Play audio or video in a media player or browser to attach DSP effects</string>
 </resources>

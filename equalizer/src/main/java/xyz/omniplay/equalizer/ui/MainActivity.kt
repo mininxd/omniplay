@@ -441,15 +441,8 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchMaster.isChecked = enabled
         updateEnabledState(enabled)
 
-        if (enabled) {
-            val sessionCount = eqManager.getActiveSessionCount()
-            val sessionText = if (sessionCount > 0) " · $sessionCount session${if (sessionCount != 1) "s" else ""} active" else ""
-            binding.tvMasterDesc.text = "High-Precision DSP Online$sessionText"
-            binding.tvMasterDesc.setTextColor(ThemeColors.getPrimary(this))
-        } else {
-            binding.tvMasterDesc.text = getString(R.string.equalizer_master_switch_desc)
-            binding.tvMasterDesc.setTextColor(ThemeColors.getOnSurfaceVariant(this))
-        }
+        binding.tvMasterDesc.text = getString(R.string.equalizer_master_switch_desc)
+        binding.tvMasterDesc.setTextColor(if (enabled) ThemeColors.getPrimary(this) else ThemeColors.getOnSurfaceVariant(this))
         binding.tvMasterDesc.alpha = 0.75f
 
         updatePresetSelection(eqManager.getCurrentPresetIndex())
