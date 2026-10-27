@@ -79,10 +79,12 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            try {
-                loudnessEnhancer = LoudnessEnhancer(sessionId)
-            } catch (e: Throwable) {
-                Log.w(TAG, "Failed to instantiate LoudnessEnhancer on session $sessionId", e)
+            if (sessionId != 0) {
+                try {
+                    loudnessEnhancer = LoudnessEnhancer(sessionId)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to instantiate LoudnessEnhancer on session $sessionId", e)
+                }
             }
 
             try {
@@ -191,7 +193,7 @@ class EqualizerManager private constructor(private val context: Context) {
             existing?.release()
             activeSessions.remove(sessionId)
         }
-        if (activeSessions.size > 8) {
+        if (activeSessions.size > 16) {
             val oldestKey = activeSessions.keys.firstOrNull { it != 0 && it != sessionId }
             if (oldestKey != null) {
                 activeSessions.remove(oldestKey)?.release()
@@ -462,6 +464,17 @@ class EqualizerManager private constructor(private val context: Context) {
                                 finalGainDb += cbLevel
                             } else if (hwFreqHz <= 250) {
                                 finalGainDb += (cbLevel / 2)
+                            }
+
+                            // If LoudnessEnhancer is unavailable for this session (e.g. Session 0),
+                            // apply Volume Boost (+3 dB) and Loudness Enhancer gain directly via Graphic EQ
+                            if (sessionEffects.loudnessEnhancer == null) {
+                                if (isXloud) {
+                                    finalGainDb += 3
+                                }
+                                if (isLeEnabled && leGainMb > 0) {
+                                    finalGainDb += (leGainMb / 100)
+                                }
                             }
 
                             when (ieq) {

@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.Handler
@@ -20,6 +21,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import xyz.omniplay.equalizer.R
+import xyz.omniplay.equalizer.audio.ActiveSessionScanner
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.receiver.AudioSessionReceiver
 import xyz.omniplay.equalizer.ui.MainActivity
@@ -30,7 +32,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         private const val TAG = "EqualizerService"
         private const val CHANNEL_ID = "equalizer_channel"
         private const val NOTIFICATION_ID = 2001
-        private const val SESSION_KEEP_ALIVE_MS = 30_000L
+        private const val SESSION_KEEP_ALIVE_MS = 15_000L
 
         const val ACTION_START = "xyz.omniplay.equalizer.action.START"
         const val ACTION_STOP = "xyz.omniplay.equalizer.action.STOP"
@@ -67,6 +69,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     private val audioSessionReceiver = AudioSessionReceiver()
     private var isReceiverRegistered = false
     private var audioDeviceCallback: Any? = null
+    private var audioPlaybackCallback: Any? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val sessionKeepAliveRunnable = object : Runnable {
@@ -74,6 +77,15 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
             if (!eqManager.isEnabled()) return
             try {
                 eqManager.ensureGlobalSession()
+
+                // Periodically scan for active browser / media playback sessions
+                ActiveSessionScanner.scanAsync { detectedSessions ->
+                    for (sessionId in detectedSessions) {
+                        if (sessionId > 0) {
+                            eqManager.openAudioSession(sessionId, "keep_alive_scan")
+                        }
+                    }
+                }
             } catch (e: Throwable) {
                 Log.w(TAG, "Session keep-alive check failed", e)
             }
@@ -88,6 +100,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         createNotificationChannel()
         registerAudioSessionReceiver()
         registerAudioDeviceCallback()
+        registerAudioPlaybackCallback()
         startSessionKeepAlive()
     }
 
@@ -187,9 +200,68 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     override fun onDestroy() {
         super.onDestroy()
         stopSessionKeepAlive()
+        unregisterAudioPlaybackCallback()
         unregisterAudioDeviceCallback()
         unregisterAudioSessionReceiver()
+        ActiveSessionScanner.stop()
         eqManager.removeListener(this)
+    }
+
+    private fun registerAudioPlaybackCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioManager = getSystemService(AudioManager::class.java) ?: return
+            val callback = object : AudioManager.AudioPlaybackCallback() {
+                override fun onPlaybackConfigChanged(configs: List<AudioPlaybackConfiguration>?) {
+                    super.onPlaybackConfigChanged(configs)
+                    if (!eqManager.isEnabled() || configs == null) return
+
+                    var foundAny = false
+                    for (config in configs) {
+                        val sessionId = ActiveSessionScanner.extractSessionId(config)
+                        if (sessionId > 0) {
+                            foundAny = true
+                            Log.d(TAG, "AudioPlaybackCallback detected active session: $sessionId")
+                            eqManager.openAudioSession(sessionId, "playback_callback")
+                        }
+                    }
+
+                    // If configs are present (audio playing) but reflection could not extract session ID,
+                    // run background dumpsys scan to detect browser session
+                    if (!foundAny && configs.isNotEmpty()) {
+                        ActiveSessionScanner.scanAsync { sessions ->
+                            for (sessionId in sessions) {
+                                if (sessionId > 0) {
+                                    Log.d(TAG, "ActiveSessionScanner detected session: $sessionId")
+                                    eqManager.openAudioSession(sessionId, "dumpsys_scan")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            audioPlaybackCallback = callback
+            try {
+                audioManager.registerAudioPlaybackCallback(callback, handler)
+                Log.d(TAG, "Registered AudioPlaybackCallback for browser session detection")
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to register AudioPlaybackCallback", e)
+            }
+        }
+    }
+
+    private fun unregisterAudioPlaybackCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val callback = audioPlaybackCallback as? AudioManager.AudioPlaybackCallback ?: return
+            val audioManager = getSystemService(AudioManager::class.java)
+            try {
+                audioManager?.unregisterAudioPlaybackCallback(callback)
+                Log.d(TAG, "Unregistered AudioPlaybackCallback")
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to unregister AudioPlaybackCallback", e)
+            } finally {
+                audioPlaybackCallback = null
+            }
+        }
     }
 
     private fun registerAudioDeviceCallback() {
