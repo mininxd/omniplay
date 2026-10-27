@@ -57,6 +57,7 @@ impl MonoDownmixNode {
 /// reordering, and zero-cost passthrough when inactive.
 pub struct NodePipeline {
     sample_rate: f64,
+    master_enabled: bool,
     order: [NodeId; 6],
     pub mono: MonoDownmixNode,
     pub crossfeed: Crossfeed,
@@ -71,6 +72,7 @@ impl NodePipeline {
         let sr = sample_rate.max(8000.0);
         Self {
             sample_rate: sr,
+            master_enabled: true,
             order: DEFAULT_NODE_ORDER,
             mono: MonoDownmixNode::new(),
             crossfeed: Crossfeed::new(sr),
@@ -79,6 +81,14 @@ impl NodePipeline {
             balance: StereoBalance::new(sr),
             compressor: DynamicRangeCompressor::new(sr),
         }
+    }
+
+    pub fn set_master_enabled(&mut self, enabled: bool) {
+        self.master_enabled = enabled;
+    }
+
+    pub fn is_master_enabled(&self) -> bool {
+        self.master_enabled
     }
 
     pub fn set_sample_rate(&mut self, sample_rate: f64) {
@@ -104,23 +114,27 @@ impl NodePipeline {
     #[inline]
     pub fn is_node_active(&self, id: NodeId) -> bool {
         match id {
+            // Balance and Mono are fundamental channel routing controls;
+            // they remain functional whenever configured by the user, even if EQ master switch is flat/off.
             NodeId::MonoDownmix => self.mono.is_active(),
-            NodeId::Crossfeed => self.crossfeed.is_active(),
-            NodeId::Equalizer => self.equalizer.is_active(),
-            NodeId::ClearBass => self.clear_bass.is_active(),
             NodeId::StereoBalance => self.balance.is_active(),
-            NodeId::CompressorLimiter => self.compressor.is_active(),
+            // Frequency shaping and dynamic compression nodes depend on master toggle:
+            NodeId::Crossfeed => self.master_enabled && self.crossfeed.is_active(),
+            NodeId::Equalizer => self.master_enabled && self.equalizer.is_active(),
+            NodeId::ClearBass => self.master_enabled && self.clear_bass.is_active(),
+            NodeId::CompressorLimiter => self.master_enabled && self.compressor.is_active(),
         }
     }
 
     #[inline]
     pub fn is_any_active(&self) -> bool {
         self.mono.is_active()
-            || self.crossfeed.is_active()
-            || self.equalizer.is_active()
-            || self.clear_bass.is_active()
             || self.balance.is_active()
-            || self.compressor.is_active()
+            || (self.master_enabled
+                && (self.crossfeed.is_active()
+                    || self.equalizer.is_active()
+                    || self.clear_bass.is_active()
+                    || self.compressor.is_active()))
     }
 
     /// Sets the execution sequence of DSP nodes.

@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -215,14 +216,42 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
                     super.onPlaybackConfigChanged(configs)
                     if (!eqManager.isEnabled() || configs == null) return
 
+                    val activeSessionIds = mutableSetOf<Int>()
                     var foundAny = false
                     for (config in configs) {
+                        val usage = try {
+                            config.audioAttributes.usage
+                        } catch (_: Throwable) {
+                            AudioAttributes.USAGE_MEDIA
+                        }
+
+                        // Filter out non-media/game noise: ignore notifications, alarms, and UI clicks
+                        val isMediaOrGame = usage == AudioAttributes.USAGE_MEDIA ||
+                                usage == AudioAttributes.USAGE_GAME ||
+                                usage == AudioAttributes.USAGE_UNKNOWN
+
+                        if (!isMediaOrGame) continue
+
                         val sessionId = ActiveSessionScanner.extractSessionId(config)
                         if (sessionId > 0) {
                             foundAny = true
+                            activeSessionIds.add(sessionId)
                             val detectedPkg = ActiveSessionScanner.extractClientPackageName(config, packageManager)
                             Log.d(TAG, "AudioPlaybackCallback detected active session: $sessionId (pkg: $detectedPkg)")
                             eqManager.openAudioSession(sessionId, detectedPkg ?: "playback_callback")
+                        }
+                    }
+
+                    // Auto-prune sessions that were detected via playback callback/scanners but have now stopped playing
+                    val autoDetectedSessions = eqManager.getActiveSessionList()
+                        .filter { !it.isGlobal }
+                    for (session in autoDetectedSessions) {
+                        val pkg = session.packageName
+                        val isAutoScanned = pkg == "playback_callback" || pkg == "dumpsys_scan" || pkg == "keep_alive_scan" ||
+                                (foundAny && !activeSessionIds.contains(session.sessionId))
+                        if (isAutoScanned && !activeSessionIds.contains(session.sessionId)) {
+                            Log.d(TAG, "AudioPlaybackCallback pruning inactive session: ${session.sessionId} (${session.packageName})")
+                            eqManager.closeAudioSession(session.sessionId)
                         }
                     }
 

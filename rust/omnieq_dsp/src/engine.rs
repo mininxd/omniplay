@@ -31,6 +31,7 @@ impl DspEngine {
 
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        self.pipeline.set_master_enabled(enabled);
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -74,10 +75,10 @@ impl DspEngine {
     }
 
     /// High-performance zero-copy processing of interleaved 16-bit signed PCM audio.
-    /// If no effects are active, or engine is disabled, returns immediately with 0% CPU overhead.
+    /// If no effects or channel routings are active, returns immediately with 0% CPU overhead.
     #[inline]
     pub fn process_interleaved_pcm16(&mut self, buffer: &mut [i16]) {
-        if !self.enabled || !self.pipeline.is_any_active() {
+        if !self.pipeline.is_any_active() {
             return;
         }
 

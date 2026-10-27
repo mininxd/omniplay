@@ -134,6 +134,8 @@ class EqualizerManager private constructor(private val context: Context) {
         // Automatically bind global mix session (session 0)
         bindSession(0)
         applyCurrentStateToEffects()
+        applySystemBalance(getStereoBalance())
+        applySystemMono(isMonoAudioEnabled())
     }
 
     val isHardwareAccelerated: Boolean
@@ -438,8 +440,22 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setMonoAudioEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
         applyCurrentStateToEffects()
+        applySystemMono(enabled)
         broadcastStereoEffects()
         notifyListeners()
+    }
+
+    private fun applySystemMono(enabled: Boolean) {
+        val monoInt = if (enabled) 1 else 0
+        try {
+            android.provider.Settings.System.putInt(context.contentResolver, "master_mono", monoInt)
+        } catch (_: Throwable) {
+            try {
+                if (ActiveSessionScanner.canUseRootSu != false) {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "settings put system master_mono $monoInt"))
+                }
+            } catch (_: Throwable) {}
+        }
     }
 
     @Volatile
@@ -449,8 +465,22 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
+        applySystemBalance(balance)
         broadcastStereoEffects()
         notifyListeners()
+    }
+
+    private fun applySystemBalance(balance: Int) {
+        val balanceFloat = (balance.coerceIn(-100, 100) / 100f)
+        try {
+            android.provider.Settings.System.putFloat(context.contentResolver, "master_balance", balanceFloat)
+        } catch (_: Throwable) {
+            try {
+                if (ActiveSessionScanner.canUseRootSu != false) {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "settings put system master_balance $balanceFloat"))
+                }
+            } catch (_: Throwable) {}
+        }
     }
 
     fun broadcastStereoEffects() {
