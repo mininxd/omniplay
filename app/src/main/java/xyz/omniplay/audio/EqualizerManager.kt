@@ -194,6 +194,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setCrossfeedAmount(amount: Int) {
         prefs.edit().putInt(KEY_CROSSFEED_AMOUNT, amount.coerceIn(0, 100)).apply()
+        updateAudioProcessorConfig()
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -202,6 +203,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setDynamicRangeAmount(amount: Int) {
         prefs.edit().putInt(KEY_DYNAMIC_RANGE_AMOUNT, amount.coerceIn(0, 100)).apply()
+        updateAudioProcessorConfig()
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -210,6 +212,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setMonoAudioEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
+        updateAudioProcessorConfig()
         applyCurrentStateToEffects()
         notifyListeners()
     }
@@ -218,6 +221,7 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
+        updateAudioProcessorConfig()
         applyCurrentStateToEffects()
         notifyListeners()
     }

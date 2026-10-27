@@ -46,6 +46,7 @@ class EqualizerManager private constructor(private val context: Context) {
         var bassBoost: BassBoost? = null
         var virtualizer: Virtualizer? = null
         var loudnessEnhancer: LoudnessEnhancer? = null
+        var dynamicsProcessing: DynamicsProcessingHelper? = null
         val nativeHardware = NativeAudioEffectBinding()
 
         init {
@@ -87,6 +88,14 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    dynamicsProcessing = DynamicsProcessingHelper(sessionId)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to init DynamicsProcessing on session $sessionId", e)
+                }
+            }
+
             try {
                 nativeHardware.initSession(sessionId)
             } catch (e: Throwable) {
@@ -100,10 +109,12 @@ class EqualizerManager private constructor(private val context: Context) {
             try { bassBoost?.enabled = false; bassBoost?.release() } catch (_: Throwable) {}
             try { virtualizer?.enabled = false; virtualizer?.release() } catch (_: Throwable) {}
             try { loudnessEnhancer?.enabled = false; loudnessEnhancer?.release() } catch (_: Throwable) {}
+            try { dynamicsProcessing?.release() } catch (_: Throwable) {}
             equalizer = null
             bassBoost = null
             virtualizer = null
             loudnessEnhancer = null
+            dynamicsProcessing = null
         }
     }
 
@@ -428,6 +439,7 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setCrossfeedAmount(amount: Int) {
         prefs.edit().putInt(KEY_CROSSFEED_AMOUNT, amount.coerceIn(0, 100)).apply()
         applyCurrentStateToEffects()
+        broadcastStereoEffects()
         notifyListeners()
     }
 
@@ -436,6 +448,7 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setDynamicRangeAmount(amount: Int) {
         prefs.edit().putInt(KEY_DYNAMIC_RANGE_AMOUNT, amount.coerceIn(0, 100)).apply()
         applyCurrentStateToEffects()
+        broadcastStereoEffects()
         notifyListeners()
     }
 
@@ -444,6 +457,7 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setMonoAudioEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
         applyCurrentStateToEffects()
+        broadcastStereoEffects()
         notifyListeners()
     }
 
@@ -452,7 +466,21 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
         applyCurrentStateToEffects()
+        broadcastStereoEffects()
         notifyListeners()
+    }
+
+    fun broadcastStereoEffects() {
+        try {
+            val intent = Intent("xyz.omniplay.action.SET_STEREO_EFFECTS").apply {
+                setPackage("xyz.omniplay")
+                putExtra("balance", getStereoBalance())
+                putExtra("mono_audio", isMonoAudioEnabled())
+                putExtra("crossfeed", getCrossfeedAmount())
+                putExtra("drc", getDynamicRangeAmount())
+            }
+            context.sendBroadcast(intent)
+        } catch (_: Throwable) {}
     }
 
     @Synchronized
@@ -573,14 +601,27 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            // Virtualizer
+            // Virtualizer (Crossfeed)
             val virt = sessionEffects.virtualizer
             if (virt != null) {
                 try {
-                    virt.enabled = false
+                    val crossfeed = getCrossfeedAmount()
+                    val shouldEnableVirt = isMasterOn && crossfeed > 0
+                    virt.enabled = shouldEnableVirt
+                    if (shouldEnableVirt && virt.strengthSupported) {
+                        val strength = ((crossfeed / 100f) * 1000).roundToInt().coerceIn(0, 1000).toShort()
+                        virt.setStrength(strength)
+                    }
                 } catch (e: Throwable) {
-                    Log.w(TAG, "Failed to disable Virtualizer for session ${sessionEffects.sessionId}", e)
+                    Log.w(TAG, "Failed to apply Virtualizer to session ${sessionEffects.sessionId}", e)
                 }
+            }
+
+            // DynamicsProcessing (Stereo Balance & Dynamic Range Limiter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val balance = getStereoBalance()
+                val drc = getDynamicRangeAmount()
+                sessionEffects.dynamicsProcessing?.applyEffects(balance, drc)
             }
 
             // LoudnessEnhancer (Standalone + Volume Boost integration)
@@ -611,6 +652,8 @@ class EqualizerManager private constructor(private val context: Context) {
                 if (isMasterOn) {
                     if (hw.isSonyActive) {
                         hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_XLOUD_ON, if (isXloud) 1 else 0)
+                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_DN_ON, if (getDynamicRangeAmount() > 0) 1 else 0)
+                        hw.setSonyParam(NativeAudioEffectBinding.SONY_PARAM_CLEARSTEREO_ON, if (getCrossfeedAmount() > 0) 1 else 0)
                     }
 
                     if (hw.isDolbyActive) {
@@ -623,10 +666,13 @@ class EqualizerManager private constructor(private val context: Context) {
                             else -> 0
                         }
                         hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_IEQ_PRESET, dolbyIeq)
+                        hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_VOLUME_LEVELER, if (getDynamicRangeAmount() > 0) 1 else 0)
+                        hw.setDolbyParam(NativeAudioEffectBinding.DOLBY_PARAM_HEADPHONE_VIRTUALIZER, if (getCrossfeedAmount() > 0) 1 else 0)
                     }
                 }
             }
         }
+        broadcastStereoEffects()
     }
 
     companion object {

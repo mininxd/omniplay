@@ -380,6 +380,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         initPlayer()
         setupBitPerfectAudio()
         registerBecomingNoisyReceiver()
+        registerStereoEffectsReceiver()
 
         val sync = xyz.omniplay.sync.OmniSyncManager.getInstance(applicationContext)
         sync.hostSongProvider = { currentSong?.let { getResolvedSongForSync(it) } }
@@ -1978,6 +1979,46 @@ class PlaybackService : MediaBrowserServiceCompat() {
         registerReceiver(noisyReceiver, filter)
     }
 
+    private val stereoEffectsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "xyz.omniplay.action.SET_STEREO_EFFECTS") {
+                val ctx = context ?: applicationContext
+                val eq = xyz.omniplay.audio.EqualizerManager.getInstance(ctx)
+                if (intent.hasExtra("balance")) {
+                    val balance = intent.getIntExtra("balance", 0)
+                    eq.setStereoBalance(balance)
+                }
+                if (intent.hasExtra("mono_audio")) {
+                    val mono = intent.getBooleanExtra("mono_audio", false)
+                    eq.setMonoAudioEnabled(mono)
+                }
+                if (intent.hasExtra("crossfeed")) {
+                    val crossfeed = intent.getIntExtra("crossfeed", 0)
+                    eq.setCrossfeedAmount(crossfeed)
+                }
+                if (intent.hasExtra("drc")) {
+                    val drc = intent.getIntExtra("drc", 0)
+                    eq.setDynamicRangeAmount(drc)
+                }
+            }
+        }
+    }
+
+    private fun registerStereoEffectsReceiver() {
+        val filter = IntentFilter("xyz.omniplay.action.SET_STEREO_EFFECTS")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(stereoEffectsReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(stereoEffectsReceiver, filter)
+        }
+    }
+
+    private fun unregisterStereoEffectsReceiver() {
+        try {
+            unregisterReceiver(stereoEffectsReceiver)
+        } catch (_: Exception) {}
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_PLAY -> play()
@@ -2027,6 +2068,7 @@ class PlaybackService : MediaBrowserServiceCompat() {
         try {
             unregisterReceiver(noisyReceiver)
         } catch (e: Exception) {}
+        unregisterStereoEffectsReceiver()
         try {
             player?.release()
             player = null

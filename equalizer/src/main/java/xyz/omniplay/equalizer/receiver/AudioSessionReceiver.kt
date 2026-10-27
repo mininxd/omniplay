@@ -33,6 +33,9 @@ class AudioSessionReceiver : BroadcastReceiver() {
                 }
                 Log.d(TAG, "Opening audio session $sessionId for $packageName")
                 eqManager.openAudioSession(sessionId, packageName)
+                if (cleanPkg == "xyz.omniplay") {
+                    eqManager.broadcastStereoEffects()
+                }
                 if (eqManager.isEnabled()) {
                     xyz.omniplay.equalizer.service.EqualizerService.start(context)
                 }
