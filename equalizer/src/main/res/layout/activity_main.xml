@@ -363,6 +363,77 @@
                     android:valueTo="10" />
             </LinearLayout>
 
+            <!-- SECTION: Loudness Enhancer -->
+            <LinearLayout
+                android:id="@+id/card_loudness_enhancer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/row_loudness_enhancer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
+                            android:text="@string/loudness_enhancer_title"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/loudness_enhancer_desc"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tv_loudness_enhancer_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="12dp"
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/effect_off"
+                        android:textColor="?attr/colorPrimary"
+                        android:textSize="15sp" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_loudness_enhancer"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:clickable="false"
+                        android:focusable="false"
+                        app:thumbIcon="@drawable/asl_switch_thumb" />
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slider_loudness_enhancer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:stepSize="50"
+                    android:value="0"
+                    android:valueFrom="0"
+                    android:valueTo="1000" />
+            </LinearLayout>
+
             <!-- SECTION 5: Virtualphones Technology (VPT) -->
             <LinearLayout
                 android:id="@+id/card_vpt"

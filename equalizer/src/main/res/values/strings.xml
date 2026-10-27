@@ -24,6 +24,10 @@
     <string name="clear_bass_title">Sub-Bass (ClearBass™)</string>
     <string name="clear_bass_desc">Deep dynamic sub-bass resonance without acoustic distortion</string>
 
+    <!-- Loudness Enhancer -->
+    <string name="loudness_enhancer_title">Loudness Enhancer</string>
+    <string name="loudness_enhancer_desc">Increases audio loudness and dynamic gain without acoustic distortion</string>
+
     <!-- VPT Surround -->
     <string name="vpt_title">Virtualphones Technology (VPT)</string>
     <string name="vpt_desc">Virtual spatial acoustics simulation</string>

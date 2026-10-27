@@ -297,6 +297,28 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Loudness Enhancer ---
+    fun isLoudnessEnhancerEnabled(): Boolean {
+        return prefs.getBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, false)
+    }
+
+    fun setLoudnessEnhancerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun getLoudnessEnhancerGainMb(): Int {
+        return prefs.getInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, 0).coerceIn(0, 1000)
+    }
+
+    fun setLoudnessEnhancerGainMb(gainMb: Int) {
+        val clamped = gainMb.coerceIn(0, 1000)
+        prefs.edit().putInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, clamped).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
     // --- Sony Xperia Automatic Optimisation ---
     fun isAutomaticOptimizationEnabled(): Boolean {
         return prefs.getBoolean(KEY_AUTOMATIC_OPTIMIZATION, false)
@@ -389,6 +411,8 @@ class EqualizerManager private constructor(private val context: Context) {
     fun applyCurrentStateToEffects() {
         val isMasterOn = isEnabled()
         val cbLevel = getClearBassLevel()
+        val isLeEnabled = isLoudnessEnhancerEnabled()
+        val leGainMb = getLoudnessEnhancerGainMb()
         val ieq = getIeqPreset()
         val deAmount = getDialogEnhancerAmount()
         val isAhc = isAutomaticOptimizationEnabled()
@@ -510,14 +534,19 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            // LoudnessEnhancer (xLOUD)
+            // LoudnessEnhancer (Standalone + xLOUD integration)
             val le = sessionEffects.loudnessEnhancer
             if (le != null) {
                 try {
-                    val shouldEnable = isMasterOn && isXloud
+                    val shouldEnable = isMasterOn && (isLeEnabled || isXloud)
                     le.enabled = shouldEnable
                     if (shouldEnable) {
-                        le.setTargetGain(300) // +3.0 dB clean lift
+                        val targetGain = if (isLeEnabled) {
+                            leGainMb
+                        } else {
+                            300 // +3.0 dB clean lift for Sony xLOUD
+                        }
+                        le.setTargetGain(targetGain)
                     }
                 } catch (e: Throwable) {
                     Log.w(TAG, "Failed to apply LoudnessEnhancer to session ${sessionEffects.sessionId}", e)
@@ -571,6 +600,8 @@ class EqualizerManager private constructor(private val context: Context) {
         const val KEY_IEQ_PRESET = "ieq_preset"
         const val KEY_DIALOG_ENHANCER = "dialog_enhancer"
         const val KEY_CLEAR_BASS = "clear_bass"
+        const val KEY_LOUDNESS_ENHANCER_ENABLED = "loudness_enhancer_enabled"
+        const val KEY_LOUDNESS_ENHANCER_GAIN_MB = "loudness_enhancer_gain_mb"
         const val KEY_AUTOMATIC_OPTIMIZATION = "automatic_optimization"
         const val KEY_CLEAR_PHASE = "clear_phase"
         const val KEY_XLOUD = "xloud"

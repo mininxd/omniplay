@@ -287,6 +287,28 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
+    // --- Loudness Enhancer ---
+    fun isLoudnessEnhancerEnabled(): Boolean {
+        return prefs.getBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, false)
+    }
+
+    fun setLoudnessEnhancerEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, enabled).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
+    fun getLoudnessEnhancerGainMb(): Int {
+        return prefs.getInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, 0).coerceIn(0, 1000)
+    }
+
+    fun setLoudnessEnhancerGainMb(gainMb: Int) {
+        val clamped = gainMb.coerceIn(0, 1000)
+        prefs.edit().putInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, clamped).apply()
+        applyCurrentStateToEffects()
+        notifyListeners()
+    }
+
     // Dynamic Normaliser removed in favor of standard ReplayGain
     fun isDynamicNormalizerEnabled(): Boolean = false
     fun setDynamicNormalizerEnabled(enabled: Boolean) {}
@@ -506,14 +528,21 @@ class EqualizerManager private constructor(private val context: Context) {
             }
         }
 
-        // 4. Loudness Booster (xLOUD)
+        // 4. Loudness Booster (Standalone + xLOUD)
         val xloud = xloudEnhancer
         if (xloud != null) {
             try {
-                val isXLoudOn = isMasterOn && isXLoudEnabled()
-                xloud.enabled = isXLoudOn
-                if (isXLoudOn) {
-                    xloud.setTargetGain(350)
+                val isLeOn = isLoudnessEnhancerEnabled()
+                val isXLoudOn = isXLoudEnabled()
+                val shouldEnable = isMasterOn && (isLeOn || isXLoudOn)
+                xloud.enabled = shouldEnable
+                if (shouldEnable) {
+                    val targetGain = if (isLeOn) {
+                        getLoudnessEnhancerGainMb()
+                    } else {
+                        350
+                    }
+                    xloud.setTargetGain(targetGain)
                 }
             } catch (e: Throwable) {
                 Log.w(TAG, "Error applying LoudnessEnhancer", e)
@@ -566,6 +595,8 @@ class EqualizerManager private constructor(private val context: Context) {
         const val KEY_IEQ_PRESET = "key_ieq_preset"
         const val KEY_DIALOG_ENHANCER = "key_dialog_enhancer"
         const val KEY_CLEAR_BASS = "key_clear_bass"
+        const val KEY_LOUDNESS_ENHANCER_ENABLED = "key_loudness_enhancer_enabled"
+        const val KEY_LOUDNESS_ENHANCER_GAIN_MB = "key_loudness_enhancer_gain_mb"
         const val KEY_CROSSFEED_AMOUNT = "key_crossfeed_amount"
         const val KEY_DYNAMIC_RANGE_AMOUNT = "key_dynamic_range_amount"
         const val KEY_MONO_AUDIO = "key_mono_audio"

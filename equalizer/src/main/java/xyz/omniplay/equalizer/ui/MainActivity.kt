@@ -11,6 +11,7 @@ import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
 import xyz.omniplay.equalizer.util.ThemeHelper
+import java.util.Locale
 
 /**
  * Dedicated Material 3 Equalizer & Sound Enhancement Application.
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         setupIeq()
         setupDialogueEnhancer()
         setupClearBass()
+        setupLoudnessEnhancer()
         setupVptSurround()
         setupSonySuite()
         setupPlaybackEffects()
@@ -178,6 +180,37 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                 val db = value.toInt()
                 binding.tvClearBassValue.text = formatDb(db)
                 eqManager.setClearBassLevel(db)
+            }
+        }
+    }
+
+    private fun setupLoudnessEnhancer() {
+        binding.sliderLoudnessEnhancer.isTickVisible = false
+        binding.sliderLoudnessEnhancer.valueFrom = 0f
+        binding.sliderLoudnessEnhancer.valueTo = 1000f
+        binding.sliderLoudnessEnhancer.stepSize = 50f
+
+        val isLeEnabled = eqManager.isLoudnessEnhancerEnabled()
+        val currentMb = eqManager.getLoudnessEnhancerGainMb().toFloat()
+
+        binding.switchLoudnessEnhancer.isChecked = isLeEnabled
+        binding.sliderLoudnessEnhancer.value = currentMb
+        binding.sliderLoudnessEnhancer.isEnabled = isLeEnabled && eqManager.isEnabled()
+        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeEnabled, currentMb.toInt())
+
+        binding.rowLoudnessEnhancer.setOnClickListener {
+            val newState = !binding.switchLoudnessEnhancer.isChecked
+            binding.switchLoudnessEnhancer.isChecked = newState
+            eqManager.setLoudnessEnhancerEnabled(newState)
+            binding.sliderLoudnessEnhancer.isEnabled = newState && eqManager.isEnabled()
+            binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(newState, eqManager.getLoudnessEnhancerGainMb())
+        }
+
+        binding.sliderLoudnessEnhancer.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                val mb = value.toInt()
+                binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(binding.switchLoudnessEnhancer.isChecked, mb)
+                eqManager.setLoudnessEnhancerGainMb(mb)
             }
         }
     }
@@ -367,6 +400,14 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderClearBass.value = cb
         binding.tvClearBassValue.text = formatDb(cb.toInt())
 
+        // Loudness Enhancer
+        val isLeOn = eqManager.isLoudnessEnhancerEnabled()
+        val leGain = eqManager.getLoudnessEnhancerGainMb().toFloat()
+        binding.switchLoudnessEnhancer.isChecked = isLeOn
+        binding.sliderLoudnessEnhancer.value = leGain
+        binding.sliderLoudnessEnhancer.isEnabled = isLeOn && enabled
+        binding.tvLoudnessEnhancerValue.text = formatLoudnessGain(isLeOn, leGain.toInt())
+
         val crossfeed = eqManager.getCrossfeedAmount()
         binding.sliderCrossfeed.value = crossfeed.toFloat()
         binding.tvCrossfeedValue.text = formatEffectAmount(crossfeed)
@@ -401,6 +442,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.cardIeq.alpha = alpha
         binding.cardDialogueEnhancer.alpha = alpha
         binding.cardClearBass.alpha = alpha
+        binding.cardLoudnessEnhancer.alpha = alpha
         binding.cardVpt.alpha = alpha
         binding.cardSonySuite.alpha = alpha
         binding.cardPlaybackEffects.alpha = alpha
@@ -413,6 +455,9 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.daxEqBarsView.isEnabled = enabled
         binding.sliderDialogueEnhancer.isEnabled = enabled
         binding.sliderClearBass.isEnabled = enabled
+        binding.rowLoudnessEnhancer.isEnabled = enabled
+        binding.switchLoudnessEnhancer.isEnabled = enabled
+        binding.sliderLoudnessEnhancer.isEnabled = enabled && eqManager.isLoudnessEnhancerEnabled()
         binding.sliderCrossfeed.isEnabled = enabled
         binding.sliderDynamicRange.isEnabled = enabled
         binding.rowMonoAudio.isEnabled = enabled
@@ -445,6 +490,15 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             db > 0 -> "+$db dB"
             db < 0 -> "$db dB"
             else -> "0 dB"
+        }
+    }
+
+    private fun formatLoudnessGain(enabled: Boolean, gainMb: Int): String {
+        return if (!enabled) {
+            getString(R.string.effect_off)
+        } else {
+            val db = gainMb / 100.0
+            String.format(Locale.US, if (gainMb > 0) "+%.1f dB" else "%.1f dB", db)
         }
     }
 
