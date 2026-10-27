@@ -144,11 +144,11 @@
     <string name="automatic_optimization_title">Automatic optimisation</string>
     <string name="automatic_optimization_desc">Optimises sound quality based on your headphones and hearing</string>
     <string name="equalizer_active">High Precision DSP Equalizer</string>
-    <string name="clear_phase_title">Clear Phase™</string>
+    <string name="clear_phase_title">Clear Phase</string>
     <string name="clear_phase_desc">Acoustic phase correction for crisp, natural vocal and instrumental presence</string>
-    <string name="xloud_title">xLOUD™</string>
+    <string name="xloud_title">Volume Boost</string>
     <string name="xloud_desc">Internal speaker volume &amp; dynamic loudness booster</string>
-    <string name="sforce_title">S-Force Front Surround 3D</string>
+    <string name="sforce_title">Front Surround 3D</string>
     <string name="sforce_desc">Frontal 3D virtual surround soundstage expansion</string>
     <string name="vpt_title">Virtualphones Technology (VPT)</string>
     <string name="vpt_desc">Virtualphones Technology acoustic simulation</string>

@@ -12,11 +12,10 @@ import xyz.omniplay.util.ThemeHelper
 /**
  * Material 3 Expressive "Equalizer and Sound Enhancement" nested settings screen.
  *
- * Implements reverse-engineered DSP features:
- * - Dolby Atmos (DaxUI): 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
- * - Sony Xperia (SoundEnhancement): ClearBass™, VPT Surround Sound, Dynamic Normaliser,
- *   Automatic Optimisation, Clear Phase™, xLOUD™, and S-Force Front Surround 3D.
- * - Non-dotted sliders for high steps (bands & ClearBass), dotted sliders for lower steps (Dialogue Enhancer).
+ * Features:
+ * - 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
+ * - Sub-Bass, VPT Surround Sound, Automatic Optimisation, Clear Phase, xLOUD, and Front Surround 3D.
+ * - Non-dotted sliders for high steps (bands & Sub-Bass), dotted sliders for lower steps (Dialogue Enhancer).
  */
 class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
 

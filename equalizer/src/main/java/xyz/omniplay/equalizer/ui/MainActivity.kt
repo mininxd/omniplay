@@ -14,12 +14,12 @@ import xyz.omniplay.equalizer.util.ThemeHelper
 import java.util.Locale
 
 /**
- * Dedicated Material 3 Equalizer & Sound Enhancement Application.
+ * OmniQualizer: Material 3 Equalizer & Sound Enhancement Application.
  *
- * Implements reverse-engineered DSP features:
- * - Dolby Atmos (DaxUI): 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
- * - Sony Xperia (SoundEnhancement): ClearBass™, VPT Surround Sound,
- *   Automatic Optimisation, Clear Phase™, xLOUD™, and S-Force Front Surround 3D.
+ * Audio DSP features:
+ * - 10-band Graphic Equalizer, Intelligent Equalizer (IEQ), Dialogue Enhancer.
+ * - Sub-Bass, Loudness Enhancer, Virtual Surround Sound (VPT).
+ * - Automatic Optimisation, Clear Phase, Volume Boost, and Front Surround 3D.
  * - Multi-session routing: Global session 0 and external player audio session binding.
  */
 class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         setupClearBass()
         setupLoudnessEnhancer()
         setupVptSurround()
-        setupSonySuite()
+        setupEnhancementSuite()
         setupPlaybackEffects()
         setupResetButton()
 
@@ -232,7 +232,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         }
     }
 
-    private fun setupSonySuite() {
+    private fun setupEnhancementSuite() {
         binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
         binding.rowAutomaticOptimization.setOnClickListener {
             val newState = !binding.switchAutomaticOptimization.isChecked
@@ -425,7 +425,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         // VPT
         updateVptChipSelection(eqManager.getVptMode())
 
-        // Sony Suite
+        // Sound Enhancement Suite
         binding.switchAutomaticOptimization.isChecked = eqManager.isAutomaticOptimizationEnabled()
         binding.switchClearPhase.isChecked = eqManager.isClearPhaseEnabled()
         binding.switchXloud.isChecked = eqManager.isXLoudEnabled()

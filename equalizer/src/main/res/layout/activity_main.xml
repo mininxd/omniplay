@@ -305,7 +305,7 @@
                     android:valueTo="10" />
             </LinearLayout>
 
-            <!-- SECTION 4: Sub-Bass (ClearBass™) -->
+            <!-- SECTION 4: Sub-Bass -->
             <LinearLayout
                 android:id="@+id/card_clear_bass"
                 android:layout_width="match_parent"
@@ -495,7 +495,7 @@
                 </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
 
-            <!-- SECTION 6: Sony Audio Enhancement Suite -->
+            <!-- SECTION 6: Sound Enhancement Suite -->
             <LinearLayout
                 android:id="@+id/card_sony_suite"
                 android:layout_width="match_parent"

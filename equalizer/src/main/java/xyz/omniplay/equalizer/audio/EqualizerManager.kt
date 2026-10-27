@@ -14,22 +14,20 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * High-Precision Audio Engine & DSP Sound Enhancement Suite for the dedicated Equalizer app.
+ * High-Precision Audio Engine & DSP Sound Enhancement Suite for OmniQualizer.
  *
- * Direct reverse-engineered implementation from:
- * 1. Dolby Atmos (DaxUI & daxService):
- *    - 10-Band Graphic Equalizer (32Hz, 64Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz)
- *    - Intelligent Equalizer (IEQ): Off, Balanced, Warm, Detailed
- *    - Dialogue Enhancer: Vocal presence & clarity enhancement (0 to 10 scale)
- *    - ±12 dB Precision Gain Range
- *
- * 2. Sony Xperia (SoundEnhancement):
- *    - Automatic Optimisation (headphone acoustic response & impedance compensation)
- *    - Clear Phase™ (acoustic phase correction for natural sound reproduction)
- *    - xLOUD™ (dynamic speaker & output volume booster)
- *    - S-Force Front Surround 3D (wide frontal sound field spatialization)
- *    - VPT (Virtualphones Technology) Surround Modes: Off, Studio, Club, Concert Hall
- *    - ClearBass™ (-10 dB to +10 dB sub-bass resonance slider)
+ * Core audio features:
+ * - 10-Band Graphic Equalizer (32Hz, 64Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz)
+ * - Intelligent Equalizer (IEQ): Off, Balanced, Warm, Detailed
+ * - Dialogue Enhancer: Vocal presence & clarity enhancement (0 to 10 scale)
+ * - ±12 dB Precision Gain Range
+ * - Sub-Bass (-10 dB to +10 dB resonance slider)
+ * - Loudness Enhancer (ITU-R BS.1770 dynamic gain compression)
+ * - Automatic Optimisation (headphone acoustic response & impedance compensation)
+ * - Clear Phase (acoustic phase correction for natural sound reproduction)
+ * - xLOUD (dynamic speaker & output volume booster)
+ * - S-Force Front Surround 3D (wide frontal sound field spatialization)
+ * - Surround Modes (VPT): Off, Studio, Club, Concert Hall
  *
  * Multi-session architecture:
  * - Session 0: Global mix audio effect (system-wide equalization).
@@ -128,14 +126,7 @@ class EqualizerManager private constructor(private val context: Context) {
         }
 
     fun getHardwareDspStatus(): String {
-        val anySony = activeSessions.values.any { it.nativeHardware.isSonyActive }
-        val anyDolby = activeSessions.values.any { it.nativeHardware.isDolbyActive }
-        return when {
-            anySony && anyDolby -> "Hardware DSP (Sony + Dolby Active)"
-            anySony -> "Hardware DSP (Sony Soundfx Active)"
-            anyDolby -> "Hardware DSP (Dolby DAP Active)"
-            else -> "Software High-Precision DSP Engine"
-        }
+        return if (isHardwareAccelerated) "Hardware DSP Audio Engine" else "High-Precision DSP Audio Engine"
     }
 
     fun addListener(listener: EqualizerListener) {
@@ -234,7 +225,7 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
-    // --- Dolby DAX 10-Band Graphic Equalizer ---
+    // --- 10-Band Graphic Equalizer ---
     fun getDaxBandLevel(bandIndex: Int): Int {
         if (bandIndex !in 0 until 10) return 0
         return prefs.getInt(KEY_DAX_BAND_PREFIX + bandIndex, 0).coerceIn(-12, 12)
@@ -261,7 +252,7 @@ class EqualizerManager private constructor(private val context: Context) {
         applyPreset(0) // Apply Flat preset
     }
 
-    // --- Dolby Intelligent Equalizer (IEQ) ---
+    // --- Intelligent Equalizer (IEQ) ---
     fun getIeqPreset(): Int {
         return prefs.getInt(KEY_IEQ_PRESET, IEQ_OFF)
     }
@@ -273,7 +264,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Dolby Dialogue Enhancer ---
+    // --- Dialogue Enhancer ---
     fun getDialogEnhancerAmount(): Int {
         return prefs.getInt(KEY_DIALOG_ENHANCER, 0).coerceIn(0, 10)
     }
@@ -285,7 +276,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia ClearBass™ ---
+    // --- Sub-Bass ---
     fun getClearBassLevel(): Int {
         return prefs.getInt(KEY_CLEAR_BASS, 0).coerceIn(-10, 10)
     }
@@ -319,7 +310,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia Automatic Optimisation ---
+    // --- Automatic Optimisation ---
     fun isAutomaticOptimizationEnabled(): Boolean {
         return prefs.getBoolean(KEY_AUTOMATIC_OPTIMIZATION, false)
     }
@@ -330,7 +321,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia Clear Phase™ ---
+    // --- Clear Phase ---
     fun isClearPhaseEnabled(): Boolean {
         return prefs.getBoolean(KEY_CLEAR_PHASE, false)
     }
@@ -341,7 +332,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia xLOUD™ ---
+    // --- xLOUD (Volume Boost) ---
     fun isXLoudEnabled(): Boolean {
         return prefs.getBoolean(KEY_XLOUD, false)
     }
@@ -352,7 +343,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia S-Force Front Surround 3D ---
+    // --- S-Force Front Surround 3D ---
     fun isSForceEnabled(): Boolean {
         return prefs.getBoolean(KEY_SFORCE, false)
     }
@@ -363,7 +354,7 @@ class EqualizerManager private constructor(private val context: Context) {
         notifyListeners()
     }
 
-    // --- Sony Xperia VPT Surround ---
+    // --- Surround Modes (VPT) ---
     fun getVptMode(): Int {
         return prefs.getInt(KEY_VPT_MODE, VPT_OFF)
     }
@@ -544,7 +535,7 @@ class EqualizerManager private constructor(private val context: Context) {
                         val targetGain = if (isLeEnabled) {
                             leGainMb
                         } else {
-                            300 // +3.0 dB clean lift for Sony xLOUD
+                            300 // +3.0 dB clean lift for xLOUD
                         }
                         le.setTargetGain(targetGain)
                     }
@@ -553,7 +544,7 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            // Hardware HAL (Sony + Dolby)
+            // Hardware Audio HAL
             val hw = sessionEffects.nativeHardware
             if (hw.isSonyActive || hw.isDolbyActive) {
                 hw.setEnabled(isMasterOn)
