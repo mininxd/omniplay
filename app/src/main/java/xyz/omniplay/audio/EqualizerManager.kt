@@ -46,6 +46,8 @@ class EqualizerManager private constructor(private val context: Context) {
     private var xloudEnhancer: LoudnessEnhancer? = null
     private var activeAudioSessionId: Int = 0
 
+    fun getActiveAudioSessionId(): Int = activeAudioSessionId
+
     init {
         updateAudioProcessorConfig()
     }

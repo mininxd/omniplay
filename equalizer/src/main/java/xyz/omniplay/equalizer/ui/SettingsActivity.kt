@@ -99,8 +99,8 @@ class SettingsActivity : AppCompatActivity() {
             itemBinding.tvSessionAppName.text = session.displayName
 
             var appIconLoaded = false
-            val pkg = session.packageName
-            if (pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan") {
+            val pkg = session.packageName?.substringBefore(':')?.trim()
+            if (!pkg.isNullOrBlank() && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan") {
                 try {
                     val icon = packageManager.getApplicationIcon(pkg)
                     itemBinding.ivSessionIcon.setImageDrawable(icon)

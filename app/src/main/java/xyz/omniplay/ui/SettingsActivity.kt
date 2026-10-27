@@ -213,8 +213,13 @@ class SettingsActivity : AppCompatActivity() {
         // Equalizer and Sound Enhancement
         updateEqualizerSubtitle()
         binding.settingEqualizer.setOnClickListener {
-            val intent = Intent(this, SoundEnhancementActivity::class.java)
-            startActivity(intent)
+            val fullIntent = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer")
+            if (fullIntent != null) {
+                startActivity(fullIntent)
+            } else {
+                val intent = Intent(this, SoundEnhancementActivity::class.java)
+                startActivity(intent)
+            }
         }
 
         // 4. Rescan Music
@@ -274,11 +279,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateEqualizerSubtitle() {
-        val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
-        if (eq.isEnabled()) {
-            binding.subtitleEqualizer.setText(R.string.equalizer_active)
+        val isOmniQualizerInstalled = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
+        if (isOmniQualizerInstalled) {
+            binding.subtitleEqualizer.text = "OmniQualizer DSP Engine"
         } else {
-            binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
+            val eq = xyz.omniplay.audio.EqualizerManager.getInstance(this)
+            if (eq.isEnabled()) {
+                binding.subtitleEqualizer.setText(R.string.equalizer_active)
+            } else {
+                binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
+            }
         }
     }
 

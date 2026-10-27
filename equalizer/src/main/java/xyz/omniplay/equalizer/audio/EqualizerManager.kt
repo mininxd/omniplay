@@ -220,24 +220,26 @@ class EqualizerManager private constructor(private val context: Context) {
         val pm = context.packageManager
         return activeSessions.entries.map { (sessionId, effects) ->
             val pkg = effects.packageName
+            val cleanPkg = pkg?.substringBefore(':')?.trim()
             val isGlobal = (sessionId == 0)
             val name = when {
                 isGlobal -> "Global Audio Mix"
-                pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan" -> {
+                !cleanPkg.isNullOrBlank() && cleanPkg != "playback_callback" && cleanPkg != "dumpsys_scan" && cleanPkg != "keep_alive_scan" -> {
                     try {
-                        val appInfo = pm.getApplicationInfo(pkg, 0)
-                        pm.getApplicationLabel(appInfo).toString()
+                        val appInfo = pm.getApplicationInfo(cleanPkg, 0)
+                        val label = pm.getApplicationLabel(appInfo).toString()
+                        if (label.isNotBlank()) label else cleanPkg
                     } catch (_: Exception) {
-                        pkg
+                        cleanPkg
                     }
                 }
-                pkg == "playback_callback" -> "Media Stream (Browser / Player)"
-                pkg == "dumpsys_scan" -> "Detected Audio Session"
-                else -> "Media Player Session"
+                cleanPkg == "playback_callback" -> "Media Stream"
+                cleanPkg == "dumpsys_scan" -> "Detected Audio Player"
+                else -> "Media Player"
             }
             ActiveSessionInfo(
                 sessionId = sessionId,
-                packageName = pkg,
+                packageName = cleanPkg,
                 displayName = name,
                 isGlobal = isGlobal
             )

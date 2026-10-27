@@ -28,6 +28,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
+    <queries>
+        <package android:name="xyz.omniplay.equalizer" />
+        <intent>
+            <action android:name="xyz.omniplay.equalizer.ACTION_QUICK_PANEL" />
+        </intent>
+    </queries>
+
     <application
         android:name=".OmniplayApplication"
         android:allowBackup="true"

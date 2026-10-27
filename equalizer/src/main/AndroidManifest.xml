@@ -14,6 +14,9 @@
     <uses-permission
         android:name="android.permission.DUMP"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <queries>
         <intent>
@@ -86,6 +89,22 @@
             android:name=".ui.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title" />
+
+        <activity
+            android:name=".ui.QuickEqualizerActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Equalizer.QuickPanel"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="xyz.omniplay.equalizer.ACTION_QUICK_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter android:priority="900">
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <!-- Broadcast receiver for system & media player audio sessions -->
         <receiver
