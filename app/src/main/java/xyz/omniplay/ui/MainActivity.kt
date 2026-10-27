@@ -887,7 +887,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                 }
                 putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
             }
-            if (packageManager.resolveActivity(quickPanelIntent, 0) != null) {
+            if (isOmniQualizerSupported() && packageManager.resolveActivity(quickPanelIntent, 0) != null) {
                 startActivity(quickPanelIntent)
             } else {
                 EqualizerBottomSheet.show(supportFragmentManager)
@@ -895,7 +895,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         }
         binding.btnEqualizer.setOnLongClickListener {
             val fullIntent = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer")
-            if (fullIntent != null) {
+            if (isOmniQualizerSupported() && fullIntent != null) {
                 startActivity(fullIntent)
             } else {
                 startActivity(Intent(this, SoundEnhancementActivity::class.java))
@@ -1865,6 +1865,10 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
             ThemeColors.getOnSurfaceVariant(this)
         }
         binding.btnEqualizer.setColorFilter(tint)
+    }
+
+    private fun isOmniQualizerSupported(): Boolean {
+        return xyz.omniplay.BuildConfig.VERSION_CODE >= 35
     }
 
     private val eqListener = object : xyz.omniplay.audio.EqualizerManager.EqualizerListener {

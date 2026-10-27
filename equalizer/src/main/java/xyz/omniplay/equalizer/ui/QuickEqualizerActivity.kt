@@ -25,6 +25,11 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
     override fun onCreate(savedInstanceState: Bundle?) {
         ThemeHelper.applyTheme(this)
         super.onCreate(savedInstanceState)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.attributes = window.attributes.apply {
+            dimAmount = 0.0f
+        }
+        window.setBackgroundDrawableResource(android.R.color.transparent)
         binding = ActivityQuickEqualizerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         ThemeHelper.applySystemBars(this)
@@ -34,8 +39,11 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
 
         val sessionId = intent.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0)
         val packageName = intent.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
+        val cleanPkg = packageName?.substringBefore(':')?.trim()
         if (sessionId > 0) {
-            eqManager.openAudioSession(sessionId, packageName)
+            if (cleanPkg != "xyz.omniplay" || EqualizerManager.isOmniPlaySupported(this)) {
+                eqManager.openAudioSession(sessionId, packageName)
+            }
         }
 
         binding.rootQuickPanel.setOnClickListener {

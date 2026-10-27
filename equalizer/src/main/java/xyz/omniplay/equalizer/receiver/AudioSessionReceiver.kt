@@ -26,6 +26,11 @@ class AudioSessionReceiver : BroadcastReceiver() {
 
         when (action) {
             AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION -> {
+                val cleanPkg = packageName?.substringBefore(':')?.trim()
+                if (cleanPkg == "xyz.omniplay" && !EqualizerManager.isOmniPlaySupported(context)) {
+                    Log.d(TAG, "Ignoring audio session $sessionId for unsupported OmniPlay (< 0.17.0)")
+                    return
+                }
                 Log.d(TAG, "Opening audio session $sessionId for $packageName")
                 eqManager.openAudioSession(sessionId, packageName)
                 if (eqManager.isEnabled()) {

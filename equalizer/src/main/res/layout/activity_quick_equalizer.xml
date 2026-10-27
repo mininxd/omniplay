@@ -5,7 +5,7 @@
     android:id="@+id/root_quick_panel"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#66000000"
+    android:background="@android:color/transparent"
     android:fitsSystemWindows="true">
 
     <LinearLayout

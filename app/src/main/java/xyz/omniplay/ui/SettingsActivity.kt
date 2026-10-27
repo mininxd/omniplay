@@ -214,7 +214,7 @@ class SettingsActivity : AppCompatActivity() {
         updateEqualizerSubtitle()
         binding.settingEqualizer.setOnClickListener {
             val fullIntent = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer")
-            if (fullIntent != null) {
+            if (isOmniQualizerSupported() && fullIntent != null) {
                 startActivity(fullIntent)
             } else {
                 val intent = Intent(this, SoundEnhancementActivity::class.java)
@@ -279,7 +279,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateEqualizerSubtitle() {
-        val isOmniQualizerInstalled = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
+        val isOmniQualizerInstalled = isOmniQualizerSupported() &&
+            packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
         if (isOmniQualizerInstalled) {
             binding.subtitleEqualizer.text = "OmniQualizer DSP Engine"
         } else {
@@ -290,6 +291,10 @@ class SettingsActivity : AppCompatActivity() {
                 binding.subtitleEqualizer.setText(R.string.sound_enhancement_desc)
             }
         }
+    }
+
+    private fun isOmniQualizerSupported(): Boolean {
+        return xyz.omniplay.BuildConfig.VERSION_CODE >= 35
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

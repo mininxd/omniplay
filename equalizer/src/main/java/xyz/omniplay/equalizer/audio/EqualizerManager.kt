@@ -165,6 +165,11 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun openAudioSession(sessionId: Int, packageName: String? = null) {
+        val cleanPkg = packageName?.substringBefore(':')?.trim()
+        if (cleanPkg == "xyz.omniplay" && !isOmniPlaySupported(context)) {
+            Log.i(TAG, "Skipping session $sessionId from unsupported OmniPlay version (< 0.17.0)")
+            return
+        }
         Log.i(TAG, "Opening audio session: $sessionId from $packageName (active sessions: ${activeSessions.size})")
         bindSession(sessionId, packageName)
         applyCurrentStateToEffects()
@@ -188,6 +193,11 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun bindSession(sessionId: Int, packageName: String? = null) {
+        val cleanPkg = packageName?.substringBefore(':')?.trim()
+        if (cleanPkg == "xyz.omniplay" && !isOmniPlaySupported(context)) {
+            Log.i(TAG, "Skipping bindSession $sessionId from unsupported OmniPlay version (< 0.17.0)")
+            return
+        }
         if (activeSessions.containsKey(sessionId)) {
             val existing = activeSessions[sessionId]
             if (packageName != null) {
@@ -622,6 +632,40 @@ class EqualizerManager private constructor(private val context: Context) {
     companion object {
         private const val TAG = "EqualizerManager"
         private const val PREFS_NAME = "equalizer_prefs"
+
+        const val MIN_OMNIPLAY_VERSION_CODE = 35L
+        const val MIN_OMNIPLAY_VERSION_NAME = "0.17.0"
+
+        fun isOmniPlaySupported(context: Context): Boolean {
+            return try {
+                val pInfo = context.packageManager.getPackageInfo("xyz.omniplay", 0)
+                val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    pInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    pInfo.versionCode.toLong()
+                }
+                if (vCode >= MIN_OMNIPLAY_VERSION_CODE) {
+                    return true
+                }
+                val vName = pInfo.versionName ?: ""
+                compareSemVer(vName, MIN_OMNIPLAY_VERSION_NAME) >= 0
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        fun compareSemVer(v1: String, v2: String): Int {
+            val parts1 = v1.split('.').mapNotNull { it.takeWhile { c -> c.isDigit() }.toIntOrNull() }
+            val parts2 = v2.split('.').mapNotNull { it.takeWhile { c -> c.isDigit() }.toIntOrNull() }
+            val maxLen = maxOf(parts1.size, parts2.size)
+            for (i in 0 until maxLen) {
+                val p1 = parts1.getOrElse(i) { 0 }
+                val p2 = parts2.getOrElse(i) { 0 }
+                if (p1 != p2) return p1.compareTo(p2)
+            }
+            return 0
+        }
 
         const val KEY_MASTER_ENABLED = "master_enabled"
         const val KEY_PRESET_INDEX = "preset_index"
