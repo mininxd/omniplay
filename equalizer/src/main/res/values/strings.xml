@@ -71,11 +71,7 @@
     <string name="theme_style_rainbow">Rainbow</string>
 
     <!-- Active Audio Sessions (Settings) -->
-    <string name="active_sessions_title">Active Audio Sessions</string>
-    <string name="active_sessions_desc">Connected media apps and system audio streams routed through OmniQualizer DSP</string>
-    <string name="session_global_mix">Global Audio Mix</string>
-    <string name="session_global_desc">Session 0 · Primary system audio engine</string>
-    <string name="session_active_status">Active · DSP Connected</string>
-    <string name="no_active_sessions">No active audio sessions</string>
-    <string name="no_active_sessions_desc">Play audio or video in a media player or browser to attach DSP effects</string>
+    <string name="active_sessions_title">Active Sessions</string>
+    <string name="active_sessions_desc">Apps currently using the equalizer</string>
+    <string name="no_active_sessions">No apps currently using equalizer</string>
 </resources>

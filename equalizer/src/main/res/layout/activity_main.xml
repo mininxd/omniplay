@@ -73,31 +73,15 @@
                     android:paddingTop="10dp"
                     android:paddingBottom="10dp">
 
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/tv_master_title"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:id="@+id/tv_master_title"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-medium"
-                            android:text="@string/equalizer_master_switch"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textSize="17sp" />
-
-                        <TextView
-                            android:id="@+id/tv_master_desc"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:alpha="0.75"
-                            android:text="@string/equalizer_master_switch_desc"
-                            android:textColor="?attr/colorOnSurfaceVariant"
-                            android:textSize="12.5sp" />
-                    </LinearLayout>
+                        android:fontFamily="sans-serif-medium"
+                        android:text="@string/equalizer_master_switch"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="17sp" />
 
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_master"

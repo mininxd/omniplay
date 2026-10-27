@@ -220,8 +220,9 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
                         val sessionId = ActiveSessionScanner.extractSessionId(config)
                         if (sessionId > 0) {
                             foundAny = true
-                            Log.d(TAG, "AudioPlaybackCallback detected active session: $sessionId")
-                            eqManager.openAudioSession(sessionId, "playback_callback")
+                            val detectedPkg = ActiveSessionScanner.extractClientPackageName(config, packageManager)
+                            Log.d(TAG, "AudioPlaybackCallback detected active session: $sessionId (pkg: $detectedPkg)")
+                            eqManager.openAudioSession(sessionId, detectedPkg ?: "playback_callback")
                         }
                     }
 

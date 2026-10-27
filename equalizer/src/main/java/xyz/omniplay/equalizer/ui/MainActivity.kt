@@ -441,10 +441,6 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.switchMaster.isChecked = enabled
         updateEnabledState(enabled)
 
-        binding.tvMasterDesc.text = getString(R.string.equalizer_master_switch_desc)
-        binding.tvMasterDesc.setTextColor(if (enabled) ThemeColors.getPrimary(this) else ThemeColors.getOnSurfaceVariant(this))
-        binding.tvMasterDesc.alpha = 0.75f
-
         updatePresetSelection(eqManager.getCurrentPresetIndex())
 
         // Dax 10-Band Pillars Rack

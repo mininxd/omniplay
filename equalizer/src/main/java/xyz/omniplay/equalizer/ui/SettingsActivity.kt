@@ -84,55 +84,38 @@ class SettingsActivity : AppCompatActivity() {
         val container = binding.containerActiveSessions
         container.removeAllViews()
 
-        val sessions = eqManager.getActiveSessionList()
+        val appSessions = eqManager.getActiveSessionList()
+            .filter { !it.isGlobal }
+            .distinctBy { it.packageName ?: it.displayName }
+
         val primaryColor = ThemeColors.getPrimary(this)
 
-        if (sessions.isEmpty()) {
+        if (appSessions.isEmpty()) {
             val emptyBinding = ItemActiveSessionBinding.inflate(layoutInflater, container, false)
             emptyBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
             emptyBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
             emptyBinding.tvSessionAppName.setText(R.string.no_active_sessions)
-            emptyBinding.tvSessionSub.setText(R.string.no_active_sessions_desc)
-            emptyBinding.tvSessionBadge.visibility = View.GONE
             container.addView(emptyBinding.root)
             return
         }
 
-        for (session in sessions) {
+        for (session in appSessions) {
             val itemBinding = ItemActiveSessionBinding.inflate(layoutInflater, container, false)
-            if (session.isGlobal) {
+            itemBinding.tvSessionAppName.text = session.displayName
+
+            var appIconLoaded = false
+            val pkg = session.packageName
+            if (pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan") {
+                try {
+                    val icon = packageManager.getApplicationIcon(pkg)
+                    itemBinding.ivSessionIcon.setImageDrawable(icon)
+                    itemBinding.ivSessionIcon.imageTintList = null
+                    appIconLoaded = true
+                } catch (_: Exception) {}
+            }
+            if (!appIconLoaded) {
                 itemBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
                 itemBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
-                itemBinding.tvSessionAppName.setText(R.string.session_global_mix)
-                itemBinding.tvSessionSub.setText(R.string.session_global_desc)
-                itemBinding.tvSessionBadge.setText(R.string.session_active_status)
-            } else {
-                itemBinding.tvSessionAppName.text = session.displayName
-                val subText = if (!session.packageName.isNullOrBlank() &&
-                    session.packageName != "playback_callback" &&
-                    session.packageName != "dumpsys_scan" &&
-                    session.packageName != "keep_alive_scan") {
-                    "Session ${session.sessionId} · ${session.packageName}"
-                } else {
-                    "Session ${session.sessionId} · Active media stream"
-                }
-                itemBinding.tvSessionSub.text = subText
-                itemBinding.tvSessionBadge.setText(R.string.session_active_status)
-
-                var appIconLoaded = false
-                val pkg = session.packageName
-                if (pkg != null && pkg != "playback_callback" && pkg != "dumpsys_scan" && pkg != "keep_alive_scan") {
-                    try {
-                        val icon = packageManager.getApplicationIcon(pkg)
-                        itemBinding.ivSessionIcon.setImageDrawable(icon)
-                        itemBinding.ivSessionIcon.imageTintList = null
-                        appIconLoaded = true
-                    } catch (_: Exception) {}
-                }
-                if (!appIconLoaded) {
-                    itemBinding.ivSessionIcon.setImageResource(R.drawable.ic_equalizer)
-                    itemBinding.ivSessionIcon.imageTintList = ColorStateList.valueOf(primaryColor)
-                }
             }
             container.addView(itemBinding.root)
         }

@@ -105,6 +105,47 @@ object ActiveSessionScanner {
     }
 
     /**
+     * Extracts the client package name from an AudioPlaybackConfiguration object via client UID.
+     */
+    fun extractClientPackageName(config: Any, pm: android.content.pm.PackageManager): String? {
+        val clazz = config.javaClass
+        var uid = -1
+        try {
+            val method = clazz.getMethod("getClientUid")
+            val result = method.invoke(config)
+            if (result is Int && result > 0) uid = result
+        } catch (_: Throwable) {}
+
+        if (uid <= 0) {
+            try {
+                val method = clazz.getDeclaredMethod("getClientUid")
+                method.isAccessible = true
+                val result = method.invoke(config)
+                if (result is Int && result > 0) uid = result
+            } catch (_: Throwable) {}
+        }
+
+        if (uid <= 0) {
+            try {
+                val field = clazz.getDeclaredField("mClientUid")
+                field.isAccessible = true
+                val result = field.getInt(config)
+                if (result > 0) uid = result
+            } catch (_: Throwable) {}
+        }
+
+        if (uid > 0) {
+            try {
+                val packages = pm.getPackagesForUid(uid)
+                val pkg = packages?.firstOrNull()
+                if (!pkg.isNullOrBlank()) return pkg
+            } catch (_: Throwable) {}
+        }
+
+        return null
+    }
+
+    /**
      * Parses active audio sessions from dumpsys audio or dumpsys media.audio_flinger output.
      */
     fun parseSessionIdsFromDump(dump: String): Set<Int> {
