@@ -222,7 +222,7 @@ class EqualizerManager private constructor(private val context: Context) {
             try {
                 val eq = session0.equalizer
                 if (eq != null && isEnabled()) {
-                    if (!eq.enabled || !eq.hasControl) {
+                    if (!eq.enabled || !eq.hasControl()) {
                         eq.enabled = true
                     }
                 }
