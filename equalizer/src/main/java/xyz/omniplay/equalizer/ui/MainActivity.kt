@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.sliderLoudnessEnhancer.valueTo = 10.0f
         binding.sliderLoudnessEnhancer.stepSize = 0.1f
         binding.sliderLoudnessEnhancer.setLabelFormatter { value ->
-            String.format(Locale.US, "%.1f dB", value)
+            String.format(Locale.US, "%.1f", value)
         }
 
         val isLeEnabled = eqManager.isLoudnessEnhancerEnabled()
