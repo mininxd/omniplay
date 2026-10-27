@@ -56,7 +56,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopForegroundCompat()
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -64,7 +64,7 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
                 val newState = !eqManager.isEnabled()
                 eqManager.setEnabled(newState)
                 if (!newState) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopForegroundCompat()
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -90,11 +90,20 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
 
     override fun onEqualizerConfigChanged() {
         if (!eqManager.isEnabled()) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForegroundCompat()
             stopSelf()
         } else {
-            val manager = getSystemService(NotificationManager::class.java)
+            val manager = androidx.core.content.ContextCompat.getSystemService(this, NotificationManager::class.java)
             manager?.notify(NOTIFICATION_ID, buildNotification())
+        }
+    }
+
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
         }
     }
 

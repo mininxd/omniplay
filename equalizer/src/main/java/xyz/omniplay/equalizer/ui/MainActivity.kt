@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private fun setupPresets() {
         binding.chipGroupPresets.removeAllViews()
         for ((index, preset) in eqManager.presets.withIndex()) {
-            val chip = Chip(this, null, com.google.android.material.R.style.Widget_Material3_Chip_Filter).apply {
+            val chip = Chip(this).apply {
                 id = index + 1000
                 text = preset.name
                 isCheckable = true
