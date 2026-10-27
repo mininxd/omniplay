@@ -48,7 +48,6 @@ class EqualizerManager private constructor(private val context: Context) {
         var bassBoost: BassBoost? = null
         var virtualizer: Virtualizer? = null
         var loudnessEnhancer: LoudnessEnhancer? = null
-        var dynamicsProcessing: DynamicsProcessingHelper? = null
         val nativeHardware = NativeAudioEffectBinding()
 
         init {
@@ -90,14 +89,6 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    dynamicsProcessing = DynamicsProcessingHelper(sessionId)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "Failed to init DynamicsProcessing on session $sessionId", e)
-                }
-            }
-
             try {
                 nativeHardware.initSession(sessionId)
             } catch (e: Throwable) {
@@ -111,12 +102,10 @@ class EqualizerManager private constructor(private val context: Context) {
             try { bassBoost?.enabled = false; bassBoost?.release() } catch (_: Throwable) {}
             try { virtualizer?.enabled = false; virtualizer?.release() } catch (_: Throwable) {}
             try { loudnessEnhancer?.enabled = false; loudnessEnhancer?.release() } catch (_: Throwable) {}
-            try { dynamicsProcessing?.release() } catch (_: Throwable) {}
             equalizer = null
             bassBoost = null
             virtualizer = null
             loudnessEnhancer = null
-            dynamicsProcessing = null
         }
     }
 
@@ -178,11 +167,6 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun openAudioSession(sessionId: Int, packageName: String? = null) {
-        val cleanPkg = packageName?.substringBefore(':')?.trim()
-        if (cleanPkg == "xyz.omniplay" && !isOmniPlaySupported(context)) {
-            Log.i(TAG, "Skipping session $sessionId from unsupported OmniPlay version (< 0.17.0)")
-            return
-        }
         Log.i(TAG, "Opening audio session: $sessionId from $packageName (active sessions: ${activeSessions.size})")
         bindSession(sessionId, packageName)
         applyCurrentStateToEffects()
@@ -206,11 +190,6 @@ class EqualizerManager private constructor(private val context: Context) {
 
     @Synchronized
     fun bindSession(sessionId: Int, packageName: String? = null) {
-        val cleanPkg = packageName?.substringBefore(':')?.trim()
-        if (cleanPkg == "xyz.omniplay" && !isOmniPlaySupported(context)) {
-            Log.i(TAG, "Skipping bindSession $sessionId from unsupported OmniPlay version (< 0.17.0)")
-            return
-        }
         if (activeSessions.containsKey(sessionId)) {
             val existing = activeSessions[sessionId]
             if (packageName != null) {
@@ -467,7 +446,6 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
-        applyCurrentStateToEffects()
         broadcastStereoEffects()
         notifyListeners()
     }
@@ -619,12 +597,6 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
-            // DynamicsProcessing (Stereo Balance & Dynamic Range Limiter)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val balance = getStereoBalance()
-                val drc = getDynamicRangeAmount()
-                sessionEffects.dynamicsProcessing?.applyEffects(balance, drc)
-            }
 
             // LoudnessEnhancer (Standalone + Volume Boost integration)
             val le = sessionEffects.loudnessEnhancer
@@ -684,24 +656,7 @@ class EqualizerManager private constructor(private val context: Context) {
         const val MIN_OMNIPLAY_VERSION_CODE = 35L
         const val MIN_OMNIPLAY_VERSION_NAME = "0.17.0"
 
-        fun isOmniPlaySupported(context: Context): Boolean {
-            return try {
-                val pInfo = context.packageManager.getPackageInfo("xyz.omniplay", 0)
-                val vCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                    pInfo.longVersionCode
-                } else {
-                    @Suppress("DEPRECATION")
-                    pInfo.versionCode.toLong()
-                }
-                if (vCode >= MIN_OMNIPLAY_VERSION_CODE) {
-                    return true
-                }
-                val vName = pInfo.versionName ?: ""
-                compareSemVer(vName, MIN_OMNIPLAY_VERSION_NAME) >= 0
-            } catch (_: Exception) {
-                false
-            }
-        }
+        fun isOmniPlaySupported(context: Context): Boolean = true
 
         fun compareSemVer(v1: String, v2: String): Int {
             val parts1 = v1.split('.').mapNotNull { it.takeWhile { c -> c.isDigit() }.toIntOrNull() }

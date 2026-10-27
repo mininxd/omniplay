@@ -222,7 +222,6 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
         updateAudioProcessorConfig()
-        applyCurrentStateToEffects()
         notifyListeners()
     }
 

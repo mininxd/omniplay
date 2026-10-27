@@ -165,10 +165,12 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
     private var lastBroadcastSessionId: Int = -1
 
-    private fun broadcastAudioSessionOpened(audioSessionId: Int) {
+    private fun broadcastAudioSessionOpened(audioSessionId: Int, force: Boolean = false) {
         if (audioSessionId <= 0 || audioSessionId == C.AUDIO_SESSION_ID_UNSET) return
-        if (lastBroadcastSessionId == audioSessionId) return
-        broadcastAudioSessionClosed()
+        if (!force && lastBroadcastSessionId == audioSessionId) return
+        if (!force) {
+            broadcastAudioSessionClosed()
+        }
         lastBroadcastSessionId = audioSessionId
         try {
             val intent = Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
@@ -1981,7 +1983,15 @@ class PlaybackService : MediaBrowserServiceCompat() {
 
     private val stereoEffectsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "xyz.omniplay.action.SET_STEREO_EFFECTS") {
+            val action = intent?.action ?: return
+            if (action == "xyz.omniplay.action.REQUEST_AUDIO_SESSION") {
+                val sid = player?.audioSessionId ?: 0
+                if (sid > 0) {
+                    broadcastAudioSessionOpened(sid, force = true)
+                }
+                return
+            }
+            if (action == "xyz.omniplay.action.SET_STEREO_EFFECTS") {
                 val ctx = context ?: applicationContext
                 val eq = xyz.omniplay.audio.EqualizerManager.getInstance(ctx)
                 if (intent.hasExtra("balance")) {
@@ -2005,7 +2015,10 @@ class PlaybackService : MediaBrowserServiceCompat() {
     }
 
     private fun registerStereoEffectsReceiver() {
-        val filter = IntentFilter("xyz.omniplay.action.SET_STEREO_EFFECTS")
+        val filter = IntentFilter().apply {
+            addAction("xyz.omniplay.action.SET_STEREO_EFFECTS")
+            addAction("xyz.omniplay.action.REQUEST_AUDIO_SESSION")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stereoEffectsReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {

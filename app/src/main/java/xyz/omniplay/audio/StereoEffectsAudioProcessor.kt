@@ -79,6 +79,13 @@ class StereoEffectsAudioProcessor(
         val threshold = DRC_THRESHOLD
         val ratio = 1f + DYNAMIC_RANGE_MAX_RATIO_DELTA * dynamicRangeAmount / 100f
 
+        val isPassthrough = !useMono && crossfeedMix == 0f && balance == 0 && dynamicRangeAmount == 0
+        if (isPassthrough) {
+            outputBuffer.put(inputBuffer)
+            outputBuffer.flip()
+            return
+        }
+
         repeat(frameCount) {
             var peak = 0f
             for (channel in 0 until channelCount) {

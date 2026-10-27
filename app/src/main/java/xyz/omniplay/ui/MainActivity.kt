@@ -879,23 +879,48 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
         updateOmniSyncButtonState(OmniSyncManager.getInstance(this).currentRole)
         updateEqualizerButtonState()
         binding.btnEqualizer.setOnClickListener {
-            val quickPanelIntent = Intent("xyz.omniplay.equalizer.ACTION_QUICK_PANEL").apply {
-                setPackage("xyz.omniplay.equalizer")
-                val sessionId = xyz.omniplay.audio.EqualizerManager.getInstance(this@MainActivity).getActiveAudioSessionId()
-                if (sessionId > 0) {
-                    putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
+            val isPlaying = isBound && playbackService?.isPlaying() == true
+            val activeSessionId = xyz.omniplay.audio.EqualizerManager.getInstance(this@MainActivity).getActiveAudioSessionId()
+            val isOmniQualizerInstalled = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
+
+            if (isPlaying && activeSessionId > 0 && isOmniQualizerInstalled) {
+                try {
+                    val openIntent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, activeSessionId)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                    }
+                    sendBroadcast(openIntent)
+                } catch (_: Exception) {}
+
+                val quickPanelIntent = Intent("xyz.omniplay.equalizer.ACTION_QUICK_PANEL").apply {
+                    setPackage("xyz.omniplay.equalizer")
+                    putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, activeSessionId)
+                    putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
                 }
-                putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
-            }
-            if (isOmniQualizerSupported() && packageManager.resolveActivity(quickPanelIntent, 0) != null) {
-                startActivity(quickPanelIntent)
+                if (packageManager.resolveActivity(quickPanelIntent, 0) != null) {
+                    startActivity(quickPanelIntent)
+                } else {
+                    EqualizerBottomSheet.show(supportFragmentManager)
+                }
             } else {
                 EqualizerBottomSheet.show(supportFragmentManager)
             }
         }
         binding.btnEqualizer.setOnLongClickListener {
+            val isPlaying = isBound && playbackService?.isPlaying() == true
+            val activeSessionId = xyz.omniplay.audio.EqualizerManager.getInstance(this@MainActivity).getActiveAudioSessionId()
             val fullIntent = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer")
-            if (isOmniQualizerSupported() && fullIntent != null) {
+
+            if (isPlaying && activeSessionId > 0 && fullIntent != null) {
+                try {
+                    val openIntent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, activeSessionId)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                    }
+                    sendBroadcast(openIntent)
+                } catch (_: Exception) {}
                 startActivity(fullIntent)
             } else {
                 startActivity(Intent(this, SoundEnhancementActivity::class.java))
@@ -1868,7 +1893,7 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
     }
 
     private fun isOmniQualizerSupported(): Boolean {
-        return xyz.omniplay.BuildConfig.VERSION_CODE >= 35
+        return packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer") != null
     }
 
     private val eqListener = object : xyz.omniplay.audio.EqualizerManager.EqualizerListener {

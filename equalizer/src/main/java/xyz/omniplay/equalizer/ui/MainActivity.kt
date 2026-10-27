@@ -83,6 +83,11 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         if (eqManager.isEnabled()) {
             EqualizerService.start(this)
         }
+        try {
+            sendBroadcast(Intent("xyz.omniplay.action.REQUEST_AUDIO_SESSION").apply {
+                setPackage("xyz.omniplay")
+            })
+        } catch (_: Exception) {}
         refreshUI()
     }
 

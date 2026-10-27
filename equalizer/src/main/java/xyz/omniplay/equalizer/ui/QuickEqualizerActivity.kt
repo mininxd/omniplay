@@ -39,11 +39,14 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
 
         val sessionId = intent.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0)
         val packageName = intent.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
-        val cleanPkg = packageName?.substringBefore(':')?.trim()
         if (sessionId > 0) {
-            if (cleanPkg != "xyz.omniplay" || EqualizerManager.isOmniPlaySupported(this)) {
-                eqManager.openAudioSession(sessionId, packageName)
-            }
+            eqManager.openAudioSession(sessionId, packageName)
+        } else {
+            try {
+                sendBroadcast(Intent("xyz.omniplay.action.REQUEST_AUDIO_SESSION").apply {
+                    setPackage("xyz.omniplay")
+                })
+            } catch (_: Exception) {}
         }
 
         binding.rootQuickPanel.setOnClickListener {
