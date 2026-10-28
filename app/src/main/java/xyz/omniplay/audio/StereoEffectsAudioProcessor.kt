@@ -72,6 +72,14 @@ class StereoEffectsAudioProcessor(
 
         val settings = configProvider()
         val isEnabled = settings.enabled
+        val crossfeedAmount = if (isEnabled) settings.crossfeedAmount.coerceIn(0, 100) else 0
+        val dynamicRangeAmount = if (isEnabled) settings.dynamicRangeAmount.coerceIn(0, 100) else 0
+        val useMono = (isEnabled || settings.monoAudio) && settings.monoAudio && channelCount == 2
+        val balance = if (channelCount == 2) settings.stereoBalance.coerceIn(-100, 100) else 0
+        val crossfeedMix = if (channelCount == 2 && !useMono) crossfeedAmount * MAX_CROSSFEED_MIX / 100f else 0f
+        val leftGain = if (balance > 0) 1f - balance / 100f else 1f
+        val rightGain = if (balance < 0) 1f + balance / 100f else 1f
+        val ratio = 1f + DYNAMIC_RANGE_MAX_RATIO_DELTA * dynamicRangeAmount / 100f
 
         val isPassthrough = !useMono && crossfeedMix == 0f && balance == 0 && dynamicRangeAmount == 0
         if (isPassthrough) {
