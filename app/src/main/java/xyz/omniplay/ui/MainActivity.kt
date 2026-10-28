@@ -892,10 +892,26 @@ class MainActivity : AppCompatActivity(), PlaybackService.PlaybackListener {
                     sendBroadcast(openIntent)
                 } catch (_: Exception) {}
             }
-            EqualizerBottomSheet.show(supportFragmentManager)
+            val quickPanelIntent = Intent("xyz.omniplay.equalizer.ACTION_QUICK_PANEL").apply {
+                setPackage("xyz.omniplay.equalizer")
+                if (activeSessionId > 0) {
+                    putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, activeSessionId)
+                }
+                putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+            }
+            if (packageManager.resolveActivity(quickPanelIntent, 0) != null) {
+                startActivity(quickPanelIntent)
+            } else {
+                EqualizerBottomSheet.show(supportFragmentManager)
+            }
         }
         binding.btnEqualizer.setOnLongClickListener {
-            startActivity(Intent(this, SoundEnhancementActivity::class.java))
+            val fullIntent = packageManager.getLaunchIntentForPackage("xyz.omniplay.equalizer")
+            if (fullIntent != null) {
+                startActivity(fullIntent)
+            } else {
+                startActivity(Intent(this, SoundEnhancementActivity::class.java))
+            }
             true
         }
         binding.btnOmnisync.setOnClickListener {

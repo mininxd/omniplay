@@ -53,11 +53,6 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
             finish()
         }
 
-        binding.btnOpenFull.setOnClickListener {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-        }
-
         setupMasterSwitch()
         setupPresets()
         setupDaxBands()

@@ -7,7 +7,9 @@ import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import xyz.omniplay.equalizer.service.EqualizerService
 import java.util.concurrent.ConcurrentHashMap
@@ -483,24 +485,99 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
+    fun buildStateBundle(): Bundle {
+        return Bundle().apply {
+            putBoolean("master_enabled", isEnabled())
+            putInt("preset_index", getCurrentPresetIndex())
+            putIntArray("dax_bands", getAllDaxBandLevels())
+            putInt("clear_bass", getClearBassLevel())
+            putInt("ieq_preset", getIeqPreset())
+            putInt("balance", getStereoBalance())
+            putBoolean("mono_audio", isMonoAudioEnabled())
+            putInt("crossfeed", getCrossfeedAmount())
+            putInt("drc", getDynamicRangeAmount())
+            putBoolean("xloud", isXLoudEnabled())
+            putBoolean("le_enabled", isLoudnessEnhancerEnabled())
+            putInt("le_gain_mb", getLoudnessEnhancerGainMb())
+        }
+    }
+
+    fun applySyncBundle(extras: Bundle) {
+        isSyncingFromRemote = true
+        try {
+            if (extras.containsKey("master_enabled")) {
+                val enabled = extras.getBoolean("master_enabled", isEnabled())
+                if (enabled != isEnabled()) {
+                    setEnabled(enabled)
+                }
+            }
+            if (extras.containsKey("preset_index")) {
+                applyPreset(extras.getInt("preset_index", 0))
+            }
+            if (extras.containsKey("dax_bands")) {
+                val bands = extras.getIntArray("dax_bands")
+                if (bands != null && bands.size == 10) {
+                    for (i in 0 until 10) {
+                        setDaxBandLevel(i, bands[i], fromUser = false)
+                    }
+                }
+            }
+            if (extras.containsKey("clear_bass")) {
+                setClearBassLevel(extras.getInt("clear_bass", 0))
+            }
+            if (extras.containsKey("ieq_preset")) {
+                setIeqPreset(extras.getInt("ieq_preset", 0))
+            }
+            if (extras.containsKey("balance")) {
+                setStereoBalance(extras.getInt("balance", 0))
+            }
+            if (extras.containsKey("mono_audio")) {
+                setMonoAudioEnabled(extras.getBoolean("mono_audio", false))
+            }
+            if (extras.containsKey("crossfeed")) {
+                setCrossfeedAmount(extras.getInt("crossfeed", 0))
+            }
+            if (extras.containsKey("drc")) {
+                setDynamicRangeAmount(extras.getInt("drc", 0))
+            }
+            if (extras.containsKey("xloud")) {
+                setXLoudEnabled(extras.getBoolean("xloud", false))
+            }
+            if (extras.containsKey("le_enabled")) {
+                setLoudnessEnhancerEnabled(extras.getBoolean("le_enabled", false))
+            }
+            if (extras.containsKey("le_gain_mb")) {
+                setLoudnessEnhancerGainMb(extras.getInt("le_gain_mb", 0))
+            }
+            notifyListeners()
+        } finally {
+            isSyncingFromRemote = false
+        }
+    }
+
     fun broadcastStereoEffects() {
         if (isSyncingFromRemote) return
+        val bundle = buildStateBundle()
+
+        // 1. Instant Binder IPC via ContentProvider (sub-millisecond synchronous execution)
+        try {
+            val res = context.contentResolver.call(
+                Uri.parse("content://xyz.omniplay.eqprovider"),
+                "SYNC_EQ_STATE",
+                null,
+                bundle
+            )
+            if (res != null && res.getBoolean("success", false)) {
+                return
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Fallback to broadcast
         try {
             val intent = Intent("xyz.omniplay.action.SYNC_EQ_STATE").apply {
                 setPackage("xyz.omniplay")
                 addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                putExtra("master_enabled", isEnabled())
-                putExtra("preset_index", getCurrentPresetIndex())
-                putExtra("dax_bands", getAllDaxBandLevels())
-                putExtra("clear_bass", getClearBassLevel())
-                putExtra("ieq_preset", getIeqPreset())
-                putExtra("balance", getStereoBalance())
-                putExtra("mono_audio", isMonoAudioEnabled())
-                putExtra("crossfeed", getCrossfeedAmount())
-                putExtra("drc", getDynamicRangeAmount())
-                putExtra("xloud", isXLoudEnabled())
-                putExtra("le_enabled", isLoudnessEnhancerEnabled())
-                putExtra("le_gain_mb", getLoudnessEnhancerGainMb())
+                putExtras(bundle)
             }
             context.sendBroadcast(intent)
 

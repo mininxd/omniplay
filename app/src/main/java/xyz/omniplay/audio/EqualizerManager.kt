@@ -7,6 +7,8 @@ import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
+import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import androidx.media3.common.audio.AudioProcessor
 import java.util.concurrent.CopyOnWriteArrayList
@@ -97,30 +99,124 @@ class EqualizerManager private constructor(private val context: Context) {
     @Volatile
     var isSyncingFromRemote: Boolean = false
 
+    fun buildStateBundle(): Bundle {
+        return Bundle().apply {
+            putBoolean("master_enabled", isEnabled())
+            putInt("preset_index", getCurrentPresetIndex())
+            putIntArray("dax_bands", getAllDaxBandLevels())
+            putInt("clear_bass", getClearBassLevel())
+            putInt("ieq_preset", getIeqPreset())
+            putInt("balance", getStereoBalance())
+            putBoolean("mono_audio", isMonoAudioEnabled())
+            putInt("crossfeed", getCrossfeedAmount())
+            putInt("drc", getDynamicRangeAmount())
+            putBoolean("xloud", isXLoudEnabled())
+            putBoolean("le_enabled", isLoudnessEnhancerEnabled())
+            putInt("le_gain_mb", getLoudnessEnhancerGainMb())
+        }
+    }
+
+    fun applySyncBundle(extras: Bundle) {
+        isSyncingFromRemote = true
+        try {
+            if (extras.containsKey("master_enabled")) {
+                val enabled = extras.getBoolean("master_enabled", isEnabled())
+                if (isEnabled() != enabled) {
+                    setEnabled(enabled)
+                }
+            }
+            if (extras.containsKey("preset_index")) {
+                applyPreset(extras.getInt("preset_index", 0))
+            }
+            if (extras.containsKey("dax_bands")) {
+                val bands = extras.getIntArray("dax_bands")
+                if (bands != null && bands.size == 10) {
+                    for (i in 0 until 10) {
+                        setDaxBandLevel(i, bands[i], fromUser = false)
+                    }
+                }
+            }
+            if (extras.containsKey("clear_bass")) {
+                setClearBassLevel(extras.getInt("clear_bass", 0))
+            }
+            if (extras.containsKey("ieq_preset")) {
+                setIeqPreset(extras.getInt("ieq_preset", 0))
+            }
+            if (extras.containsKey("balance")) {
+                setStereoBalance(extras.getInt("balance", 0))
+            }
+            if (extras.containsKey("mono_audio")) {
+                setMonoAudioEnabled(extras.getBoolean("mono_audio", false))
+            }
+            if (extras.containsKey("crossfeed")) {
+                setCrossfeedAmount(extras.getInt("crossfeed", 0))
+            }
+            if (extras.containsKey("drc")) {
+                setDynamicRangeAmount(extras.getInt("drc", 0))
+            }
+            if (extras.containsKey("xloud")) {
+                setXLoudEnabled(extras.getBoolean("xloud", false))
+            }
+            if (extras.containsKey("le_enabled")) {
+                setLoudnessEnhancerEnabled(extras.getBoolean("le_enabled", false))
+            }
+            if (extras.containsKey("le_gain_mb")) {
+                setLoudnessEnhancerGainMb(extras.getInt("le_gain_mb", 0))
+            }
+            notifyListeners()
+        } finally {
+            isSyncingFromRemote = false
+        }
+    }
+
+    fun applySyncIntent(intent: Intent) {
+        intent.extras?.let { applySyncBundle(it) }
+    }
+
     fun broadcastSyncState() {
         if (isSyncingFromRemote) return
+        val bundle = buildStateBundle()
+
+        // 1. Instant Binder IPC via ContentProvider (sub-millisecond synchronous execution)
+        try {
+            val res = context.contentResolver.call(
+                Uri.parse("content://xyz.omniplay.equalizer.eqprovider"),
+                "SYNC_EQ_STATE",
+                null,
+                bundle
+            )
+            if (res != null && res.getBoolean("success", false)) {
+                return
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Fallback to broadcast
         try {
             val intent = Intent("xyz.omniplay.equalizer.action.SYNC_EQ_STATE").apply {
                 setPackage("xyz.omniplay.equalizer")
                 addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
-                putExtra("master_enabled", isEnabled())
-                putExtra("preset_index", getCurrentPresetIndex())
-                putExtra("dax_bands", getAllDaxBandLevels())
-                putExtra("clear_bass", getClearBassLevel())
-                putExtra("ieq_preset", getIeqPreset())
-                putExtra("balance", getStereoBalance())
-                putExtra("mono_audio", isMonoAudioEnabled())
-                putExtra("crossfeed", getCrossfeedAmount())
-                putExtra("drc", getDynamicRangeAmount())
-                putExtra("xloud", isXLoudEnabled())
-                putExtra("le_enabled", isLoudnessEnhancerEnabled())
-                putExtra("le_gain_mb", getLoudnessEnhancerGainMb())
+                putExtras(bundle)
             }
             context.sendBroadcast(intent)
         } catch (_: Throwable) {}
     }
 
     fun requestOmniQualizerSync() {
+        // 1. Instant synchronous fetch from OmniQualizer via ContentProvider
+        try {
+            val res = context.contentResolver.call(
+                Uri.parse("content://xyz.omniplay.equalizer.eqprovider"),
+                "GET_EQ_STATE",
+                null,
+                null
+            )
+            if (res != null && res.getBoolean("success", false)) {
+                applySyncBundle(res)
+                return
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Fallback to broadcast request
         try {
             val reqIntent = Intent("xyz.omniplay.equalizer.action.REQUEST_SYNC").apply {
                 setPackage("xyz.omniplay.equalizer")
@@ -128,59 +224,6 @@ class EqualizerManager private constructor(private val context: Context) {
             }
             context.sendBroadcast(reqIntent)
         } catch (_: Throwable) {}
-    }
-
-    fun applySyncIntent(intent: Intent) {
-        isSyncingFromRemote = true
-        try {
-            if (intent.hasExtra("master_enabled")) {
-                val enabled = intent.getBooleanExtra("master_enabled", isEnabled())
-                if (isEnabled() != enabled) {
-                    setEnabled(enabled)
-                }
-            }
-            if (intent.hasExtra("preset_index")) {
-                applyPreset(intent.getIntExtra("preset_index", 0))
-            }
-            if (intent.hasExtra("dax_bands")) {
-                val bands = intent.getIntArrayExtra("dax_bands")
-                if (bands != null && bands.size == 10) {
-                    for (i in 0 until 10) {
-                        setDaxBandLevel(i, bands[i], fromUser = false)
-                    }
-                }
-            }
-            if (intent.hasExtra("clear_bass")) {
-                setClearBassLevel(intent.getIntExtra("clear_bass", 0))
-            }
-            if (intent.hasExtra("ieq_preset")) {
-                setIeqPreset(intent.getIntExtra("ieq_preset", 0))
-            }
-            if (intent.hasExtra("balance")) {
-                setStereoBalance(intent.getIntExtra("balance", 0))
-            }
-            if (intent.hasExtra("mono_audio")) {
-                setMonoAudioEnabled(intent.getBooleanExtra("mono_audio", false))
-            }
-            if (intent.hasExtra("crossfeed")) {
-                setCrossfeedAmount(intent.getIntExtra("crossfeed", 0))
-            }
-            if (intent.hasExtra("drc")) {
-                setDynamicRangeAmount(intent.getIntExtra("drc", 0))
-            }
-            if (intent.hasExtra("xloud")) {
-                setXLoudEnabled(intent.getBooleanExtra("xloud", false))
-            }
-            if (intent.hasExtra("le_enabled")) {
-                setLoudnessEnhancerEnabled(intent.getBooleanExtra("le_enabled", false))
-            }
-            if (intent.hasExtra("le_gain_mb")) {
-                setLoudnessEnhancerGainMb(intent.getIntExtra("le_gain_mb", 0))
-            }
-            notifyListeners()
-        } finally {
-            isSyncingFromRemote = false
-        }
     }
 
     fun notifyListeners() {

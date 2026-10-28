@@ -25,6 +25,8 @@
         <intent>
             <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
         </intent>
+        <package android:name="xyz.omniplay" />
+        <provider android:authorities="xyz.omniplay.eqprovider" />
     </queries>
 
     <application
@@ -137,6 +139,12 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback"
             tools:targetApi="29" />
+
+        <!-- Direct Binder IPC ContentProvider for instantaneous EQ synchronization -->
+        <provider
+            android:name=".provider.EqSyncProvider"
+            android:authorities="xyz.omniplay.equalizer.eqprovider"
+            android:exported="true" />
 
     </application>
 

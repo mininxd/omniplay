@@ -33,6 +33,7 @@
         <intent>
             <action android:name="xyz.omniplay.equalizer.ACTION_QUICK_PANEL" />
         </intent>
+        <provider android:authorities="xyz.omniplay.equalizer.eqprovider" />
     </queries>
 
     <application
@@ -365,6 +366,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/lyrics_share_paths" />
         </provider>
+
+        <!-- Direct Binder IPC ContentProvider for instantaneous EQ synchronization -->
+        <provider
+            android:name=".provider.EqSyncProvider"
+            android:authorities="xyz.omniplay.eqprovider"
+            android:exported="true" />
 
 
         <!-- Android Auto Integration -->
