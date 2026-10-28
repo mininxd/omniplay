@@ -22,20 +22,33 @@ class EqSyncProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        val ctx = context ?: return null
-        val eqManager = EqualizerManager.getInstance(ctx)
+        return handleCall(method, extras)
+    }
 
-        return when (method) {
-            METHOD_SYNC_EQ_STATE -> {
-                if (extras != null) {
-                    eqManager.applySyncBundle(extras)
+    override fun call(authority: String, method: String, arg: String?, extras: Bundle?): Bundle? {
+        return handleCall(method, extras)
+    }
+
+    private fun handleCall(method: String, extras: Bundle?): Bundle? {
+        return try {
+            val ctx = context ?: return null
+            val eqManager = EqualizerManager.getInstance(ctx)
+
+            when (method) {
+                METHOD_SYNC_EQ_STATE -> {
+                    if (extras != null) {
+                        eqManager.applySyncBundle(extras)
+                    }
+                    Bundle().apply { putBoolean("success", true) }
                 }
-                Bundle().apply { putBoolean("success", true) }
+                METHOD_GET_EQ_STATE -> {
+                    eqManager.buildStateBundle().apply { putBoolean("success", true) }
+                }
+                else -> null
             }
-            METHOD_GET_EQ_STATE -> {
-                eqManager.buildStateBundle().apply { putBoolean("success", true) }
-            }
-            else -> null
+        } catch (e: Throwable) {
+            android.util.Log.e("EqSyncProvider", "Error in call method=$method", e)
+            null
         }
     }
 

@@ -68,8 +68,21 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun getActiveAudioSessionId(): Int = activeAudioSessionId
 
+    @Volatile
+    var isSyncingFromRemote: Boolean = false
+
+    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val syncRunnable = Runnable {
+        doBroadcastSyncState()
+    }
+
     init {
-        updateAudioProcessorConfig()
+        isSyncingFromRemote = true
+        try {
+            updateAudioProcessorConfig()
+        } finally {
+            isSyncingFromRemote = false
+        }
     }
 
     val isHardwareAccelerated: Boolean
@@ -96,9 +109,6 @@ class EqualizerManager private constructor(private val context: Context) {
         listeners.remove(listener)
     }
 
-    @Volatile
-    var isSyncingFromRemote: Boolean = false
-
     fun buildStateBundle(): Bundle {
         return Bundle().apply {
             putBoolean("master_enabled", isEnabled())
@@ -114,11 +124,6 @@ class EqualizerManager private constructor(private val context: Context) {
             putBoolean("le_enabled", isLoudnessEnhancerEnabled())
             putInt("le_gain_mb", getLoudnessEnhancerGainMb())
         }
-    }
-
-    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val syncRunnable = Runnable {
-        doBroadcastSyncState()
     }
 
     fun applySyncBundle(extras: Bundle) {
@@ -181,14 +186,18 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun broadcastSyncState() {
         if (isSyncingFromRemote) return
-        syncHandler.removeCallbacks(syncRunnable)
-        syncHandler.postDelayed(syncRunnable, 30L)
+        try {
+            syncHandler.removeCallbacks(syncRunnable)
+            syncHandler.postDelayed(syncRunnable, 30L)
+        } catch (_: Throwable) {}
     }
 
     fun flushSyncNow() {
         if (isSyncingFromRemote) return
-        syncHandler.removeCallbacks(syncRunnable)
-        doBroadcastSyncState()
+        try {
+            syncHandler.removeCallbacks(syncRunnable)
+            doBroadcastSyncState()
+        } catch (_: Throwable) {}
     }
 
     private fun doBroadcastSyncState() {

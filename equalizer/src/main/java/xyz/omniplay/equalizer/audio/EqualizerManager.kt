@@ -132,12 +132,25 @@ class EqualizerManager private constructor(private val context: Context) {
         Preset("Custom", IntArray(10) { 0 }, 0)
     )
 
+    @Volatile
+    var isSyncingFromRemote: Boolean = false
+
+    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val syncRunnable = Runnable {
+        doBroadcastStereoEffects()
+    }
+
     init {
-        // Automatically bind global mix session (session 0)
-        bindSession(0)
-        applyCurrentStateToEffects()
-        applySystemBalance(getStereoBalance())
-        applySystemMono(isMonoAudioEnabled())
+        isSyncingFromRemote = true
+        try {
+            // Automatically bind global mix session (session 0)
+            bindSession(0)
+            applyCurrentStateToEffects()
+            applySystemBalance(getStereoBalance())
+            applySystemMono(isMonoAudioEnabled())
+        } finally {
+            isSyncingFromRemote = false
+        }
     }
 
     val isHardwareAccelerated: Boolean
@@ -460,9 +473,6 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
-    @Volatile
-    var isSyncingFromRemote: Boolean = false
-
     fun getStereoBalance(): Int = prefs.getInt(KEY_STEREO_BALANCE, 0).coerceIn(-100, 100)
 
     fun setStereoBalance(balance: Int) {
@@ -500,11 +510,6 @@ class EqualizerManager private constructor(private val context: Context) {
             putBoolean("le_enabled", isLoudnessEnhancerEnabled())
             putInt("le_gain_mb", getLoudnessEnhancerGainMb())
         }
-    }
-
-    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val syncRunnable = Runnable {
-        doBroadcastStereoEffects()
     }
 
     fun applySyncBundle(extras: Bundle) {
@@ -564,14 +569,18 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun broadcastStereoEffects() {
         if (isSyncingFromRemote) return
-        syncHandler.removeCallbacks(syncRunnable)
-        syncHandler.postDelayed(syncRunnable, 30L)
+        try {
+            syncHandler.removeCallbacks(syncRunnable)
+            syncHandler.postDelayed(syncRunnable, 30L)
+        } catch (_: Throwable) {}
     }
 
     fun flushSyncNow() {
         if (isSyncingFromRemote) return
-        syncHandler.removeCallbacks(syncRunnable)
-        doBroadcastStereoEffects()
+        try {
+            syncHandler.removeCallbacks(syncRunnable)
+            doBroadcastStereoEffects()
+        } catch (_: Throwable) {}
     }
 
     private fun doBroadcastStereoEffects() {
