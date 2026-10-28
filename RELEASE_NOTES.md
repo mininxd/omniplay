@@ -1,9 +1,9 @@
 ## What's Changed
-* **Floating Quick Equalizer**: Tap the Equalizer button on the player controls to quickly tune audio curves, toggle ClearBass, or switch sound presets from a floating bottom panel without leaving your music.
-* **Fully transparent popup overlay**: Removed background dimming and dark scrims from the Quick Equalizer popup so the player screen remains completely visible underneath.
-* **OmniPlay and OmniQualizer integration**: Seamlessly links OmniPlay with OmniQualizer when both apps are installed, routing audio sessions to OmniQualizer with quick-launch access from player controls and settings.
-* **Playback & stereo effects fix**: Restored stereo balance (left/right pan), mono audio mixing, crossfeed spatialization, and dynamic range compression with synchronized playback processing.
-* **Active session detector improvements**: Resolved real application display names and crisp app icons in the active session list, and moved session monitoring to Settings for a cleaner main screen.
-* **Streamlined audio controls**: Removed empty placeholder texts when inactive, hid zero-session counters in notifications, and aligned Material 3 spacing and styles across both apps.
+* **Real-time Equalizer Synchronization**: Seamlessly synchronized audio settings between OmniPlay and OmniQualizer. Adjusting equalizer bands, sound presets, ClearBass, stereo balance, or playback effects in either app updates instantly and smoothly in both.
+* **Floating Quick Equalizer**: Tap the Quick EQ button on the player controls to open the floating equalizer popup without interrupting playback or navigating away from your music.
+* **Fully Transparent Popup Overlay**: Clean floating panel design with zero background dimming or dark overlays, keeping your album art and queue completely visible underneath.
+* **Smooth Audio Slider Adjustments**: Eliminated slider snapping and stutter when dragging equalizer bars, bass boost, or balance sliders for fluid, responsive audio fine-tuning.
+* **Streamlined Sound Settings**: Restored clean settings navigation with crossfade in player settings, keeping equalizer panels uncluttered and focused.
+* **Stability & Performance Improvements**: Fixed startup issues and resolved app crashes when opening equalizer panels, ensuring reliable and continuous audio processing.
 
 **Full Changelog**: https://github.com/mininxd/omniplay/compare/v0.16.3...v0.17.0
