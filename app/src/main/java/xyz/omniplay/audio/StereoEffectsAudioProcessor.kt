@@ -15,9 +15,7 @@ data class StereoEffectsConfig(
     val crossfeedAmount: Int = 0,
     val dynamicRangeAmount: Int = 0,
     val monoAudio: Boolean = false,
-    val stereoBalance: Int = 0,
-    val daxBands: FloatArray = FloatArray(10),
-    val clearBass: Float = 0f
+    val stereoBalance: Int = 0
 )
 
 @UnstableApi
@@ -29,7 +27,6 @@ class StereoEffectsAudioProcessor(
     private var buffer = AudioProcessor.EMPTY_BUFFER
     private var outputBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
-    private var rustEngine: RustAudioEngine? = null
     private var crossfeedLeft = 0f
     private var crossfeedRight = 0f
     private var compressorGain = 1.0f
@@ -49,15 +46,6 @@ class StereoEffectsAudioProcessor(
         crossfeedCoefficient = 1f - exp((-2.0 * Math.PI * CROSSFEED_CUTOFF_HZ / sampleRate).toFloat())
         attackCoefficient = exp((-1.0 / (sampleRate * COMPRESSOR_ATTACK_SECONDS)).toFloat())
         releaseCoefficient = exp((-1.0 / (sampleRate * COMPRESSOR_RELEASE_SECONDS)).toFloat())
-
-        if (RustAudioEngine.isLibraryLoaded) {
-            try {
-                rustEngine?.release()
-                rustEngine = RustAudioEngine(sampleRate, inputAudioFormat.channelCount)
-            } catch (_: Throwable) {
-                rustEngine = null
-            }
-        }
         return inputAudioFormat
     }
 
@@ -84,35 +72,6 @@ class StereoEffectsAudioProcessor(
 
         val settings = configProvider()
         val isEnabled = settings.enabled
-
-        // 1. Primary High-Performance Rust Audio DSP Core
-        val engine = rustEngine
-        if (engine != null && engine.isAvailable) {
-            engine.setEnabled(isEnabled)
-            engine.setMono(settings.monoAudio)
-            engine.setBalance(settings.stereoBalance)
-            engine.setCrossfeed(settings.crossfeedAmount)
-            engine.setDrc(settings.dynamicRangeAmount)
-            engine.setAllBands(settings.daxBands)
-            engine.setClearBass(settings.clearBass)
-
-            buffer.put(inputBuffer)
-            engine.processDirectByteBuffer(buffer, 0, processedBytes)
-            inputBuffer.position(inputBuffer.limit())
-            buffer.flip()
-            outputBuffer = buffer
-            return
-        }
-
-        // 2. Fallback Software DSP
-        val crossfeedAmount = if (isEnabled) settings.crossfeedAmount.coerceIn(0, 100) else 0
-        val dynamicRangeAmount = if (isEnabled) settings.dynamicRangeAmount.coerceIn(0, 100) else 0
-        val useMono = (isEnabled || settings.monoAudio) && settings.monoAudio && channelCount == 2
-        val balance = if (channelCount == 2) settings.stereoBalance.coerceIn(-100, 100) else 0
-        val crossfeedMix = if (channelCount == 2 && !useMono) crossfeedAmount * MAX_CROSSFEED_MIX / 100f else 0f
-        val leftGain = if (balance > 0) 1f - balance / 100f else 1f
-        val rightGain = if (balance < 0) 1f + balance / 100f else 1f
-        val ratio = 1f + DYNAMIC_RANGE_MAX_RATIO_DELTA * dynamicRangeAmount / 100f
 
         val isPassthrough = !useMono && crossfeedMix == 0f && balance == 0 && dynamicRangeAmount == 0
         if (isPassthrough) {
@@ -213,7 +172,6 @@ class StereoEffectsAudioProcessor(
         crossfeedLeft = 0f
         crossfeedRight = 0f
         compressorGain = 1.0f
-        rustEngine?.resetState()
     }
 
     override fun reset() {
@@ -223,8 +181,6 @@ class StereoEffectsAudioProcessor(
         attackCoefficient = 0f
         releaseCoefficient = 0f
         samples = FloatArray(0)
-        rustEngine?.release()
-        rustEngine = null
     }
 
     private companion object {
