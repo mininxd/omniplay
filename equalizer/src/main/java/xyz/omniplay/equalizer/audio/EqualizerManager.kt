@@ -502,53 +502,60 @@ class EqualizerManager private constructor(private val context: Context) {
         }
     }
 
+    private val syncHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val syncRunnable = Runnable {
+        doBroadcastStereoEffects()
+    }
+
     fun applySyncBundle(extras: Bundle) {
         isSyncingFromRemote = true
         try {
+            val editor = prefs.edit()
             if (extras.containsKey("master_enabled")) {
-                val enabled = extras.getBoolean("master_enabled", isEnabled())
-                if (enabled != isEnabled()) {
-                    setEnabled(enabled)
-                }
+                editor.putBoolean(KEY_MASTER_ENABLED, extras.getBoolean("master_enabled", isEnabled()))
             }
             if (extras.containsKey("preset_index")) {
-                applyPreset(extras.getInt("preset_index", 0))
+                editor.putInt(KEY_PRESET_INDEX, extras.getInt("preset_index", 0).coerceIn(0, presets.size - 1))
             }
             if (extras.containsKey("dax_bands")) {
                 val bands = extras.getIntArray("dax_bands")
                 if (bands != null && bands.size == 10) {
                     for (i in 0 until 10) {
-                        setDaxBandLevel(i, bands[i], fromUser = false)
+                        editor.putInt(KEY_DAX_BAND_PREFIX + i, bands[i].coerceIn(-12, 12))
                     }
                 }
             }
             if (extras.containsKey("clear_bass")) {
-                setClearBassLevel(extras.getInt("clear_bass", 0))
+                editor.putInt(KEY_CLEAR_BASS, extras.getInt("clear_bass", 0).coerceIn(-10, 10))
             }
             if (extras.containsKey("ieq_preset")) {
-                setIeqPreset(extras.getInt("ieq_preset", 0))
+                editor.putInt(KEY_IEQ_PRESET, extras.getInt("ieq_preset", 0).coerceIn(0, 3))
             }
             if (extras.containsKey("balance")) {
-                setStereoBalance(extras.getInt("balance", 0))
+                val bal = extras.getInt("balance", 0).coerceIn(-100, 100)
+                editor.putInt(KEY_STEREO_BALANCE, bal)
+                applySystemBalance(bal)
             }
             if (extras.containsKey("mono_audio")) {
-                setMonoAudioEnabled(extras.getBoolean("mono_audio", false))
+                editor.putBoolean(KEY_MONO_AUDIO, extras.getBoolean("mono_audio", false))
             }
             if (extras.containsKey("crossfeed")) {
-                setCrossfeedAmount(extras.getInt("crossfeed", 0))
+                editor.putInt(KEY_CROSSFEED_AMOUNT, extras.getInt("crossfeed", 0).coerceIn(0, 100))
             }
             if (extras.containsKey("drc")) {
-                setDynamicRangeAmount(extras.getInt("drc", 0))
+                editor.putInt(KEY_DYNAMIC_RANGE_AMOUNT, extras.getInt("drc", 0).coerceIn(0, 100))
             }
             if (extras.containsKey("xloud")) {
-                setXLoudEnabled(extras.getBoolean("xloud", false))
+                editor.putBoolean(KEY_XLOUD, extras.getBoolean("xloud", false))
             }
             if (extras.containsKey("le_enabled")) {
-                setLoudnessEnhancerEnabled(extras.getBoolean("le_enabled", false))
+                editor.putBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, extras.getBoolean("le_enabled", false))
             }
             if (extras.containsKey("le_gain_mb")) {
-                setLoudnessEnhancerGainMb(extras.getInt("le_gain_mb", 0))
+                editor.putInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, extras.getInt("le_gain_mb", 0))
             }
+            editor.apply()
+            applyCurrentStateToEffects()
             notifyListeners()
         } finally {
             isSyncingFromRemote = false
@@ -557,12 +564,24 @@ class EqualizerManager private constructor(private val context: Context) {
 
     fun broadcastStereoEffects() {
         if (isSyncingFromRemote) return
+        syncHandler.removeCallbacks(syncRunnable)
+        syncHandler.postDelayed(syncRunnable, 30L)
+    }
+
+    fun flushSyncNow() {
+        if (isSyncingFromRemote) return
+        syncHandler.removeCallbacks(syncRunnable)
+        doBroadcastStereoEffects()
+    }
+
+    private fun doBroadcastStereoEffects() {
+        if (isSyncingFromRemote) return
         val bundle = buildStateBundle()
 
         // 1. Instant Binder IPC via ContentProvider (sub-millisecond synchronous execution)
         try {
             val res = context.contentResolver.call(
-                Uri.parse("content://xyz.omniplay.eqprovider"),
+                Uri.parse("content://xyz.omniplay.core"),
                 "SYNC_EQ_STATE",
                 null,
                 bundle

@@ -38,6 +38,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
 
     interface OnBandGainChangeListener {
         fun onBandGainChanged(bandIndex: Int, gainDb: Int, fromUser: Boolean)
+        fun onBandGainChangeFinished() {}
     }
 
     private val bandGains = IntArray(10) { 0 }
@@ -53,6 +54,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
     private var touchDownY: Float = 0f
     private var initialBandGain: Float = 0f
     private var isDragging: Boolean = false
+    val isUserDragging: Boolean get() = isDragging || lockedBandIndex != -1
     private val touchSlop: Float by lazy {
         ViewConfiguration.get(context).scaledTouchSlop.toFloat()
     }
@@ -242,6 +244,7 @@ class DaxEqualizerBarsView @JvmOverloads constructor(
                 lockedBandIndex = -1
                 activeBandIndex = -1
                 isDragging = false
+                listener?.onBandGainChangeFinished()
                 invalidate()
                 return true
             }

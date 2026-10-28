@@ -123,6 +123,10 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
                     eqManager.setDaxBandLevel(bandIndex, gainDb, fromUser = true)
                 }
             }
+
+            override fun onBandGainChangeFinished() {
+                eqManager.flushSyncNow()
+            }
         }
     }
 
@@ -143,6 +147,13 @@ class QuickEqualizerActivity : AppCompatActivity(), EqualizerManager.EqualizerLi
                 eqManager.setClearBassLevel(db)
             }
         }
+
+        binding.sliderClearBass.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
+            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
+                eqManager.flushSyncNow()
+            }
+        })
     }
 
     private fun setupResetButton() {

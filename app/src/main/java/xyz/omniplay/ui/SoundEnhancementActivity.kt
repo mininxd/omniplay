@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.slider.Slider
 import xyz.omniplay.R
 import xyz.omniplay.audio.EqualizerManager
 import xyz.omniplay.databinding.ActivitySoundEnhancementBinding
@@ -88,6 +89,14 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
 
     override fun onEqualizerConfigChanged() {
         runOnUiThread {
+            if (binding.daxEqBarsView.isUserDragging ||
+                binding.sliderClearBass.isPressed ||
+                binding.sliderDialogueEnhancer.isPressed ||
+                binding.sliderCrossfeed.isPressed ||
+                binding.sliderDynamicRange.isPressed ||
+                binding.sliderStereoBalance.isPressed) {
+                return@runOnUiThread
+            }
             refreshUI()
         }
     }
@@ -120,6 +129,11 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                 if (fromUser) {
                     eqManager.setDaxBandLevel(bandIndex, gainDb, fromUser = true)
                 }
+            }
+
+            override fun onBandGainChangeFinished() {
+                eqManager.flushSyncNow()
+                refreshUI()
             }
         }
     }
@@ -159,6 +173,13 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                 eqManager.setDialogEnhancerAmount(amount)
             }
         }
+        binding.sliderDialogueEnhancer.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
+        })
     }
 
     private fun setupClearBass() {
@@ -178,9 +199,24 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                 eqManager.setClearBassLevel(db)
             }
         }
+        binding.sliderClearBass.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
+        })
     }
 
     private fun setupPlaybackEffects() {
+        val touchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
+        }
+
         binding.sliderCrossfeed.apply {
             isTickVisible = false
             valueFrom = 0f
@@ -195,6 +231,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                     eqManager.setCrossfeedAmount(amount)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
 
         binding.sliderDynamicRange.apply {
@@ -211,6 +248,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                     eqManager.setDynamicRangeAmount(amount)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
 
         binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
@@ -218,6 +256,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
             val enabled = !binding.switchMonoAudio.isChecked
             binding.switchMonoAudio.isChecked = enabled
             eqManager.setMonoAudioEnabled(enabled)
+            eqManager.flushSyncNow()
         }
 
         binding.sliderStereoBalance.apply {
@@ -234,6 +273,7 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
                     eqManager.setStereoBalance(balance)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
         setupBalanceSliderResetGesture()
     }
@@ -352,7 +392,9 @@ class SoundEnhancementActivity : AppCompatActivity(), EqualizerManager.Equalizer
         updateEnabledState(enabled)
 
         // Dax 10-Band Pillars Rack
-        binding.daxEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        if (!binding.daxEqBarsView.isUserDragging) {
+            binding.daxEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        }
 
         // IEQ
         updateIeqChipSelection(eqManager.getIeqPreset())

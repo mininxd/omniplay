@@ -33,7 +33,7 @@
         <intent>
             <action android:name="xyz.omniplay.equalizer.ACTION_QUICK_PANEL" />
         </intent>
-        <provider android:authorities="xyz.omniplay.equalizer.eqprovider" />
+        <provider android:authorities="xyz.omniplay.equalizer.core" />
     </queries>
 
     <application
@@ -370,7 +370,7 @@
         <!-- Direct Binder IPC ContentProvider for instantaneous EQ synchronization -->
         <provider
             android:name=".provider.EqSyncProvider"
-            android:authorities="xyz.omniplay.eqprovider"
+            android:authorities="xyz.omniplay.core"
             android:exported="true" />
 
 

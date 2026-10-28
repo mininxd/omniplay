@@ -58,6 +58,10 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
     override fun onEqualizerConfigChanged() {
         if (!isAdded || _binding == null) return
         activity?.runOnUiThread {
+            if (_binding == null) return@runOnUiThread
+            if (binding.sheetEqBarsView.isUserDragging || binding.sliderBassBoost.isPressed) {
+                return@runOnUiThread
+            }
             refreshUI()
         }
     }
@@ -79,6 +83,11 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
                     eqManager.setDaxBandLevel(bandIndex, gainDb, fromUser = true)
                 }
             }
+
+            override fun onBandGainChangeFinished() {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
         }
     }
 
@@ -99,6 +108,14 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
                 eqManager.setClearBassLevel(db)
             }
         }
+
+        binding.sliderBassBoost.addOnSliderTouchListener(object : com.google.android.material.slider.Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: com.google.android.material.slider.Slider) {}
+            override fun onStopTrackingTouch(slider: com.google.android.material.slider.Slider) {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
+        })
     }
 
     private fun setupButtons() {
@@ -116,10 +133,14 @@ class EqualizerBottomSheet : BottomSheetDialogFragment(), EqualizerManager.Equal
         binding.switchEqualizer.isChecked = enabled
         updateEnabledState(enabled)
 
-        binding.sheetEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        if (!binding.sheetEqBarsView.isUserDragging) {
+            binding.sheetEqBarsView.setBandGains(eqManager.getAllDaxBandLevels())
+        }
 
         val cb = eqManager.getClearBassLevel().toFloat()
-        binding.sliderBassBoost.value = cb
+        if (!binding.sliderBassBoost.isPressed && binding.sliderBassBoost.value != cb) {
+            binding.sliderBassBoost.value = cb
+        }
         binding.tvBassBoostValue.text = formatDb(cb.toInt())
 
         isUpdatingUi = false

@@ -14,7 +14,7 @@ import xyz.omniplay.equalizer.audio.EqualizerManager
 class EqSyncProvider : ContentProvider() {
 
     companion object {
-        const val AUTHORITY = "xyz.omniplay.equalizer.eqprovider"
+        const val AUTHORITY = "xyz.omniplay.equalizer.core"
         const val METHOD_SYNC_EQ_STATE = "SYNC_EQ_STATE"
         const val METHOD_GET_EQ_STATE = "GET_EQ_STATE"
     }
