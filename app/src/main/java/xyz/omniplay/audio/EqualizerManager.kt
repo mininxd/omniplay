@@ -161,10 +161,10 @@ class EqualizerManager private constructor(private val context: Context) {
                 editor.putBoolean(KEY_XLOUD, extras.getBoolean("xloud", false))
             }
             if (extras.containsKey("le_enabled")) {
-                editor.putBoolean(KEY_LOUDNESS_ENHANCER, extras.getBoolean("le_enabled", false))
+                editor.putBoolean(KEY_LOUDNESS_ENHANCER_ENABLED, extras.getBoolean("le_enabled", false))
             }
             if (extras.containsKey("le_gain_mb")) {
-                editor.putInt(KEY_LOUDNESS_ENHANCER_GAIN, extras.getInt("le_gain_mb", 0))
+                editor.putInt(KEY_LOUDNESS_ENHANCER_GAIN_MB, extras.getInt("le_gain_mb", 0))
             }
             editor.apply()
             updateAudioProcessorConfig()
