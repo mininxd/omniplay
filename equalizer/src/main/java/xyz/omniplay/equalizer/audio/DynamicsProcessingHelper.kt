@@ -43,8 +43,8 @@ class DynamicsProcessingHelper(val sessionId: Int) {
             }
             effect.enabled = true
             val (leftDb, rightDb) = calculateChannelGainsDb(clamped)
-            effect.setInputGainByChannelIndex(0, leftDb)
-            effect.setInputGainByChannelIndex(1, rightDb)
+            effect.setInputGainbyChannel(0, leftDb)
+            effect.setInputGainbyChannel(1, rightDb)
         } catch (e: Throwable) {
             Log.w(TAG, "Failed to apply balance to DynamicsProcessing on session $sessionId", e)
         }
