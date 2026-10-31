@@ -17,14 +17,16 @@ class AudioSessionReceiver : BroadcastReceiver() {
         val action = intent?.action ?: return
         val eqManager = EqualizerManager.getInstance(context)
 
-        if (action == "xyz.omniplay.equalizer.action.REQUEST_SYNC") {
+        if (action == "xyz.omniplay.equalizer.action.REQUEST_SYNC" || action == "xyz.omniplay.action.REQUEST_SYNC") {
             Log.d(TAG, "Received REQUEST_SYNC, broadcasting current OmniQualizer state")
             eqManager.broadcastStereoEffects()
             return
         }
 
-        if (action == "xyz.omniplay.equalizer.action.SYNC_EQ_STATE") {
-            Log.d(TAG, "Received SYNC_EQ_STATE from OmniPlay")
+        if (action == "xyz.omniplay.equalizer.action.SYNC_EQ_STATE" ||
+            action == "xyz.omniplay.action.SYNC_EQ_STATE" ||
+            action == "xyz.omniplay.action.SET_STEREO_EFFECTS") {
+            Log.d(TAG, "Received sync action=$action from OmniPlay")
             intent.extras?.let { eqManager.applySyncBundle(it) }
             return
         }

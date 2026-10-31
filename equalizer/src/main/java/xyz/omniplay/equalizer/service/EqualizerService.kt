@@ -110,6 +110,11 @@ class EqualizerService : Service(), EqualizerManager.EqualizerListener {
         val filter = IntentFilter().apply {
             addAction(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
             addAction(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+            addAction("xyz.omniplay.equalizer.action.SYNC_EQ_STATE")
+            addAction("xyz.omniplay.equalizer.action.REQUEST_SYNC")
+            addAction("xyz.omniplay.action.SYNC_EQ_STATE")
+            addAction("xyz.omniplay.action.SET_STEREO_EFFECTS")
+            addAction("xyz.omniplay.action.REQUEST_SYNC")
             priority = 1000
         }
         try {

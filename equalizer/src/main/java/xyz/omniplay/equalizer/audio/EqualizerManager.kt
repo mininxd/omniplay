@@ -146,8 +146,6 @@ class EqualizerManager private constructor(private val context: Context) {
             // Automatically bind global mix session (session 0)
             bindSession(0)
             applyCurrentStateToEffects()
-            applySystemBalance(getStereoBalance())
-            applySystemMono(isMonoAudioEnabled())
         } finally {
             isSyncingFromRemote = false
         }
@@ -455,44 +453,17 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setMonoAudioEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
         applyCurrentStateToEffects()
-        applySystemMono(enabled)
         broadcastStereoEffects()
         notifyListeners()
-    }
-
-    private fun applySystemMono(enabled: Boolean) {
-        val monoInt = if (enabled) 1 else 0
-        try {
-            android.provider.Settings.System.putInt(context.contentResolver, "master_mono", monoInt)
-        } catch (_: Throwable) {
-            try {
-                if (ActiveSessionScanner.canUseRootSu != false) {
-                    Runtime.getRuntime().exec(arrayOf("su", "-c", "settings put system master_mono $monoInt"))
-                }
-            } catch (_: Throwable) {}
-        }
     }
 
     fun getStereoBalance(): Int = prefs.getInt(KEY_STEREO_BALANCE, 0).coerceIn(-100, 100)
 
     fun setStereoBalance(balance: Int) {
         prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
-        applySystemBalance(balance)
+        applyCurrentStateToEffects()
         broadcastStereoEffects()
         notifyListeners()
-    }
-
-    private fun applySystemBalance(balance: Int) {
-        val balanceFloat = (balance.coerceIn(-100, 100) / 100f)
-        try {
-            android.provider.Settings.System.putFloat(context.contentResolver, "master_balance", balanceFloat)
-        } catch (_: Throwable) {
-            try {
-                if (ActiveSessionScanner.canUseRootSu != false) {
-                    Runtime.getRuntime().exec(arrayOf("su", "-c", "settings put system master_balance $balanceFloat"))
-                }
-            } catch (_: Throwable) {}
-        }
     }
 
     fun buildStateBundle(): Bundle {
@@ -539,7 +510,6 @@ class EqualizerManager private constructor(private val context: Context) {
             if (extras.containsKey("balance")) {
                 val bal = extras.getInt("balance", 0).coerceIn(-100, 100)
                 editor.putInt(KEY_STEREO_BALANCE, bal)
-                applySystemBalance(bal)
             }
             if (extras.containsKey("mono_audio")) {
                 editor.putBoolean(KEY_MONO_AUDIO, extras.getBoolean("mono_audio", false))
@@ -583,24 +553,46 @@ class EqualizerManager private constructor(private val context: Context) {
         } catch (_: Throwable) {}
     }
 
+    fun requestOmniPlaySync() {
+        // 1. Instant synchronous fetch from OmniPlay via ContentProvider
+        try {
+            val res = context.contentResolver.call(
+                Uri.parse("content://xyz.omniplay.core"),
+                "GET_EQ_STATE",
+                null,
+                null
+            )
+            if (res != null && res.getBoolean("success", false)) {
+                applySyncBundle(res)
+                return
+            }
+        } catch (_: Throwable) {}
+
+        // 2. Fallback to broadcast request
+        try {
+            val reqIntent = Intent("xyz.omniplay.action.REQUEST_SYNC").apply {
+                setPackage("xyz.omniplay")
+                addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            }
+            context.sendBroadcast(reqIntent)
+        } catch (_: Throwable) {}
+    }
+
     private fun doBroadcastStereoEffects() {
         if (isSyncingFromRemote) return
         val bundle = buildStateBundle()
 
         // 1. Instant Binder IPC via ContentProvider (sub-millisecond synchronous execution)
         try {
-            val res = context.contentResolver.call(
+            context.contentResolver.call(
                 Uri.parse("content://xyz.omniplay.core"),
                 "SYNC_EQ_STATE",
                 null,
                 bundle
             )
-            if (res != null && res.getBoolean("success", false)) {
-                return
-            }
         } catch (_: Throwable) {}
 
-        // 2. Fallback to broadcast
+        // 2. Fallback / broadcast to PlaybackService and receivers
         try {
             val intent = Intent("xyz.omniplay.action.SYNC_EQ_STATE").apply {
                 setPackage("xyz.omniplay")

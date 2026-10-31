@@ -1,7 +1,10 @@
 package xyz.omniplay.equalizer.ui
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +17,7 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.chip.Chip
+import com.google.android.material.slider.Slider
 import xyz.omniplay.equalizer.R
 import xyz.omniplay.equalizer.audio.EqualizerManager
 import xyz.omniplay.equalizer.databinding.ActivityMainBinding
@@ -37,6 +41,17 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     private lateinit var eqManager: EqualizerManager
 
     private var isUpdatingUi = false
+
+    private val syncReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val action = intent?.action ?: return
+            if (action == "xyz.omniplay.action.SYNC_EQ_STATE" ||
+                action == "xyz.omniplay.action.SET_STEREO_EFFECTS" ||
+                action == "xyz.omniplay.equalizer.action.SYNC_EQ_STATE") {
+                refreshUI()
+            }
+        }
+    }
 
     private val settingsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -80,17 +95,40 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         requestNotificationPermissionIfNeeded()
     }
 
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction("xyz.omniplay.action.SYNC_EQ_STATE")
+            addAction("xyz.omniplay.action.SET_STEREO_EFFECTS")
+            addAction("xyz.omniplay.equalizer.action.SYNC_EQ_STATE")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(syncReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(syncReceiver, filter)
+        }
+        eqManager.requestOmniPlaySync()
+    }
+
     override fun onResume() {
         super.onResume()
         if (eqManager.isEnabled()) {
             EqualizerService.start(this)
         }
+        eqManager.requestOmniPlaySync()
         try {
             sendBroadcast(Intent("xyz.omniplay.action.REQUEST_AUDIO_SESSION").apply {
                 setPackage("xyz.omniplay")
             })
         } catch (_: Exception) {}
         refreshUI()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            unregisterReceiver(syncReceiver)
+        } catch (_: Exception) {}
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -336,6 +374,14 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
     }
 
     private fun setupPlaybackEffects() {
+        val touchListener = object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                eqManager.flushSyncNow()
+                refreshUI()
+            }
+        }
+
         binding.sliderCrossfeed.apply {
             isTickVisible = false
             valueFrom = 0f
@@ -351,6 +397,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                     eqManager.setCrossfeedAmount(amount)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
 
         binding.sliderDynamicRange.apply {
@@ -368,6 +415,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                     eqManager.setDynamicRangeAmount(amount)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
 
         binding.switchMonoAudio.isChecked = eqManager.isMonoAudioEnabled()
@@ -376,6 +424,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
             if (isChecked != eqManager.isMonoAudioEnabled()) {
                 binding.switchMonoAudio.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                 eqManager.setMonoAudioEnabled(isChecked)
+                eqManager.flushSyncNow()
             }
         }
         binding.rowMonoAudio.setOnClickListener {
@@ -405,6 +454,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
                     eqManager.setStereoBalance(balance)
                 }
             }
+            addOnSliderTouchListener(touchListener)
         }
         setupBalanceSliderResetGesture()
     }
@@ -432,6 +482,7 @@ class MainActivity : AppCompatActivity(), EqualizerManager.EqualizerListener {
         binding.tvStereoBalanceValue.text = formatBalance(0)
         if (eqManager.getStereoBalance() != 0) {
             eqManager.setStereoBalance(0)
+            eqManager.flushSyncNow()
         }
     }
 

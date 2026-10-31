@@ -117,6 +117,9 @@
                 <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
                 <action android:name="xyz.omniplay.equalizer.action.SYNC_EQ_STATE" />
                 <action android:name="xyz.omniplay.equalizer.action.REQUEST_SYNC" />
+                <action android:name="xyz.omniplay.action.SYNC_EQ_STATE" />
+                <action android:name="xyz.omniplay.action.SET_STEREO_EFFECTS" />
+                <action android:name="xyz.omniplay.action.REQUEST_SYNC" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
