@@ -152,9 +152,13 @@ class EqualizerManager private constructor(private val context: Context) {
             }
             if (extras.containsKey("balance")) {
                 editor.putInt(KEY_STEREO_BALANCE, extras.getInt("balance", 0).coerceIn(-100, 100))
+            } else if (extras.containsKey("key_stereo_balance")) {
+                editor.putInt(KEY_STEREO_BALANCE, extras.getInt("key_stereo_balance", 0).coerceIn(-100, 100))
             }
             if (extras.containsKey("mono_audio")) {
                 editor.putBoolean(KEY_MONO_AUDIO, extras.getBoolean("mono_audio", false))
+            } else if (extras.containsKey("key_mono_audio")) {
+                editor.putBoolean(KEY_MONO_AUDIO, extras.getBoolean("key_mono_audio", false))
             }
             if (extras.containsKey("crossfeed")) {
                 editor.putInt(KEY_CROSSFEED_AMOUNT, extras.getInt("crossfeed", 0).coerceIn(0, 100))

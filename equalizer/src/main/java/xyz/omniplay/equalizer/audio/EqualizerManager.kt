@@ -50,6 +50,7 @@ class EqualizerManager private constructor(private val context: Context) {
         var bassBoost: BassBoost? = null
         var virtualizer: Virtualizer? = null
         var loudnessEnhancer: LoudnessEnhancer? = null
+        var dynamicsProcessing: DynamicsProcessingHelper? = null
         val nativeHardware = NativeAudioEffectBinding()
 
         init {
@@ -91,6 +92,14 @@ class EqualizerManager private constructor(private val context: Context) {
                 }
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && sessionId != 0) {
+                try {
+                    dynamicsProcessing = DynamicsProcessingHelper(sessionId)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to instantiate DynamicsProcessing on session $sessionId", e)
+                }
+            }
+
             try {
                 nativeHardware.initSession(sessionId)
             } catch (e: Throwable) {
@@ -104,10 +113,12 @@ class EqualizerManager private constructor(private val context: Context) {
             try { bassBoost?.enabled = false; bassBoost?.release() } catch (_: Throwable) {}
             try { virtualizer?.enabled = false; virtualizer?.release() } catch (_: Throwable) {}
             try { loudnessEnhancer?.enabled = false; loudnessEnhancer?.release() } catch (_: Throwable) {}
+            try { dynamicsProcessing?.release() } catch (_: Throwable) {}
             equalizer = null
             bassBoost = null
             virtualizer = null
             loudnessEnhancer = null
+            dynamicsProcessing = null
         }
     }
 
@@ -146,6 +157,8 @@ class EqualizerManager private constructor(private val context: Context) {
             // Automatically bind global mix session (session 0)
             bindSession(0)
             applyCurrentStateToEffects()
+            applySystemBalance(getStereoBalance())
+            applySystemMono(isMonoAudioEnabled())
         } finally {
             isSyncingFromRemote = false
         }
@@ -453,17 +466,59 @@ class EqualizerManager private constructor(private val context: Context) {
     fun setMonoAudioEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MONO_AUDIO, enabled).apply()
         applyCurrentStateToEffects()
+        applySystemMono(enabled)
         broadcastStereoEffects()
         notifyListeners()
+    }
+
+    private fun applySystemMono(enabled: Boolean) {
+        val monoInt = if (enabled) 1 else 0
+        try {
+            android.provider.Settings.System.putInt(context.contentResolver, "master_mono", monoInt)
+        } catch (_: Throwable) {}
+        try {
+            android.provider.Settings.Global.putInt(context.contentResolver, "master_mono", monoInt)
+        } catch (_: Throwable) {}
+        try {
+            if (ActiveSessionScanner.canUseRootSu != false) {
+                Runtime.getRuntime().exec(arrayOf(
+                    "su", "-c",
+                    "settings put system master_mono $monoInt; settings put global master_mono $monoInt"
+                ))
+            }
+        } catch (_: Throwable) {}
     }
 
     fun getStereoBalance(): Int = prefs.getInt(KEY_STEREO_BALANCE, 0).coerceIn(-100, 100)
 
     fun setStereoBalance(balance: Int) {
-        prefs.edit().putInt(KEY_STEREO_BALANCE, balance.coerceIn(-100, 100)).apply()
+        val clamped = balance.coerceIn(-100, 100)
+        prefs.edit().putInt(KEY_STEREO_BALANCE, clamped).apply()
         applyCurrentStateToEffects()
+        applySystemBalance(clamped)
         broadcastStereoEffects()
         notifyListeners()
+    }
+
+    private fun applySystemBalance(balance: Int) {
+        val balanceFloat = (balance.coerceIn(-100, 100) / 100f)
+        try {
+            android.provider.Settings.Global.putFloat(context.contentResolver, "master_balance", balanceFloat)
+        } catch (_: Throwable) {}
+        try {
+            android.provider.Settings.System.putFloat(context.contentResolver, "master_balance", balanceFloat)
+        } catch (_: Throwable) {}
+        try {
+            android.provider.Settings.Secure.putFloat(context.contentResolver, "master_balance", balanceFloat)
+        } catch (_: Throwable) {}
+        try {
+            if (ActiveSessionScanner.canUseRootSu != false) {
+                Runtime.getRuntime().exec(arrayOf(
+                    "su", "-c",
+                    "settings put global master_balance $balanceFloat; settings put system master_balance $balanceFloat; settings put secure master_balance $balanceFloat"
+                ))
+            }
+        } catch (_: Throwable) {}
     }
 
     fun buildStateBundle(): Bundle {
@@ -474,7 +529,9 @@ class EqualizerManager private constructor(private val context: Context) {
             putInt("clear_bass", getClearBassLevel())
             putInt("ieq_preset", getIeqPreset())
             putInt("balance", getStereoBalance())
+            putInt("key_stereo_balance", getStereoBalance())
             putBoolean("mono_audio", isMonoAudioEnabled())
+            putBoolean("key_mono_audio", isMonoAudioEnabled())
             putInt("crossfeed", getCrossfeedAmount())
             putInt("drc", getDynamicRangeAmount())
             putBoolean("xloud", isXLoudEnabled())
@@ -510,9 +567,20 @@ class EqualizerManager private constructor(private val context: Context) {
             if (extras.containsKey("balance")) {
                 val bal = extras.getInt("balance", 0).coerceIn(-100, 100)
                 editor.putInt(KEY_STEREO_BALANCE, bal)
+                applySystemBalance(bal)
+            } else if (extras.containsKey("key_stereo_balance")) {
+                val bal = extras.getInt("key_stereo_balance", 0).coerceIn(-100, 100)
+                editor.putInt(KEY_STEREO_BALANCE, bal)
+                applySystemBalance(bal)
             }
             if (extras.containsKey("mono_audio")) {
-                editor.putBoolean(KEY_MONO_AUDIO, extras.getBoolean("mono_audio", false))
+                val mono = extras.getBoolean("mono_audio", false)
+                editor.putBoolean(KEY_MONO_AUDIO, mono)
+                applySystemMono(mono)
+            } else if (extras.containsKey("key_mono_audio")) {
+                val mono = extras.getBoolean("key_mono_audio", false)
+                editor.putBoolean(KEY_MONO_AUDIO, mono)
+                applySystemMono(mono)
             }
             if (extras.containsKey("crossfeed")) {
                 editor.putInt(KEY_CROSSFEED_AMOUNT, extras.getInt("crossfeed", 0).coerceIn(0, 100))
@@ -746,6 +814,11 @@ class EqualizerManager private constructor(private val context: Context) {
                 } catch (e: Throwable) {
                     Log.w(TAG, "Failed to apply Virtualizer to session ${sessionEffects.sessionId}", e)
                 }
+            }
+
+            // DynamicsProcessing (Stereo Balance for active media sessions)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                sessionEffects.dynamicsProcessing?.applyBalance(getStereoBalance())
             }
 
 
